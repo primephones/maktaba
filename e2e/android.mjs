@@ -85,6 +85,7 @@ page = await launch();
 watch(page);
 
 console.log('Starting up');
+await page.waitForSelector('.desk-head', { timeout: 30000 });
 const env = await page.evaluate(() => {
   const probe = document.createElement('div');
   probe.style.cssText = 'position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)';
@@ -108,7 +109,7 @@ console.log('  environment:', JSON.stringify(env));
 await wait(1500);
 await shot('01-home-empty');
 check(env.native, 'runs as the installed Android app');
-check(await page.getByRole('button', { name: 'Add your first book' }).isVisible(), 'first launch shows Home with “Add your first book”');
+check(await page.getByRole('button', { name: 'Add your first book' }).waitFor({ timeout: 15000 }).then(() => true, () => false), 'first launch shows Home with “Add your first book”');
 const edgeToEdge = env.inner[1] >= env.screen[1] - 2;
 check(!edgeToEdge || parseFloat(env.safeTop) > 0, `the title is clear of the status bar (edge to edge: ${edgeToEdge}, safe top ${env.safeTop}, title at ${env.headTop}px)`);
 await page.evaluate(() => document.fonts.ready);
