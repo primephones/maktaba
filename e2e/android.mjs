@@ -33,16 +33,17 @@ const launch = async () => {
 };
 
 /** A phone screenshot, system bars included. A small copy goes into the log for review. */
-const shot = async (name) => {
+const shot = async (name, inline = false) => {
   const file = `${out}${name}.png`;
   await device.screenshot({ path: file });
+  if (!inline) return;
   try {
     const b64 = execFileSync('python3', ['-c', `
 import sys, io, base64
 from PIL import Image
 im = Image.open(sys.argv[1]).convert('RGB')
-im = im.resize((300, round(im.height * 300 / im.width)), Image.LANCZOS)
-buf = io.BytesIO(); im.save(buf, 'JPEG', quality=38, optimize=True)
+im = im.resize((250, round(im.height * 250 / im.width)), Image.LANCZOS)
+buf = io.BytesIO(); im.save(buf, 'JPEG', quality=30, optimize=True)
 print(base64.encodebytes(buf.getvalue()).decode())`, file]).toString();
     console.log(`<<<SHOT ${name}`);
     console.log(b64.trim());
@@ -72,6 +73,31 @@ const books = (page) => page.evaluate(async () => {
 
 const back = () => device.shell('input keyevent 4');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** What the phone itself says went wrong, when the session dies. */
+const diagnose = () => {
+  const adb = (...args) => {
+    try {
+      return execFileSync('adb', args, { timeout: 20000 }).toString();
+    } catch (e) {
+      return `(adb ${args.join(' ')} failed: ${e.message.split('\n')[0]})`;
+    }
+  };
+  console.log('--- adb devices ---\n' + adb('devices'));
+  console.log('--- crash log ---\n' + adb('logcat', '-d', '-b', 'crash', '-t', '60'));
+  const log = adb('logcat', '-d', '-t', '4000').split('\n').filter((l) => /maktaba|chromium|FATAL|AndroidRuntime|lowmemory|Out of memory|renderer|WebView|ANR in/i.test(l));
+  console.log('--- app and WebView log (last lines) ---\n' + log.slice(-70).join('\n'));
+};
+process.on('uncaughtException', (e) => {
+  console.log('TEST ABORTED:', e.message.split('\n')[0]);
+  diagnose();
+  process.exit(1);
+});
+process.on('unhandledRejection', (e) => {
+  console.log('TEST ABORTED:', String(e?.message ?? e).split('\n')[0]);
+  diagnose();
+  process.exit(1);
+});
 
 let page = await launch();
 const errors = [];
@@ -116,18 +142,24 @@ await page.evaluate(() => document.fonts.ready);
 check(await page.evaluate(() => document.fonts.check('700 20px Amiri') && document.fonts.check('600 20px "Literata Variable"')), 'the app’s own typefaces are loaded');
 
 console.log('Adding books');
-await addFile(page, 'usul.epub', 'application/epub+zip');
-await addFile(page, 'makhtut-scan.pdf', 'application/pdf');
-await addFile(page, 'urdu-risala.txt', 'text/plain');
 let list = [];
-for (let i = 0; i < 120; i++) {
-  list = await books(page);
-  if (list.length >= 3 && list.every((b) => b.state === 'ready' || b.state === 'failed')) break;
-  await wait(500);
-}
-check(list.length === 3 && list.every((b) => b.state === 'ready'), `an EPUB, a scanned PDF and a text file all import (${JSON.stringify(list)})`);
+const addAndWait = async (name, type, count) => {
+  const t0 = Date.now();
+  await addFile(page, name, type);
+  for (let i = 0; i < 240; i++) {
+    list = await books(page);
+    if (list.length >= count && list.every((b) => b.state === 'ready' || b.state === 'failed')) break;
+    if (i % 10 === 9) console.log('   …', name, JSON.stringify(list.map((b) => b.state)), `${Math.round((Date.now() - t0) / 1000)}s`);
+    await wait(500);
+  }
+  console.log(`   ${name}: ${Date.now() - t0} ms`);
+};
+await addAndWait('usul.epub', 'application/epub+zip', 1);
+await addAndWait('urdu-risala.txt', 'text/plain', 2);
+await addAndWait('makhtut-scan.pdf', 'application/pdf', 3);
+check(list.length === 3 && list.every((b) => b.state === 'ready'), `an EPUB, a text file and a scanned PDF all import (${JSON.stringify(list)})`);
 await wait(800);
-await shot('02-home-with-books');
+await shot('02-home-with-books', true);
 
 console.log('Reading');
 await page.getByRole('button', { name: 'Library', exact: true }).click();
@@ -136,7 +168,7 @@ await shot('03-library');
 await page.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
 await page.waitForSelector('.bk', { timeout: 20000 });
 await wait(1200);
-await shot('04-reader');
+await shot('04-reader', true);
 const para = await page.locator('.bk[data-t="p"]').first().evaluate((el) => ({ font: getComputedStyle(el).fontFamily, dir: getComputedStyle(el).direction, text: el.textContent.slice(0, 20) }));
 check(/Amiri/.test(para.font) && para.dir === 'rtl', `Arabic is set in Amiri, right to left (${JSON.stringify(para)})`);
 await back();
