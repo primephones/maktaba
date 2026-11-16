@@ -779,3 +779,9 @@ input[type='range'] {
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
+
+/* A list straight under a screen title shares the title's rule instead of doubling it. */
+.screen-head + .list {
+  border-top: 0;
+  margin-top: -16px;
+}
