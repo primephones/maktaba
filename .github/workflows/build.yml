@@ -1,0 +1,141 @@
+name: Build and test
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Web app and browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Install the test browser
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Make the test books
+        run: node e2e/fixtures.mjs
+      - name: Run the app end to end in a phone-sized browser
+        run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-test-screenshots
+          path: e2e/out/shots
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-books
+          path: e2e/out/fixtures
+
+  apk:
+    name: Android APK
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+      - run: npx cap sync android
+      - name: Use the signing key, if one has been stored
+        env:
+          KEYSTORE_B64: ${{ secrets.MAKTABA_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/maktaba.keystore"
+            echo "MAKTABA_KEYSTORE=$RUNNER_TEMP/maktaba.keystore" >> "$GITHUB_ENV"
+            echo "Signed with the stored key: this build installs over earlier ones."
+          else
+            echo "::warning::No signing key stored. This is a test build and cannot update an earlier install."
+          fi
+      - name: Build the APK
+        env:
+          MAKTABA_KEYSTORE_PASSWORD: ${{ secrets.MAKTABA_KEYSTORE_PASSWORD }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          cd android
+          ./gradlew assembleRelease --no-daemon -PbuildNumber=${{ github.run_number }} -PappVersion=$VERSION
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Maktaba-$VERSION-build${{ github.run_number }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maktaba-apk
+          path: Maktaba-*.apk
+
+  phone:
+    name: Test on an Android phone (emulator)
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: maktaba-apk
+          path: apk
+      - uses: actions/download-artifact@v4
+        with:
+          name: test-books
+          path: e2e/out/fixtures
+      - name: Install the test driver
+        run: |
+          npm install --no-save playwright
+          pip install --quiet pillow
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - name: Allow hardware acceleration for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install Maktaba on the phone and use it
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r apk/*.apk
+            node e2e/android.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-screenshots
+          path: e2e/out/phone
+          if-no-files-found: ignore

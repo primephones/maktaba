@@ -4,6 +4,7 @@ import { AppContext } from './AppContext';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useAddBooks } from './addBooks';
 import { UpdateNotice } from './UpdateNotice';
+import { resolveTheme, useSetting } from './settings';
 import { BottomBar } from '../ui/BottomBar';
 import { Toasts } from '../ui/toast';
 import { EmptyState } from '../ui/EmptyState';
@@ -58,6 +59,23 @@ export function App() {
       window.removeEventListener('drop', drop);
     };
   }, [addDropped]);
+
+  // The status bar is drawn over the app: its icons must contrast with what is under them,
+  // which is leather on Home and paper elsewhere.
+  const theme = useSetting('theme');
+  useEffect(() => {
+    const resolved = resolveTheme(theme);
+    const dark = resolved === 'lamp' || resolved === 'black';
+    const onLeather = route.name === 'home';
+    const color = onLeather ? (dark ? '#4f1c18' : '#7c2822') : { paper: '#f6f4ef', sepia: '#f1e7d0', lamp: '#14130f', black: '#000000' }[resolved];
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
+    void (async () => {
+      const { Capacitor } = await import('@capacitor/core');
+      if (!Capacitor.isNativePlatform()) return;
+      const { StatusBar, Style } = await import('@capacitor/status-bar');
+      await StatusBar.setStyle({ style: dark || onLeather ? Style.Dark : Style.Light }).catch(() => undefined);
+    })();
+  }, [route.name, theme]);
 
   const inReader = route.name === 'reader';
   const barHidden = inReader || route.name === 'search' || route.name === 'settings';
