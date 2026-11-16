@@ -84,6 +84,9 @@ export function normalizeWithMap(s: string): { text: string; map: number[] } {
 /** Finds every occurrence of an already-normalised query in a text, as original offsets. */
 export function findAll(text: string, normQuery: string, limit = 50): Array<[number, number]> {
   if (!normQuery) return [];
+  // Folding the whole paragraph once is cheap; the character map is only worth building
+  // for the few paragraphs that actually contain the query.
+  if (!normalizeForSearch(text).includes(normQuery)) return [];
   const { text: norm, map } = normalizeWithMap(text);
   const hits: Array<[number, number]> = [];
   let from = 0;
