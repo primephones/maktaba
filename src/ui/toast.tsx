@@ -22,7 +22,8 @@ export function toast(text: string, action?: Toast['action'], ms = 4200) {
   }, action ? Math.max(ms, 6500) : ms);
 }
 
-export function Toasts({ raised }: { raised: boolean }) {
+/** `place` keeps toasts clear of whatever sits at the bottom of the current screen. */
+export function Toasts({ place }: { place: 'bar' | 'reader' | 'edge' }) {
   const list = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
@@ -31,7 +32,7 @@ export function Toasts({ raised }: { raised: boolean }) {
     () => toasts,
   );
   return createPortal(
-    <div className="toasts" data-raised={raised} role="status" aria-live="polite">
+    <div className="toasts" data-place={place} role="status" aria-live="polite">
       {list.map((t) => (
         <div className="toast" key={t.id}>
           <span>{t.text}</span>

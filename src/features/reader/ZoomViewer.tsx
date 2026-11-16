@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pushOverlay } from '../../app/router';
 import { clamp } from '../../lib/util';
@@ -17,8 +17,12 @@ export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: (
   closeRef.current = onClose;
   const release = useRef<() => void>(() => undefined);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     release.current = pushOverlay(() => closeRef.current());
+    return () => release.current();
+  }, []);
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         release.current();
@@ -28,7 +32,6 @@ export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: (
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      release.current();
     };
   }, []);
 

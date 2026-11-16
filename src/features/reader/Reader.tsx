@@ -5,6 +5,7 @@ import type { Book, HighlightColor, Mark, Reference, Section } from '../../db/ty
 import { detectLang, hasArabicScript, stripTashkilWithMap } from '../../lib/arabic';
 import { clamp, percent } from '../../lib/util';
 import { closePdf } from '../../lib/pdfjs';
+import { formatCitation } from '../../lib/citation';
 import { goBack, navigate } from '../../app/router';
 import { useSetting } from '../../app/settings';
 import { EmptyState } from '../../ui/EmptyState';
@@ -30,11 +31,11 @@ export function Reader({ bookId }: { bookId: string }) {
   if (book === null || book.import.state !== 'ready' || !book.sectionCount) {
     return (
       <div className="screen screen--plain">
-        <div className="screen-head screen-head--sub">
+        <div className="screen-head">
           <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>
           <h1>{book?.title ?? 'Book'}</h1>
         </div>
-        <EmptyState icon="book" title={book ? 'This book isn’t ready yet' : 'This book is no longer here'} action={<button className="btn btn--primary" onClick={() => navigate('/library', { replace: true })}>Go to the Library</button>}>
+        <EmptyState title={book ? 'This book isn’t ready yet' : 'This book is no longer here'} action={<button className="btn btn--primary" onClick={() => navigate('/library', { replace: true })}>Go to the Library</button>}>
           {book ? (book.import.state === 'failed' ? book.import.error ?? 'It could not be read.' : 'It is still being prepared. You can follow its progress in the Library.') : 'It may have been removed from this device.'}
         </EmptyState>
       </div>
@@ -113,6 +114,7 @@ function ReaderInner({ book }: { book: Book }) {
 
   // ----- Position and progress -----
   const saveTimer = useRef(0);
+  const lastJump = useRef(Date.now());
   const latest = useRef(pos);
   const persist = useCallback(() => {
     const p = latest.current;
@@ -122,7 +124,8 @@ function ReaderInner({ book }: { book: Book }) {
     const atEnd = p.section === book.sectionCount - 1 && p.block >= sec.blocks.length - 2;
     void db.books.update(book.id, {
       progress: { section: p.section, block: p.block, fraction: atEnd ? 1 : fraction, updatedAt: Date.now() },
-      ...(atEnd && book.status === 'reading' ? { status: 'finished' as const } : {}),
+      // Landing near the end by a jump (search, contents) is not finishing the book.
+      ...(atEnd && book.status === 'reading' && Date.now() - lastJump.current > 4000 ? { status: 'finished' as const } : {}),
     });
   }, [book]);
 
@@ -151,6 +154,7 @@ function ReaderInner({ book }: { book: Book }) {
 
   const goTo = useCallback((section: number, block: number, range?: [number, number]) => {
     setTarget((t) => ({ section, block, nonce: t.nonce + 1 }));
+    lastJump.current = Date.now();
     latest.current = { section, block };
     setPos({ section, block });
     if (range) setFlash({ section, block, range });
@@ -227,7 +231,6 @@ function ReaderInner({ book }: { book: Book }) {
     const parts = selection.parts.map(toStored).filter((p): p is NonNullable<typeof p> => !!p);
     if (!parts.length) return;
     const first = parts[0];
-    const block = cache.current.get(first.section)?.blocks[first.block];
     const now = Date.now();
     const ref: Reference = {
       id: uid(),
@@ -237,14 +240,7 @@ function ReaderInner({ book }: { book: Book }) {
       start: parts.length === 1 ? first.start : undefined,
       end: parts.length === 1 ? first.end : undefined,
       original: parts.map((p) => p.text).join('\n'),
-      citation: {
-        author: book.author,
-        book: book.series ?? book.title,
-        edition: book.edition,
-        volume: book.volume,
-        chapter: chapterAt(first.section, first.block) || undefined,
-        page: block?.printed ?? (block?.page ? String(block.page) : undefined),
-      },
+      citation: citationAt(first.section, first.block),
       createdAt: now,
       updatedAt: now,
     };
@@ -253,11 +249,31 @@ function ReaderInner({ book }: { book: Book }) {
     toast('Saved to References.', { label: 'View', run: () => navigate('/references') });
   };
 
+  /** The source of a passage, for a footnote. */
+  const citationAt = (section: number, blockIndex: number): Reference['citation'] => {
+    const block = cache.current.get(section)?.blocks[blockIndex];
+    return {
+      author: book.author,
+      book: book.series ?? book.title,
+      edition: book.edition,
+      volume: book.volume,
+      chapter: chapterAt(section, blockIndex) || undefined,
+      page: block?.printed ?? (block?.page ? String(block.page) : undefined),
+    };
+  };
+
   const copy = async () => {
     if (!selection) return;
+    const parts = selection.parts.map(toStored).filter((p): p is NonNullable<typeof p> => !!p);
+    // Copy the words as the book has them, vowel marks included, even if they are hidden.
+    const text = parts.length ? parts.map((p) => p.text).join('\n') : selection.text;
+    const cited = parts.length ? `${text}\n— ${formatCitation(citationAt(parts[0].section, parts[0].block))}` : text;
     try {
-      await navigator.clipboard.writeText(selection.text);
-      toast('Copied.');
+      await navigator.clipboard.writeText(text);
+      toast('Copied.', {
+        label: 'Add citation',
+        run: () => void navigator.clipboard.writeText(cited).then(() => toast('Copied with its citation.')).catch(() => undefined),
+      });
     } catch {
       toast('Copying isn’t allowed here. Use the phone’s own Copy.');
     }
@@ -298,23 +314,35 @@ function ReaderInner({ book }: { book: Book }) {
   const onZoom = useCallback((source: ZoomSource) => setZoom(source), []);
 
   const renderSection = useCallback(
-    (sec: Section) =>
-      sec.blocks.map((block, i) => (
-        <BlockView
-          key={i}
-          bookId={book.id}
-          bookLang={book.lang}
-          section={sec.idx}
-          index={i}
-          block={block}
-          marks={marksByBlock.get(`${sec.idx}:${i}`) ?? NO_MARKS}
-          flash={flash && flash.section === sec.idx && flash.block === i ? flash.range : undefined}
-          showTashkil={prefs.tashkil}
-          onNote={onNote}
-          onMark={onMark}
-          onZoom={onZoom}
-        />
-      )),
+    (sec: Section) => {
+      const out: React.ReactNode[] = [];
+      let lastPage: string | undefined;
+      sec.blocks.forEach((block, i) => {
+        // Mark where the printed page turns, so a passage can be cited by page.
+        const pageNo = block.t === 'img' ? undefined : block.printed ?? (block.page ? String(block.page) : undefined);
+        if (pageNo && pageNo !== lastPage) {
+          out.push(<div className="pgmark" key={`p${i}`} role="note" aria-label={`Page ${pageNo}`}>{pageNo}</div>);
+        }
+        if (pageNo) lastPage = pageNo;
+        out.push(
+          <BlockView
+            key={i}
+            bookId={book.id}
+            bookLang={book.lang}
+            section={sec.idx}
+            index={i}
+            block={block}
+            marks={marksByBlock.get(`${sec.idx}:${i}`) ?? NO_MARKS}
+            flash={flash && flash.section === sec.idx && flash.block === i ? flash.range : undefined}
+            showTashkil={prefs.tashkil}
+            onNote={onNote}
+            onMark={onMark}
+            onZoom={onZoom}
+          />,
+        );
+      });
+      return out;
+    },
     [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom],
   );
 

@@ -39,19 +39,26 @@ const UNMAPPED = /[\u0000\uFFFD\uE000-\uF8FF]/g;
  * in which some glyphs have no character behind them, so letters silently go missing.
  * Returns the number of such glyphs and the number of real characters.
  */
-export function textDamage(items: TextItem[]): { bad: number; total: number } {
+export function textDamage(items: TextItem[]): { bad: number; total: number; arabic: boolean } {
   let bad = 0;
   let total = 0;
+  let arabic = 0;
   for (const it of items) {
     if (!it.str) continue;
     bad += (it.str.match(UNMAPPED) || []).length;
     total += it.str.replace(/\s/g, '').length;
+    arabic += (it.str.match(ARABIC) || []).length;
   }
-  return { bad, total };
+  return { bad, total, arabic: arabic > total * 0.3 };
 }
 
-/** True when enough letters are missing that showing the text would misquote the book. */
-export const isDamaged = (d: { bad: number; total: number }) => d.bad >= 3 && d.bad / Math.max(1, d.total) > 0.002;
+/**
+ * True when showing the text would misquote the book. In Arabic script a single missing
+ * letter changes a word, so one is enough; in Latin text stray unmapped glyphs are usually
+ * ornaments or ligatures, so it takes a few.
+ */
+export const isDamaged = (d: { bad: number; total: number; arabic: boolean }) =>
+  d.arabic ? d.bad >= 1 : d.bad >= 3 && d.bad / Math.max(1, d.total) > 0.002;
 
 /** Groups positioned text fragments into lines, in reading order for the line's script. */
 export function itemsToLines(items: TextItem[]): Line[] {

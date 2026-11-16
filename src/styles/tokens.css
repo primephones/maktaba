@@ -9,10 +9,16 @@
   --font-arabic-sans: 'IBM Plex Sans Arabic', 'Amiri', sans-serif;
   --font-urdu: 'Noto Nastaliq Urdu', 'Amiri', serif;
 
-  --r-sm: 8px;
-  --r-md: 14px;
-  --r-lg: 22px;
+  /* Paper and leather have crisp corners: radii stay small. */
+  --r-sm: 3px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-bar: 18px;
   --r-pill: 999px;
+
+  /* Gold leaf, for tooling on leather. */
+  --foil: linear-gradient(135deg, #a8863c, #f0dfa8 30%, #b7954a 55%, #f3e3b0 78%, #9a7a30);
+  --foil-line: #c9a961;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -60,6 +66,11 @@
   --hl-slate: rgba(80, 125, 150, 0.28);
   --hl-rose: rgba(200, 120, 140, 0.3);
   --hl-ink: rgba(29, 28, 26, 0.16);
+  --leather: #5e1b17;
+  --leather-hi: #7c2822;
+  --leather-lo: #3d0f0c;
+  --on-leather: #f4ead5;
+  --on-leather-2: #d9c7a8;
 }
 
 :root[data-theme='sepia'] {
@@ -86,6 +97,11 @@
   --hl-slate: rgba(70, 115, 140, 0.3);
   --hl-rose: rgba(195, 110, 130, 0.32);
   --hl-ink: rgba(51, 40, 26, 0.18);
+  --leather: #5e1b17;
+  --leather-hi: #7c2822;
+  --leather-lo: #3d0f0c;
+  --on-leather: #f4ead5;
+  --on-leather-2: #d9c7a8;
 }
 
 /* Lamp — reading by lamplight. Every text colour here is checked against the surfaces. */
@@ -113,6 +129,11 @@
   --hl-slate: rgba(120, 165, 190, 0.34);
   --hl-rose: rgba(215, 140, 160, 0.32);
   --hl-ink: rgba(233, 226, 212, 0.2);
+  --leather: #3a1411;
+  --leather-hi: #4f1c18;
+  --leather-lo: #230b09;
+  --on-leather: #efe3cb;
+  --on-leather-2: #c9b695;
 }
 
 :root[data-theme='black'] {
@@ -139,4 +160,9 @@
   --hl-slate: rgba(120, 165, 190, 0.36);
   --hl-rose: rgba(215, 140, 160, 0.34);
   --hl-ink: rgba(220, 214, 200, 0.22);
+  --leather: #3a1411;
+  --leather-hi: #4f1c18;
+  --leather-lo: #230b09;
+  --on-leather: #efe3cb;
+  --on-leather-2: #c9b695;
 }

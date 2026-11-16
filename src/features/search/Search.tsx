@@ -2,12 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Book } from '../../db/types';
-import { normalizeForSearch } from '../../lib/arabic';
+import { langAttr, normalizeForSearch } from '../../lib/arabic';
 import { searchBook, type TextHit } from '../../lib/search';
 import { goBack, navigate } from '../../app/router';
 import { useApp } from '../../app/AppContext';
 import { EmptyState } from '../../ui/EmptyState';
 import { Icon } from '../../ui/Icon';
+import { formatCitation } from '../../lib/citation';
 import { setJump } from '../reader/jump';
 
 const PER_BOOK = 4;
@@ -80,13 +81,13 @@ export function Search() {
 
   return (
     <div className="screen screen--plain">
-      <div className="screen-head screen-head--sub">
+      <div className="screen-head">
         <button className="icon-btn" onClick={() => goBack()} aria-label="Back"><Icon name="back" /></button>
         <h1>Search</h1>
       </div>
 
       {books !== undefined && books.length === 0 ? (
-        <EmptyState icon="search" title="Add a book first" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
+        <EmptyState title="Add a book first" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
           Search looks through the books in your library. Add one and it will be searchable here.
         </EmptyState>
       ) : (
@@ -145,7 +146,7 @@ export function Search() {
                     <Icon name="references" />
                     <span className="grow">
                       <span className="title hit-text" dir="auto">{r.original.slice(0, 140)}{r.original.length > 140 ? '…' : ''}</span>
-                      <div className="sub" dir="auto">{r.citation.book}{r.citation.page ? ` · p. ${r.citation.page}` : ''}</div>
+                      <div className="sub" dir="auto">{formatCitation(r.citation)}</div>
                     </span>
                   </button>
                 ))}
@@ -155,7 +156,7 @@ export function Search() {
 
           {norm.length >= 2 && (state.busy || totalHits > 0) && (
             <div className="section-title" aria-live="polite">
-              {state.busy ? `In the text · searching ${state.done + 1} of ${state.total}` : `In the text · ${totalHits} match${totalHits === 1 ? '' : 'es'}`}
+              {state.busy ? `In the text: searching book ${state.done + 1} of ${state.total}` : `In the text: ${totalHits} match${totalHits === 1 ? '' : 'es'}`}
             </div>
           )}
 
@@ -165,13 +166,13 @@ export function Search() {
             const shown = expanded.has(bookId) ? list : list.slice(0, PER_BOOK);
             return (
               <div key={bookId} style={{ marginBottom: 16 }}>
-                <div className="hit-book" dir="auto">{book.title}<span className="muted"> · {list.length}{list.length >= 60 ? '+' : ''}</span></div>
+                <div className="hit-book"><span dir="auto" lang={langAttr(book.title)}>{book.title}</span><span className="count">{list.length}{list.length >= 60 ? '+' : ''}</span></div>
                 <div className="list">
                   {shown.map((h, i) => (
                     <button className="row" key={i} onClick={() => open(h)}>
                       <span className="grow">
                         <span className="hit-text" dir="auto">{h.before}<mark>{h.match}</mark>{h.after}</span>
-                        <div className="sub" dir="auto">{h.sectionTitle}{h.printed ? ` · p. ${h.printed}` : ''}</div>
+                        <div className="sub" dir="auto">{h.sectionTitle}{h.printed ? `, p. ${h.printed}` : ''}</div>
                       </span>
                     </button>
                   ))}
@@ -186,7 +187,7 @@ export function Search() {
           })}
 
           {nothing && (
-            <EmptyState icon="search" title="No matches">
+            <EmptyState title="No matches">
               Nothing in your books matches “{q}”.{scans ? ` ${scans} scanned book${scans === 1 ? ' is' : 's are'} not searchable until text recognition is added.` : ''}
             </EmptyState>
           )}

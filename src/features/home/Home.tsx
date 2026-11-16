@@ -5,7 +5,8 @@ import type { Book } from '../../db/types';
 import { percent } from '../../lib/util';
 import { navigate, switchTab } from '../../app/router';
 import { useApp } from '../../app/AppContext';
-import { EmptyState } from '../../ui/EmptyState';
+import { BEST_COMPANION, EmptyState } from '../../ui/EmptyState';
+import { detectLang, langAttr } from '../../lib/arabic';
 import { Icon } from '../../ui/Icon';
 import { BookCover } from '../library/BookCover';
 import { BookDetails } from '../library/BookDetails';
@@ -44,33 +45,46 @@ export function Home() {
 
   if (books === undefined) return <div className="screen" aria-busy="true" />;
 
+  const whereLang = current ? detectLang(whereIn(current) || current.author) : 'other';
+
   return (
     <div className="screen">
-      <div className="screen-head">
-        <h1>Maktaba<span className="ar" lang="ar">مكتبة</span></h1>
-        <button className="icon-btn" onClick={() => navigate('/settings')} aria-label="Settings"><Icon name="settings" /></button>
+      <div className="desk">
+        <header className="desk-head">
+          <h1>Maktaba</h1>
+          <span className="ar" lang="ar">مكتبة</span>
+          <button className="icon-btn" onClick={() => navigate('/settings')} aria-label="Settings"><Icon name="settings" /></button>
+        </header>
+        {current ? (
+          <button className="desk-book" onClick={() => navigate(`/book/${current.id}`)} aria-label={`Continue reading ${current.title}`}>
+            <BookCover book={current} />
+            <span>
+              <span className="label">Continue reading</span>
+              <h2 lang={current.lang === 'other' ? undefined : current.lang} dir="auto">{current.title}</h2>
+              <span className="where" dir="auto" lang={whereLang === 'other' ? undefined : whereLang}>{whereIn(current) || current.author}</span>
+              <span className="desk-progress">
+                <span className="meter"><i style={{ width: percent(current.progress?.fraction) }} /></span>
+                {percent(current.progress?.fraction)}
+              </span>
+            </span>
+          </button>
+        ) : (
+          <figure className="desk-epigraph" style={{ marginInline: 0, marginBottom: 0 }}>
+            <span className="line" lang="ar">{BEST_COMPANION.line}</span>
+            <figcaption>
+              <span className="gloss">{BEST_COMPANION.gloss}</span>
+              <span className="by">{BEST_COMPANION.by}</span>
+            </figcaption>
+          </figure>
+        )}
       </div>
 
       {books.length === 0 ? (
-        <EmptyState icon="book" title="Welcome to your library" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add your first book</button>}>
-          Add an Arabic, Urdu, Persian or English book from your phone. It stays on this device and opens without internet.
+        <EmptyState title="Start with one book" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add your first book</button>}>
+          Add an Arabic, Urdu, Persian or English book from your phone. It is kept on this device and opens without internet.
         </EmptyState>
       ) : (
-        <>
-          {current && (
-            <button className="continue fade-in" onClick={() => navigate(`/book/${current.id}`)}>
-              <BookCover book={current} />
-              <span>
-                <span className="eyebrow">Continue reading</span>
-                <h2 lang={current.lang === 'other' ? undefined : current.lang} dir="auto">{current.title}</h2>
-                <span className="where" dir="auto">{whereIn(current) || current.author}</span>
-                <span className="tile-progress">
-                  <span className="meter"><i style={{ width: percent(current.progress?.fraction) }} /></span>
-                  {percent(current.progress?.fraction)}
-                </span>
-              </span>
-            </button>
-          )}
+        <div className="after-desk">
 
           {working.length > 0 && (
             <>
@@ -114,7 +128,7 @@ export function Home() {
                 {recent.map((b) => (
                   <div className="tile" key={b.id}>
                     <button className="tile-cover" onClick={() => openBook(b, setDetails)} aria-label={`Open ${b.title}`}><BookCover book={b} /></button>
-                    <span className="tile-title" lang={b.lang === 'other' ? undefined : b.lang} dir="auto">{b.title}</span>
+                    <span className="tile-title" lang={langAttr(b.title)} dir="auto">{b.title}</span>
                   </div>
                 ))}
               </div>
@@ -122,19 +136,25 @@ export function Home() {
           )}
 
           <div className="section-title">Study</div>
-          <div className="shortcuts">
-            <button className="shortcut" onClick={() => navigate('/search')}>
+          <div className="list">
+            <button className="row" onClick={() => navigate('/search')}>
               <Icon name="search" />
-              <b>Search</b>
-              <span>Find a word or phrase across all your books</span>
+              <span className="grow">
+                <span className="title">Search your books</span>
+                <div className="sub">Find a word or phrase in everything you have added</div>
+              </span>
+              <Icon name="forward" size={18} />
             </button>
-            <button className="shortcut" onClick={() => switchTab('references')}>
+            <button className="row" onClick={() => switchTab('references')}>
               <Icon name="references" />
-              <b>References</b>
-              <span>{refCount ? `${refCount} saved passage${refCount === 1 ? '' : 's'}` : 'Passages you save while reading'}</span>
+              <span className="grow">
+                <span className="title">References</span>
+                <div className="sub">{refCount ? `${refCount} saved passage${refCount === 1 ? '' : 's'}` : 'Passages you save while reading, with their citations'}</div>
+              </span>
+              <Icon name="forward" size={18} />
             </button>
           </div>
-        </>
+        </div>
       )}
 
       <InstallHint />

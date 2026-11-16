@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import type { Reference } from '../../db/types';
-import { detectLang } from '../../lib/arabic';
+import { detectLang, langAttr } from '../../lib/arabic';
+import { citationParts, formatCitation } from '../../lib/citation';
 import { navigate, switchTab } from '../../app/router';
 import { EmptyState } from '../../ui/EmptyState';
 import { Icon } from '../../ui/Icon';
@@ -10,16 +11,16 @@ import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { setJump } from '../reader/jump';
 
-/** The citation as it would be written in a footnote. */
-export function formatCitation(c: Reference['citation']): string {
-  return [
-    c.author,
-    c.book,
-    c.edition,
-    c.volume ? `vol. ${c.volume}` : null,
-    c.chapter,
-    c.page ? `p. ${c.page}` : null,
-  ].filter(Boolean).join(', ');
+/** The citation set the way a footnote is: author, title in italics, then the place. */
+function Citation({ c }: { c: Reference['citation'] }) {
+  const p = citationParts(c);
+  return (
+    <p className="ref-cite" dir={p.rtl ? 'rtl' : 'ltr'} lang={p.rtl ? langAttr(p.title) : undefined}>
+      {p.author && <>{p.author}{p.sep}</>}
+      <cite>{p.title}</cite>
+      {p.rest.map((t, i) => <span key={i}>{p.sep}{t}</span>)}
+    </p>
+  );
 }
 
 export function References() {
@@ -37,13 +38,13 @@ export function References() {
 
   return (
     <div className="screen">
-      <div className="screen-head">
-        <h1>References<span className="ar" lang="ar">مراجع</span></h1>
-      </div>
+      <header className="facing">
+        <h1>References</h1>
+        <span className="ar" lang="ar">المراجع</span>
+      </header>
 
       {refs !== undefined && refs.length === 0 ? (
         <EmptyState
-          icon="references"
           title="No saved references yet"
           action={<button className="btn btn--primary" onClick={() => switchTab('library')}>{bookCount ? 'Open a book' : 'Go to the Library'}</button>}
         >
@@ -59,11 +60,11 @@ export function References() {
               ))}
             </div>
           )}
-          <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+          <div className="refs">
             {shown.map((r) => {
               const lang = detectLang(r.original);
               return (
-                <article className="card ref-card" key={r.id}>
+                <article className="ref" key={r.id}>
                   <button
                     className="ref-quote"
                     lang={lang === 'other' ? undefined : lang}
@@ -76,7 +77,7 @@ export function References() {
                   >
                     {r.original}
                   </button>
-                  <p className="ref-cite" dir="auto">{formatCitation(r.citation)}</p>
+                  <Citation c={r.citation} />
                   {r.proves && <p className="ref-proves"><b>What it proves:</b> {r.proves}</p>}
                   {r.note && <p className="ref-note" dir="auto">{r.note}</p>}
                   <div className="ref-actions">

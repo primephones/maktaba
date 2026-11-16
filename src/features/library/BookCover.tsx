@@ -56,6 +56,29 @@ interface Props {
   showState?: boolean;
 }
 
+/**
+ * Gold tooling for a cover with no picture: a ruled frame with corner pieces, and the
+ * turanj, the almond-shaped medallion stamped in the centre of Islamic bindings.
+ */
+function Tooling() {
+  const gold = 'var(--foil-line)';
+  return (
+    <svg viewBox="0 0 100 150" preserveAspectRatio="none" aria-hidden="true" fill="none" stroke={gold}>
+      <rect x="1" y="1" width="98" height="148" strokeWidth="1.4" vectorEffect="non-scaling-stroke" />
+      <rect x="5" y="5" width="90" height="140" strokeWidth="0.6" opacity="0.7" vectorEffect="non-scaling-stroke" />
+      {[[5, 5, 1, 1], [95, 5, -1, 1], [5, 145, 1, -1], [95, 145, -1, -1]].map(([x, y, dx, dy], i) => (
+        <path key={i} d={`M${x + 13 * dx},${y} Q${x + 13 * dx},${y + 13 * dy} ${x},${y + 13 * dy}`} strokeWidth="0.7" opacity="0.8" vectorEffect="non-scaling-stroke" />
+      ))}
+      <g transform="translate(50 110)">
+        <path d="M0,-22 C13,-11 13,11 0,22 C-13,11 -13,-11 0,-22 Z" fill="rgba(0,0,0,0.2)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        <path d="M0,-15 C8,-7.5 8,7.5 0,15 C-8,7.5 -8,-7.5 0,-15 Z" strokeWidth="0.6" opacity="0.75" vectorEffect="non-scaling-stroke" />
+        <path d="M0,-6 L3.5,0 L0,6 L-3.5,0 Z" fill={gold} stroke="none" opacity="0.85" />
+        <path d="M0,-30 L2.2,-26 L0,-22 L-2.2,-26 Z M0,30 L2.2,26 L0,22 L-2.2,26 Z" fill={gold} stroke="none" opacity="0.85" />
+      </g>
+    </svg>
+  );
+}
+
 /** A cover drawn as a bound book: spine, page edges, and one of three faces. */
 export function BookCover({ book, style, showState = true }: Props) {
   const defaultStyle = useSetting('coverStyle');
@@ -66,7 +89,6 @@ export function BookCover({ book, style, showState = true }: Props) {
   const leather = LEATHERS[hashString(book.series || book.title) % LEATHERS.length];
   const rtl = isRtl(book.lang) || isRtl(detectLang(book.title));
   const titleLang = detectLang(book.title);
-  const authorLang = detectLang(book.author);
   const imp = book.import;
   const busy = showState && (imp.state === 'queued' || imp.state === 'processing');
   const failed = showState && imp.state === 'failed';
@@ -76,10 +98,9 @@ export function BookCover({ book, style, showState = true }: Props) {
     <span className="cover" data-style={face} data-leather={leather} data-rtl={rtl}>
       {face !== 'designed' && url && <img src={url} alt="" loading="lazy" decoding="async" draggable={false} />}
       {face === 'designed' && (
-        <span className="cover-foil" dir={rtl ? 'rtl' : 'ltr'}>
-          <span className="orn" />
-          <span className="t" lang={titleLang === 'other' ? undefined : titleLang}>{book.title}</span>
-          {book.author && <span className="a" lang={authorLang === 'other' ? undefined : authorLang}>{book.author}</span>}
+        <span className="cover-face" dir={rtl ? 'rtl' : 'ltr'}>
+          <Tooling />
+          <span className="t"><span lang={titleLang === 'other' ? undefined : titleLang}>{book.title}</span></span>
         </span>
       )}
       {inProgress && <span className="cover-ribbon" aria-hidden="true" />}

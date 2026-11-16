@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, uid } from '../../db/db';
 import type { Book, Folder, Lang } from '../../db/types';
-import { langName } from '../../lib/arabic';
+import { langAttr, langName } from '../../lib/arabic';
 import { percent } from '../../lib/util';
 import { goBack, navigate } from '../../app/router';
 import { useApp } from '../../app/AppContext';
 import { setSetting, useSetting, type Settings } from '../../app/settings';
-import { EmptyState } from '../../ui/EmptyState';
+import { BEST_COMPANION, EmptyState } from '../../ui/EmptyState';
 import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
@@ -89,8 +89,8 @@ export function BookTile({ book, onDetails, volumes, onStack }: { book: Book; on
       </button>
       <div className="tile-row">
         <div className="tile-meta">
-          <span className="tile-title" lang={book.lang === 'other' ? undefined : book.lang} dir="auto">{title}</span>
-          {book.author && <span className="tile-sub" dir="auto">{book.author}</span>}
+          <span className="tile-title" lang={langAttr(title)} dir="auto">{title}</span>
+          {book.author && <span className="tile-sub" lang={langAttr(book.author)} dir="auto">{book.author}</span>}
           <span className="tile-progress">
             <span className="meter" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fraction * 100)} aria-label="Reading progress">
               <i style={{ width: percent(fraction) }} />
@@ -151,11 +151,11 @@ export function Library({ folderId }: { folderId?: string }) {
   if (folderId && books && foldersLoaded && !folder) {
     return (
       <div className="screen">
-        <div className="screen-head screen-head--sub">
+        <div className="screen-head">
           <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>
           <h1>Folder</h1>
         </div>
-        <EmptyState icon="folder" title="This folder was removed">Its books are back in the Library.</EmptyState>
+        <EmptyState title="This folder was removed">Its books are back in the Library.</EmptyState>
       </div>
     );
   }
@@ -165,11 +165,19 @@ export function Library({ folderId }: { folderId?: string }) {
 
   return (
     <div className="screen">
-      <div className={`screen-head${folderId ? ' screen-head--sub' : ''}`}>
-        {folderId && <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>}
-        <h1>{folderId ? folder?.name ?? '' : <>Library<span className="ar" lang="ar">مكتبة</span></>}</h1>
-        <button className="icon-btn" onClick={() => setMenu('menu')} aria-label="Library options"><Icon name="more" /></button>
-      </div>
+      {folderId ? (
+        <div className="screen-head">
+          <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>
+          <h1 dir="auto">{folder?.name ?? ''}</h1>
+          <button className="icon-btn" onClick={() => setMenu('menu')} aria-label="Library options"><Icon name="more" /></button>
+        </div>
+      ) : (
+        <header className="facing">
+          <h1>Library</h1>
+          <span className="ar" lang="ar">المكتبة</span>
+          <button className="icon-btn" onClick={() => setMenu('menu')} aria-label="Library options"><Icon name="more" /></button>
+        </header>
+      )}
 
       {!folderId && !nothingAtAll && (
         <button className="search-entry" onClick={() => navigate('/search')}>
@@ -179,7 +187,7 @@ export function Library({ folderId }: { folderId?: string }) {
       )}
 
       {nothingAtAll ? (
-        <EmptyState icon="library" title="Your library is empty" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
+        <EmptyState epigraph={BEST_COMPANION} title="Your library is empty" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
           Add a PDF, EPUB, Word or text file from your phone. Maktaba prepares it and keeps it for offline reading.
         </EmptyState>
       ) : (
@@ -200,10 +208,9 @@ export function Library({ folderId }: { folderId?: string }) {
               {subfolders.map((f) => (
                 <button key={f.id} className="folder" onClick={() => navigate(`/library/folder/${f.id}`)}>
                   <Icon name="folder" />
-                  <span style={{ minWidth: 0 }}>
-                    <span className="name" style={{ display: 'block' }} dir="auto">{f.name}</span>
-                    <span className="count">{countIn(f)} book{countIn(f) === 1 ? '' : 's'}</span>
-                  </span>
+                  <span className="name" dir="auto">{f.name}</span>
+                  <span className="count">{countIn(f)} book{countIn(f) === 1 ? '' : 's'}</span>
+                  <Icon name="forward" size={18} />
                 </button>
               ))}
             </div>
@@ -216,11 +223,11 @@ export function Library({ folderId }: { folderId?: string }) {
               ))}
             </div>
           ) : !loading && here.length === 0 ? (
-            <EmptyState icon="book" title={folderId ? 'No books in this folder' : 'No books here yet'} action={<button className="btn btn--primary" onClick={() => addBooks(folderId)}><Icon name="plus" size={20} />Add a book{folderId ? ' here' : ''}</button>}>
+            <EmptyState title={folderId ? 'No books in this folder' : 'No books here yet'} action={<button className="btn btn--primary" onClick={() => addBooks(folderId)}><Icon name="plus" size={20} />Add a book{folderId ? ' here' : ''}</button>}>
               {folderId ? 'Add a book straight into this folder, or move one here from its details.' : 'Your books are inside the folders above.'}
             </EmptyState>
           ) : !loading ? (
-            <EmptyState icon="search" title="Nothing matches" action={<button className="btn" onClick={() => setFilter('all')}>Show all books</button>}>
+            <EmptyState title="Nothing matches" action={<button className="btn" onClick={() => setFilter('all')}>Show all books</button>}>
               No books here fit that filter.
             </EmptyState>
           ) : null}

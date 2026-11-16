@@ -48,5 +48,9 @@ describe('PDF text reconstruction', () => {
     const bad = [item('فإن العل\u0000 أفضل', 50, 700, 100), item('\u0000', 160, 700, 6), item('الأحكا\u0000', 170, 700, 60)];
     expect(isDamaged(textDamage(good))).toBe(false);
     expect(isDamaged(textDamage(bad))).toBe(true);
+    // In Arabic one lost letter is already a misquotation.
+    expect(isDamaged(textDamage([item('قال الإمام: العلم ما حف\u0000 وقد أجمع العلماء على ذلك', 50, 700, 300)]))).toBe(true);
+    // In English a stray ornament glyph is not.
+    expect(isDamaged(textDamage([item('\uF0B7 A bulleted line of ordinary English text in a book.', 50, 700, 300)]))).toBe(false);
   });
 });

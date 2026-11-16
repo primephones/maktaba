@@ -93,7 +93,7 @@
 
 .bk[data-t='quote'] {
   padding-inline-start: 1em;
-  border-inline-start: 3px solid var(--line-strong);
+  border-inline-start: 2px solid var(--rubric);
   color: var(--ink-2);
 }
 .bk[data-t='li'] {
@@ -159,7 +159,7 @@
   text-align: center;
   color: var(--rubric);
   background: color-mix(in srgb, var(--rubric) 11%, transparent);
-  border-radius: var(--r-pill);
+  border-radius: 3px;
   -webkit-user-select: none;
   user-select: none;
   cursor: pointer;
@@ -201,33 +201,68 @@ mark.flash {
   overflow-wrap: anywhere;
 }
 .hit-book {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-read);
   font-weight: 600;
-  margin: 0 4px 8px;
+  margin: 22px 0 8px;
   overflow-wrap: anywhere;
 }
-
-.rd-section-end {
-  display: grid;
-  justify-items: center;
-  gap: 4px;
-  margin: 2.4em 0;
-  color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.hit-book [lang='ar'], .hit-book [lang='fa'] {
+  font-size: 1.2em;
+  font-weight: 700;
 }
-.rd-section-end::before {
-  content: '❖';
-  color: var(--gold-soft);
-  font-size: 1rem;
+.hit-book .count {
+  margin-inline-start: auto;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Between chapters: three red points, the scribe's divider. */
+.rd-section-end {
+  height: 16px;
+  margin: 2.6em auto;
+  width: 30px;
+  background:
+    radial-gradient(circle 2.6px at 15px 3px, var(--rubric) 98%, transparent),
+    radial-gradient(circle 2.6px at 4px 13px, var(--rubric) 98%, transparent),
+    radial-gradient(circle 2.6px at 26px 13px, var(--rubric) 98%, transparent);
+}
+
+/* Where the printed page turns: its number, set apart from the text and never copied. */
+.pgmark {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0.2em 0 0.9em;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: none;
+  user-select: none;
+  break-after: avoid;
+  direction: ltr;
+}
+.pgmark::before,
+.pgmark::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
 .rd-end {
   text-align: center;
-  padding: 2em 0 4em;
+  padding: 2.4em 0 4em;
   color: var(--ink-3);
-  font-family: var(--font-ui);
-  font-size: 0.9rem;
+  font-family: var(--font-read);
+  font-style: italic;
+  font-size: 0.95rem;
 }
 
 /* ---------- Paged mode ---------- */
@@ -450,7 +485,7 @@ mark.flash {
   max-width: calc(100vw - 16px);
   border-radius: var(--r-lg);
   background: var(--surface);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--ink);
   box-shadow: var(--shadow);
   animation: rise 0.22s var(--ease-out) both;
 }
@@ -489,7 +524,7 @@ mark.flash {
   min-width: 52px;
   min-height: 44px;
   padding: 3px 6px;
-  border-radius: 12px;
+  border-radius: 6px;
   font-size: 0.66rem;
   font-weight: 600;
   color: var(--ink-2);
@@ -529,8 +564,13 @@ mark.flash {
 .toc-row[data-level='3'] { padding-inline-start: 36px; font-size: 0.92rem; color: var(--ink-2); }
 .toc-row[data-level='4'] { padding-inline-start: 50px; font-size: 0.9rem; color: var(--ink-2); }
 .toc-row[aria-current='true'] {
-  color: var(--rubric);
-  font-weight: 600;
+  color: var(--ink);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--rubric);
+  padding-inline-start: 14px;
+}
+[dir='rtl'] .toc-row[aria-current='true'] {
+  box-shadow: inset -3px 0 0 var(--rubric);
 }
 .toc-row .grow {
   flex: 1;
@@ -569,12 +609,16 @@ mark.flash {
   gap: 5px;
   padding: 10px 4px;
   border-radius: var(--r-md);
-  border: 1.5px solid var(--line);
-  font-size: 0.78rem;
+  border: 1px solid var(--line-strong);
+  font-size: 0.8rem;
   font-weight: 500;
+  color: var(--ink-2);
 }
 .theme-chip[aria-pressed='true'] {
-  border-color: var(--rubric);
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+  color: var(--ink);
+  font-weight: 600;
 }
 .ctl {
   display: grid;
@@ -601,18 +645,24 @@ mark.flash {
   flex: 1;
 }
 
-.ref-card {
+/* Saved references: the passage, then its citation set like a footnote. */
+.refs {
+  margin-top: 6px;
+}
+.ref {
   display: grid;
   gap: 8px;
+  padding: 20px 0 14px;
+  border-bottom: 1px solid var(--line-strong);
 }
 .ref-quote {
   font-family: var(--font-read);
-  font-size: 1.05rem;
+  font-size: 1.08rem;
   line-height: 1.7;
   text-align: start;
   overflow-wrap: anywhere;
-  border-inline-start: 3px solid var(--rubric);
-  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--rubric);
+  padding-inline-start: 14px;
   display: -webkit-box;
   -webkit-line-clamp: 8;
   line-clamp: 8;
@@ -621,7 +671,7 @@ mark.flash {
 }
 .ref-quote[lang='ar'], .ref-quote[lang='fa'] {
   font-family: var(--font-arabic);
-  font-size: 1.3rem;
+  font-size: 1.38rem;
   line-height: 1.9;
 }
 .ref-quote[lang='ur'] {
@@ -629,11 +679,26 @@ mark.flash {
   line-height: 2.3;
 }
 .ref-cite {
-  font-size: 0.86rem;
+  font-family: var(--font-read);
+  font-size: 0.92rem;
   color: var(--ink-2);
+  line-height: 1.6;
+}
+.ref-cite[dir='rtl'] {
+  font-family: var(--font-arabic);
+  font-size: 1.08rem;
+  line-height: 1.8;
+}
+.ref-cite cite {
+  font-style: italic;
+}
+.ref-cite[dir='rtl'] cite {
+  font-style: normal;
+  font-weight: 700;
 }
 .ref-proves, .ref-note {
-  font-size: 0.92rem;
+  font-size: 0.94rem;
+  line-height: 1.55;
 }
 .ref-note {
   color: var(--ink-2);
@@ -641,11 +706,10 @@ mark.flash {
 }
 .ref-actions {
   display: flex;
-  gap: 4px;
-  margin: 0 -12px -8px;
+  gap: 6px;
+  margin-inline-start: -10px;
 }
 .ref-actions .btn {
   min-height: 40px;
-  padding: 0 12px;
-  font-size: 0.86rem;
+  font-size: 0.88rem;
 }

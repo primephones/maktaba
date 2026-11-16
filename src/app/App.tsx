@@ -90,7 +90,7 @@ export function App() {
     default:
       screen = (
         <div className="screen screen--plain">
-          <EmptyState icon="info" title="Nothing here">
+          <EmptyState title="Nothing here">
             This page doesn’t exist.
           </EmptyState>
           <button className="btn btn--primary btn--block" onClick={() => goBack()}>Go to Home</button>
@@ -105,7 +105,7 @@ export function App() {
         <main key={key}>{screen}</main>
       </ErrorBoundary>
       <BottomBar route={route} hidden={barHidden} onAdd={() => pick(route.name === 'library' ? route.folderId : undefined)} />
-      <Toasts raised={!barHidden} />
+      <Toasts place={inReader ? 'reader' : barHidden ? 'edge' : 'bar'} />
       {addElement}
     </AppContext.Provider>
   );

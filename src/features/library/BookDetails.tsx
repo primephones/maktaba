@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, deleteBook } from '../../db/db';
 import type { Book, CoverStyle, Folder, Lang, ReadStatus } from '../../db/types';
 import { cancelImport, retryImport } from '../../import';
-import { langName, parseVolume } from '../../lib/arabic';
+import { langAttr, langName, parseVolume } from '../../lib/arabic';
 import { formatBytes, percent } from '../../lib/util';
 import { navigate } from '../../app/router';
 import { Sheet } from '../../ui/Sheet';
@@ -92,10 +92,10 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
       <div className="detail-head">
         <BookCover book={book} showState={false} />
         <div>
-          <h3 lang={book.lang === 'other' ? undefined : book.lang} dir="auto">{book.title}</h3>
-          {book.author && <p className="muted" dir="auto">{book.author}</p>}
-          <p className="muted small" style={{ marginTop: 6 }}>
-            {[langName(book.lang), FORMAT[book.format], formatBytes(book.size), book.pageCount ? `${book.pageCount} pages` : null].filter(Boolean).join(' · ')}
+          <h3 lang={langAttr(book.title)} dir="auto">{book.title}</h3>
+          {book.author && <p className="by" lang={langAttr(book.author)} dir="auto">{book.author}</p>}
+          <p className="detail-facts">
+            {langName(book.lang)}, {FORMAT[book.format]}{book.pageCount ? `, ${book.pageCount} pages` : ''}<br />{formatBytes(book.size)} on this device
           </p>
         </div>
       </div>
@@ -148,7 +148,7 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
       )}
 
       <div>
-        <div className="section-title" style={{ marginTop: 6 }}>Reading status</div>
+        <div className="section-title" style={{ marginTop: 4 }}>Reading status</div>
         <div className="seg" role="group" aria-label="Reading status">
           {STATUS.map(([value, label]) => (
             <button key={value} aria-pressed={book.status === value} onClick={() => void update({ status: value })}>{label}</button>
@@ -157,7 +157,7 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
       </div>
 
       <div>
-        <div className="section-title" style={{ marginTop: 6 }}>Cover</div>
+        <div className="section-title" style={{ marginTop: 4 }}>Cover</div>
         <div className="cover-choices">
           {([['bound', 'Bound'], ['raw', 'Original'], ['designed', 'Gold title']] as Array<[CoverStyle, string]>).map(([value, label]) => {
             const unavailable = !coverUrl && value !== 'designed';

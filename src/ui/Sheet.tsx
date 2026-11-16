@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { pushOverlay } from '../app/router';
 import { Icon } from './Icon';
@@ -35,8 +35,13 @@ export function Sheet({ title, onClose, children, actions }: SheetProps) {
     finish();
   }, [finish]);
 
-  useEffect(() => {
+  // Registered before the sheet is painted, so the back gesture can never slip past it.
+  useLayoutEffect(() => {
     releaseRef.current = pushOverlay(finish);
+    return () => releaseRef.current();
+  }, [finish]);
+
+  useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     sheetRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
@@ -48,10 +53,9 @@ export function Sheet({ title, onClose, children, actions }: SheetProps) {
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      releaseRef.current();
       previous?.focus?.();
     };
-  }, [close, finish]);
+  }, [close]);
 
   return createPortal(
     <div className="sheet-root" data-closing={closing}>

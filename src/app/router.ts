@@ -97,6 +97,18 @@ export function switchTab(tab: (typeof TABS)[number]) {
 }
 
 export function goBack(fallback = '/') {
+  // Called from inside a sheet: step over the sheet's own history entry as well.
+  const onOverlay = !!(history.state as { overlay?: boolean } | null)?.overlay;
+  if (onOverlay) {
+    overlayEntry = false;
+    overlays.length = 0;
+    if (depth() > 1) history.go(-2);
+    else {
+      history.back();
+      window.setTimeout(() => navigate(fallback, { replace: true }), 60);
+    }
+    return;
+  }
   if (depth() > 0) history.back();
   else navigate(fallback, { replace: true });
 }
@@ -153,7 +165,13 @@ window.addEventListener('popstate', () => {
 export function pushOverlay(onBack: () => void): () => void {
   const overlay: Overlay = { onBack };
   overlays.push(overlay);
-  settleOverlays();
+  // The history entry is added at once, so back works from the first moment the overlay
+  // is on screen. Only its removal waits a tick, in case another overlay takes its place.
+  window.clearTimeout(settleTimer);
+  if (!overlayEntry) {
+    history.pushState({ d: depth() + 1, overlay: true }, '');
+    overlayEntry = true;
+  }
   return () => {
     const i = overlays.indexOf(overlay);
     if (i < 0) return;

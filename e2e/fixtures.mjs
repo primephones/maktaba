@@ -65,9 +65,9 @@ writeFileSync(new URL('usul.epub', out), epub);
 // ---------- Text PDF (Arabic, with printed page numbers) ----------
 const pdfHtml = (pages, text = plain) => `<html dir="rtl"><head><style>${fontCss}
 @page{size:A5;margin:18mm 16mm}body{font-family:Amiri;font-size:15pt;line-height:1.9}
-.pg{page-break-after:always;position:relative;min-height:170mm}.no{position:absolute;bottom:-8mm;left:0;right:0;text-align:center;font-size:11pt}
+.pg{page-break-after:always;position:relative;height:160mm}.no{position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:11pt}
 h1{font-size:20pt;color:#000}</style></head><body>
-${Array.from({ length: pages }, (_, p) => `<div class="pg">${p % 4 === 0 ? `<h1>الباب ${p / 4 + 1}</h1>` : ''}${Array.from({ length: 5 }, (_, i) => `<p>${text(i + p)} ${p === 6 && i === 2 ? 'الكلمة النادرة: ياقوت.' : ''}</p>`).join('')}<div class="no">${p + 1}</div></div>`).join('')}
+${Array.from({ length: pages }, (_, p) => `<div class="pg">${p % 4 === 0 ? `<h1>الباب ${p / 4 + 1}</h1>` : ''}${Array.from({ length: 3 }, (_, i) => `<p>${text(i + p)} ${p === 6 && i === 2 ? 'الكلمة النادرة: ياقوت.' : ''}</p>`).join('')}<div class="no">${p + 1}</div></div>`).join('')}
 </body></html>`;
 await page.setContent(pdfHtml(24));
 await page.evaluate(() => document.fonts.ready);

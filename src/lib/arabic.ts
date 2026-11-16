@@ -113,6 +113,12 @@ export function detectLang(sample: string): Lang {
   return 'ar';
 }
 
+/** The lang attribute for a piece of text, so each script gets its own typeface. */
+export const langAttr = (text: string): Lang | undefined => {
+  const l = detectLang(text);
+  return l === 'other' ? undefined : l;
+};
+
 export const isRtl = (lang: Lang) => lang === 'ar' || lang === 'ur' || lang === 'fa';
 
 export const langName = (lang: Lang): string =>

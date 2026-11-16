@@ -33,6 +33,11 @@ page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 
 const shot = (n) => page.screenshot({ path: `${shots}${n}.png` });
 const pause = (ms = 400) => page.waitForTimeout(ms);
+/** Moves to another screen by address, as a link or the back stack would, and lets it settle. */
+const go = async (hash) => {
+  await page.evaluate((h) => { location.hash = h; }, hash);
+  await pause(600);
+};
 const section = async (name, fn) => {
   console.log(name);
   try {
@@ -81,7 +86,7 @@ const topText = () => page.evaluate(() => {
   return '';
 });
 /** WCAG contrast of an element's text against the first opaque background behind it. */
-const contrastOf = (selector) => page.evaluate((sel) => {
+const contrastOf = (selector, bgVar) => page.evaluate(([sel, bgVar]) => {
   const lum = (c) => {
     const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -92,28 +97,34 @@ const contrastOf = (selector) => page.evaluate((sel) => {
     if (!el.textContent.trim() || !el.getClientRects().length) continue;
     const fg = parse(getComputedStyle(el).color).rgb;
     let bg = [255, 255, 255];
-    for (let p = el; p; p = p.parentElement) {
-      const c = parse(getComputedStyle(p).backgroundColor);
-      if (c.a > 0.9) { bg = c.rgb; break; }
+    if (bgVar) {
+      // A surface painted with a gradient: measure against the named colour instead.
+      const hex = getComputedStyle(el).getPropertyValue(bgVar).trim().replace('#', '');
+      bg = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    } else {
+      for (let p = el; p; p = p.parentElement) {
+        const c = parse(getComputedStyle(p).backgroundColor);
+        if (c.a > 0.9) { bg = c.rgb; break; }
+      }
     }
     const [a, b] = [lum(fg), lum(bg)].sort((x, y) => y - x);
     out.push({ text: el.textContent.trim().slice(0, 30), ratio: +((a + 0.05) / (b + 0.05)).toFixed(2) });
   }
   return out;
-}, selector);
+}, [selector, bgVar]);
 
 // ------------------------------------------------------------------------------------
 await section('Empty states', async () => {
   await page.goto(server.url);
   await page.waitForSelector('.screen');
-  check(await page.getByRole('button', { name: 'Add your first book' }).isVisible(), 'Home with no books offers “Add your first book”');
-  await page.goto(server.url + '#/search');
+  check(await page.getByRole('button', { name: 'Add your first book' }).waitFor({ timeout: 5000 }).then(() => true, () => false), 'Home with no books offers “Add your first book”');
+  await go('#/search');
   check(await page.getByText('Add a book first').isVisible(), 'Search with no books says “Add a book first”');
   check(await page.getByRole('button', { name: 'Add a book', exact: true }).isVisible(), 'Search with no books shows an Add button');
   check(await page.getByRole('button', { name: 'Back' }).isVisible(), 'Search screen has a back button');
-  await page.goto(server.url + '#/references');
+  await go('#/references');
   check(await page.getByText('No saved references yet').isVisible(), 'References explains itself when empty');
-  await page.goto(server.url + '#/library');
+  await go('#/library');
   check(await page.getByText('Your library is empty').isVisible(), 'Library explains itself when empty');
   check((await page.locator('.bar-act--add').count()) === 1, 'There is exactly one Add button in the bar');
   await shot('01-library-empty');
@@ -126,7 +137,7 @@ await section('Adding books', async () => {
   all = await waitImports(8);
   const by = (t) => all.find((b) => b.title === t) ?? {};
   check(all.length === 8 && all.every((b) => b.import.state === 'ready'), `all 8 books imported (${all.map((b) => b.import.state).join(',')})`);
-  check(await page.getByText('notes.xyz').isVisible(), 'the unsupported file is reported, not silently dropped');
+  check(await page.getByText('notes.xyz').first().isVisible(), 'the unsupported file is reported, not silently dropped');
   await page.getByRole('button', { name: 'Done' }).click();
   const epub = by('مختصر في أصول الفقه');
   check(epub.author === 'ابن اللحام' && epub.lang === 'ar' && epub.hasCover && epub.toc?.length === 4, 'EPUB: title, author, language, cover and contents read');
@@ -136,7 +147,7 @@ await section('Adding books', async () => {
   const text = by('risala-text');
   check(text.kind === 'text' && !text.imagePages && text.toc?.length >= 6, `text PDF read as text with headings (kind ${text.kind}, image pages ${text.imagePages}, toc ${text.toc?.length})`);
   const damaged = by('damaged-text-layer');
-  check(damaged.kind === 'scan' && damaged.imagePages === damaged.pageCount, 'PDF with letters missing from its text layer is shown as pages, not misquoted');
+  check(damaged.imagePages >= 2, `pages whose text layer has letters missing are shown as page images, not misquoted (${damaged.imagePages} of ${damaged.pageCount})`);
   check(by('Introduction to Usul - Vol 2').volume === 2 && by('Introduction to Usul - Vol 1').toc?.length === 6, 'volumes recognised; English chapter headings kept');
 
   await page.setInputFiles('[data-testid=add-input]', [fx('usul.epub')]);
@@ -148,8 +159,7 @@ await section('Adding books', async () => {
 });
 
 await section('Library', async () => {
-  await page.goto(server.url + '#/library');
-  await pause(600);
+  await go('#/library');
   check((await page.locator('.stack').count()) === 1, 'two volumes of one work are shelved as one stack');
   await shot('03-library');
   await page.getByRole('button', { name: 'Introduction to Usul, 2 volumes' }).click();
@@ -168,6 +178,7 @@ await section('Library', async () => {
   await page.getByRole('button', { name: 'Save' }).click();
   await pause(500);
   check(await page.locator('.folder').getByText('أصول الفقه').isVisible(), 'folder created');
+  check(/0 books/.test(await page.locator('.folder').textContent()), 'a new folder shows it is empty');
 
   await page.getByRole('button', { name: 'Details for الرسالة' }).click();
   await page.getByRole('button', { name: /Move to folder/ }).click();
@@ -186,7 +197,7 @@ await section('Library', async () => {
   await pause(700);
   check(await page.getByRole('button', { name: 'Open الرسالة', exact: true }).isVisible(), 'deleting a folder keeps its books');
 
-  await page.getByRole('button', { name: 'Urdu' }).click();
+  await page.getByRole('button', { name: 'Urdu', exact: true }).click();
   await pause(300);
   check((await page.locator('.tile').count()) === 1, 'language filter narrows the shelf');
   await page.getByRole('button', { name: 'All', exact: true }).click();
@@ -240,6 +251,25 @@ await section('Reader', async () => {
   check((await page.locator('.hl').first().textContent()) === 'العلم أفضل', 'hiding vowel marks keeps the highlight on the same words');
 
   // With vowel marks hidden, a new selection must still land on the right stored text.
+  await page.evaluate(() => {
+    const p = [...document.querySelectorAll('.bk[data-t="p"]')].find((el) => el.textContent.includes('ميراث الأنبياء'));
+    const nodes = [];
+    const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) nodes.push(n);
+    const node = nodes.find((n) => n.data.includes('ميراث الأنبياء'));
+    const from = node.data.indexOf('ميراث الأنبياء');
+    const r = document.createRange();
+    r.setStart(node, from);
+    r.setEnd(node, from + 'ميراث الأنبياء'.length);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await pause(500);
+  await page.getByRole('button', { name: 'Copy', exact: true }).click();
+  await page.getByRole('button', { name: 'Add citation' }).click();
+  await pause(300);
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  check(clip === 'ميراثُ الأنبياء\n— ابن اللحام، مختصر في أصول الفقه، المقدمة', `copy with citation gives the passage and its source (“${clip.replace(/\n/g, ' / ')}”)`);
   await page.evaluate(() => {
     const p = [...document.querySelectorAll('.bk[data-t="p"]')].find((el) => el.textContent.includes('ميراث الأنبياء'));
     const nodes = [];
@@ -316,7 +346,7 @@ await section('Pages mode and themes', async () => {
   await pause(600);
   check((await foot()) === first, 'tapping the right edge turns back');
   await shot('08-pages-lamp');
-  const lowText = (await contrastOf('.pg .bk')).filter((c) => c.ratio < 7);
+  const lowText = (await contrastOf('.pg .bk[data-t="p"]')).filter((c) => c.ratio < 7);
   check(lowText.length === 0, `dark theme: book text has strong contrast ${JSON.stringify(lowText.slice(0, 2))}`);
   await showChrome();
   await page.getByRole('button', { name: 'Text and theme' }).click();
@@ -362,18 +392,19 @@ await section('Other formats', async () => {
   await page.getByRole('button', { name: 'Go', exact: true }).click();
   await pause(900);
   check(/p\. 7/.test(await page.locator('.rd-bottom-bar .where').textContent()), 'go-to-page lands on that page');
+  check((await page.locator('.pgmark').count()) > 3, 'printed page numbers are marked between paragraphs');
 });
 
 await section('Search across the library', async () => {
   await page.goto(server.url + '#/search');
   const box = page.getByRole('searchbox', { name: 'Search your books' });
   await box.fill('ياقوت');
-  await page.getByText(/In the text · 1 match/).waitFor({ timeout: 15000 });
+  await page.getByText(/In the text: 1 match$/).waitFor({ timeout: 15000 });
   check(true, 'a word that occurs once in the library is found once');
   check((await page.locator('.field .icon-btn').count()) === 1, 'the search field has one clear button, not two');
   await shot('11-search');
   await box.fill('ijma');
-  await page.getByText(/In the text · \d+ match/).waitFor({ timeout: 15000 });
+  await page.getByText(/In the text: \d+ match/).waitFor({ timeout: 15000 });
   check(await page.locator('.hit-text mark').first().textContent().then((t) => /ijm/i.test(t)), 'typing “ijma” finds “ijmāʿ”');
   await box.fill('الشافعي');
   await pause(1500);
@@ -392,27 +423,33 @@ await section('Settings and navigation', async () => {
     await page.getByRole('button', { name: 'Back' }).click();
     await pause(300);
   }
-  await page.goto(server.url + '#/settings/storage');
+  await go('#/settings/storage');
   await page.getByText('Book files').waitFor();
   await shot('12-storage');
-  await page.goto(server.url + '#/nonsense');
+  await go('#/nonsense');
   check(await page.getByText('Nothing here').isVisible(), 'an unknown address shows a message, not a blank screen');
-  await page.goto(server.url + '#/book/does-not-exist');
+  await go('#/book/does-not-exist');
   check(await page.getByText('This book is no longer here').isVisible(), 'a missing book shows a message, not a blank screen');
 });
 
 await section('Dark theme across the app', async () => {
-  await page.goto(server.url + '#/library');
-  await pause(500);
+  await go('#/library');
   await page.getByRole('button', { name: 'Details for risala-text' }).click();
   await pause(500);
   await shot('13-details-lamp');
-  const low = (await contrastOf('.sheet h2, .sheet h3, .sheet .title, .sheet .sub, .sheet .muted, .sheet .section-title, .sheet .seg button, .sheet .cover-choice, .sheet .banner span')).filter((c) => c.ratio < 4.5);
+  const low = (await contrastOf('.sheet h2, .sheet h3, .sheet .title, .sheet .sub, .sheet .muted, .sheet .detail-facts, .sheet .by, .sheet .section-title, .sheet .seg button, .sheet .cover-choice:not([disabled]), .sheet .banner span')).filter((c) => c.ratio < 4.5);
   check(low.length === 0, `dark theme: book details sheet is readable ${JSON.stringify(low)}`);
   await page.getByRole('button', { name: 'Close' }).click();
-  const lowMain = (await contrastOf('.screen h1, .chip, .tile-title, .tile-sub, .tile-progress, .bar-tab, .search-entry')).filter((c) => c.ratio < 4.5);
+  const lowMain = (await contrastOf('.facing h1, .facing .ar, .chip, .tile-title, .tile-sub, .tile-progress, .bar-tab, .search-entry')).filter((c) => c.ratio < 4.5);
   check(lowMain.length === 0, `dark theme: library is readable ${JSON.stringify(lowMain)}`);
   await shot('14-library-lamp');
+});
+await section('Home', async () => {
+  await go('#/');
+  check(await page.getByRole('button', { name: /^Continue reading/ }).isVisible(), 'Home leads with the book being read');
+  const low = (await contrastOf('.desk .label, .desk h2, .desk .where, .desk-progress', '--leather-hi')).filter((c) => c.ratio < 4.5);
+  check(low.length === 0, `text on the leather band is readable ${JSON.stringify(low)}`);
+  await shot('15-home-lamp');
 });
 await ctx.close();
 

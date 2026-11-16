@@ -53,7 +53,7 @@ export function BookSearch({ book, onGo, onClose }: { book: Book; onGo: (hit: Te
             <button className="row" key={i} onClick={() => { onGo(h); onClose(); }}>
               <span className="grow">
                 <span className="hit-text" dir="auto">{h.before}<mark>{h.match}</mark>{h.after}</span>
-                <div className="sub" dir="auto">{h.sectionTitle}{h.printed ? ` · p. ${h.printed}` : ''}</div>
+                <div className="sub" dir="auto">{h.sectionTitle}{h.printed ? `, p. ${h.printed}` : ''}</div>
               </span>
             </button>
           ))}
