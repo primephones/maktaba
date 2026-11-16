@@ -1,0 +1,142 @@
+/* Maktaba design tokens: a scholarly manuscript, not a tech product.
+   Vellum paper, iron-gall ink, rubric red for emphasis, slate for quiet structure,
+   muted gold reserved for AI actions and book foil. */
+
+:root {
+  --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-read: 'Literata Variable', 'Literata', Georgia, serif;
+  --font-arabic: 'Amiri', 'IBM Plex Sans Arabic', serif;
+  --font-arabic-sans: 'IBM Plex Sans Arabic', 'Amiri', sans-serif;
+  --font-urdu: 'Noto Nastaliq Urdu', 'Amiri', serif;
+
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-pill: 999px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  --bar-h: 64px;
+  --bar-gap: 12px;
+  /* Space any scrolling screen must leave so its last item clears the floating bar. */
+  --bar-clear: calc(var(--bar-h) + var(--bar-gap) * 2 + var(--safe-bottom));
+
+  --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur: 280ms;
+
+  --z-bar: 40;
+  --z-reader-chrome: 50;
+  --z-sheet: 100;
+  --z-toast: 200;
+}
+
+/* Paper (vellum) — the default */
+:root,
+:root[data-theme='paper'] {
+  color-scheme: light;
+  --bg: #f6f4ef;
+  --surface: #fcfbf8;
+  --surface-2: #efebe2;
+  --ink: #1d1c1a;
+  --ink-2: #4a4741;
+  --ink-3: #6d6960;
+  --line: #ddd7c9;
+  --line-strong: #c4bca9;
+  --rubric: #a3302a;
+  --on-rubric: #fff8f3;
+  --slate: #3e5560;
+  --gold: #8a6a24;
+  --gold-soft: #b79a57;
+  --glass: rgba(252, 251, 248, 0.78);
+  --glass-line: rgba(29, 28, 26, 0.1);
+  --scrim: rgba(29, 28, 26, 0.42);
+  --shadow: 0 10px 30px rgba(60, 48, 30, 0.16), 0 2px 6px rgba(60, 48, 30, 0.1);
+  --hl-gold: rgba(205, 165, 60, 0.36);
+  --hl-rubric: rgba(190, 70, 60, 0.26);
+  --hl-slate: rgba(80, 125, 150, 0.28);
+  --hl-rose: rgba(200, 120, 140, 0.3);
+  --hl-ink: rgba(29, 28, 26, 0.16);
+}
+
+:root[data-theme='sepia'] {
+  color-scheme: light;
+  --bg: #f1e7d0;
+  --surface: #f8f0dd;
+  --surface-2: #e8dcc0;
+  --ink: #33281a;
+  --ink-2: #57472f;
+  --ink-3: #746245;
+  --line: #d9c9a6;
+  --line-strong: #bfab82;
+  --rubric: #97291f;
+  --on-rubric: #fff6ea;
+  --slate: #3d525a;
+  --gold: #7c5c16;
+  --gold-soft: #a98a45;
+  --glass: rgba(248, 240, 221, 0.8);
+  --glass-line: rgba(51, 40, 26, 0.12);
+  --scrim: rgba(51, 40, 26, 0.45);
+  --shadow: 0 10px 30px rgba(70, 50, 20, 0.2), 0 2px 6px rgba(70, 50, 20, 0.12);
+  --hl-gold: rgba(200, 150, 40, 0.4);
+  --hl-rubric: rgba(180, 60, 50, 0.28);
+  --hl-slate: rgba(70, 115, 140, 0.3);
+  --hl-rose: rgba(195, 110, 130, 0.32);
+  --hl-ink: rgba(51, 40, 26, 0.18);
+}
+
+/* Lamp — reading by lamplight. Every text colour here is checked against the surfaces. */
+:root[data-theme='lamp'] {
+  color-scheme: dark;
+  --bg: #14130f;
+  --surface: #1e1c17;
+  --surface-2: #29261f;
+  --ink: #e9e2d4;
+  --ink-2: #c9c1b0;
+  --ink-3: #a39b8a;
+  --line: #36322a;
+  --line-strong: #4c463a;
+  --rubric: #e0796d;
+  --on-rubric: #1d0f0c;
+  --slate: #9bb6c2;
+  --gold: #d0b06a;
+  --gold-soft: #a88e55;
+  --glass: rgba(34, 31, 25, 0.8);
+  --glass-line: rgba(233, 226, 212, 0.13);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --hl-gold: rgba(208, 176, 106, 0.34);
+  --hl-rubric: rgba(224, 121, 109, 0.32);
+  --hl-slate: rgba(120, 165, 190, 0.34);
+  --hl-rose: rgba(215, 140, 160, 0.32);
+  --hl-ink: rgba(233, 226, 212, 0.2);
+}
+
+:root[data-theme='black'] {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #121110;
+  --surface-2: #1d1b18;
+  --ink: #dcd6c8;
+  --ink-2: #bdb6a6;
+  --ink-3: #9a9384;
+  --line: #2a2722;
+  --line-strong: #403b33;
+  --rubric: #e0796d;
+  --on-rubric: #1d0f0c;
+  --slate: #9bb6c2;
+  --gold: #d0b06a;
+  --gold-soft: #a88e55;
+  --glass: rgba(22, 21, 19, 0.84);
+  --glass-line: rgba(220, 214, 200, 0.14);
+  --scrim: rgba(0, 0, 0, 0.7);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(220, 214, 200, 0.08);
+  --hl-gold: rgba(208, 176, 106, 0.36);
+  --hl-rubric: rgba(224, 121, 109, 0.34);
+  --hl-slate: rgba(120, 165, 190, 0.36);
+  --hl-rose: rgba(215, 140, 160, 0.34);
+  --hl-ink: rgba(220, 214, 200, 0.22);
+}
