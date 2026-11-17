@@ -25,6 +25,19 @@ createServer(async (req, res) => {
   }
   const { messages } = JSON.parse(body);
   const user = messages.find((m) => m.role === 'user').content;
+  const system = messages.find((m) => m.role === 'system')?.content ?? '';
+  const reply = (obj) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(obj) } }], usage: { prompt_tokens: 50, completion_tokens: 80 } }));
+  };
+  if (system.includes('give the words most likely')) return reply({ ar: ['الإجماع', 'حجة'], en: ['consensus'] });
+  if (system.includes('ONLY the numbered passages')) {
+    const m = user.match(/\[(p\d+)\][^\n]*\n([^\n]+)/);
+    const words = m ? m[2].split(/\s+/).slice(0, 4).join(' ') : '';
+    return reply({ found: !!m, answer: m ? `The passages say that consensus is a decisive proof [${m[1]}].` : 'Not in the passages.', quotes: m ? [{ id: m[1], text: words }] : [] });
+  }
+  if (system.includes('You explain a passage')) return reply({ explanation: 'This passage says that consensus (ijmāʿ) is a decisive proof.', terms: [{ term: 'ijmāʿ', meaning: 'consensus' }] });
+  if (system.includes('iʿrāb')) return reply({ words: user.trim().split(/\s+/).slice(0, 6).map((w) => ({ word: w, irab: 'اسم مرفوع', en: 'a noun' })), note: '' });
   const part = user.slice(user.indexOf('Translate these paragraphs:'));
   const paras = [...part.matchAll(/\[([^\]]+)\][^\n]*\n([^\n]+)/g)].map((m) => ({ id: m[1], text: m[2] }));
   const toAscii = (s) => s.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));

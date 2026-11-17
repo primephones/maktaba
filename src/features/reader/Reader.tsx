@@ -10,6 +10,7 @@ import { native } from '../../native/maktaba';
 import { sourceParagraphs, translatable, translateNow } from '../../ai/translation';
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
+import { StudySheet } from './StudySheet';
 import { goBack, navigate } from '../../app/router';
 import { useSetting } from '../../app/settings';
 import { EmptyState } from '../../ui/EmptyState';
@@ -322,6 +323,18 @@ function ReaderInner({ book }: { book: Book }) {
     clearSelection();
   };
 
+  // ----- Explain and iʿrāb -----
+  const [studyOpen, setStudyOpen] = useState<{ kind: 'explain' | 'irab'; text: string; en?: string; cite: string } | null>(null);
+  const openStudy = (kind: 'explain' | 'irab') => {
+    if (!selection) return;
+    const parts = selection.parts.map((p) => (p.en ? { ...p, en: false, start: 0, end: cache.current.get(p.section)?.blocks[p.block]?.text.length ?? 0 } : p)).map(toStored).filter((p): p is NonNullable<typeof p> => !!p);
+    const first = parts[0] ?? selection.parts[0];
+    const text = kind === 'irab' ? selection.text : parts.map((p) => p.text).join('\n') || selection.text;
+    const en = parts.map((p) => translations.get(`${p.section}:${p.block}`)?.en).filter(Boolean).join('\n') || undefined;
+    setStudyOpen({ kind, text, en, cite: formatCitation(citationAt(first.section, first.block)) });
+    clearSelection();
+  };
+
   // ----- Bookmarks -----
   const bookmarkHere = marks.find((m) => m.type === 'bookmark' && m.section === pos.section && m.block === pos.block);
   const toggleBookmark = async () => {
@@ -554,9 +567,13 @@ function ReaderInner({ book }: { book: Book }) {
               <button key={c} className="dot" data-c={c} aria-label={`Highlight ${COLOR_NAME[c]}`} onClick={() => void highlight(c)}><i /></button>
             ))}
           </div>
-          <button className="sel-act" onClick={() => void highlight('gold', true)}><Icon name="note" size={20} />Note</button>
-          <button className="sel-act" onClick={() => void saveReference()}><Icon name="references" size={20} />Reference</button>
-          <button className="sel-act" onClick={() => void copy()}><Icon name="copy" size={20} />Copy</button>
+          <div className="acts">
+            <button className="sel-act" onClick={() => void highlight('gold', true)}><Icon name="note" size={20} />Note</button>
+            <button className="sel-act" onClick={() => void saveReference()}><Icon name="references" size={20} />Reference</button>
+            <button className="sel-act" onClick={() => openStudy('explain')}><Icon name="sparkle" size={20} />Explain</button>
+            {hasArabicScript(selection.text) && <button className="sel-act" onClick={() => openStudy('irab')}><Icon name="sparkle" size={20} />Iʿrāb</button>}
+            <button className="sel-act" onClick={() => void copy()}><Icon name="copy" size={20} />Copy</button>
+          </div>
         </div>
       )}
 
@@ -599,6 +616,7 @@ function ReaderInner({ book }: { book: Book }) {
       {editing && <MarkEditor mark={editing} onClose={() => setEditMark(null)} />}
       {zoom && <ZoomViewer source={zoom} onClose={() => setZoom(null)} />}
       {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
+      {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}
     </div>
   );
 }

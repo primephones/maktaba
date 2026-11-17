@@ -233,8 +233,8 @@ function AboutPage() {
 
       <div className="section-title">In this version</div>
       <div className="card small" style={{ display: 'grid', gap: 8 }}>
-        <p><b>Working now:</b> adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; offline text recognition for scans; English translation through your own server; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
-        <p><b>Not built yet:</b> AI questions, the dictionary and read-aloud. They are left out rather than shown half-finished.</p>
+        <p><b>Working now:</b> adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; offline text recognition for scans; English translation through your own server; Ask your books, Explain and Iʿrāb; sync between your phones; one-file backup; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
+        <p><b>Not built yet:</b> the dictionary, read-aloud, issue boards and exports. They are left out rather than shown half-finished.</p>
       </div>
 
       <div className="section-title">Sources</div>

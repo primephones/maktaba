@@ -2,6 +2,7 @@ import { SEED_GLOSSARY, mergeGlossary, type Term } from './glossary';
 import { DEFAULT_PROVIDERS, FEATURES, type CallEnv, type CallResult, type Feature, type Provider } from './providers';
 import { NoProviderError, nextReset, route, type UsageStore } from './router';
 import { batches, buildMessages, checkAnswer, parseAnswer, type Paragraph, type SourceLang, type Translated } from './translate';
+import { acceptStudy, featureOf, studyMessages, type StudyTask } from './study';
 
 /**
  * Maktaba's private server: the only place the AI keys live. Only people holding a key
@@ -297,6 +298,21 @@ async function handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Re
     if (b.paragraphs.reduce((n, p) => n + String(p.text ?? '').length, 0) > 12000) return fail(413, 'Send fewer paragraphs at once.');
     try {
       return json(await translateBatch(env, member.key_hash, b));
+    } catch (e) {
+      if (e instanceof NoProviderError) return fail(503, 'No free AI service is available right now.', { retryAt: e.retryAt, skipped: e.skipped });
+      throw e;
+    }
+  }
+
+  // Study: search words for a question, answers from the reader's passages, explanations, iʿrāb.
+  if (path === '/v1/study' && req.method === 'POST') {
+    if (await overShare(env, member)) return fail(429, 'Your share of today’s AI allowance is used up.', { retryAt: nextReset() });
+    const t = body as unknown as StudyTask & { private?: boolean; prefer?: string[] };
+    if (!['keywords', 'ask', 'explain', 'summarise', 'irab'].includes(t.task)) return fail(400, 'Unknown task.');
+    if (JSON.stringify(t).length > 60_000) return fail(413, 'Too much text at once.');
+    try {
+      const routed = await route(providersFor(env), callEnv(env), usageStore(env, member.key_hash), { feature: featureOf(t), private: !!t.private, prefer: t.prefer }, studyMessages(t), (text) => acceptStudy(t, text));
+      return json({ result: routed.value, provider: routed.provider, model: routed.model });
     } catch (e) {
       if (e instanceof NoProviderError) return fail(503, 'No free AI service is available right now.', { retryAt: e.retryAt, skipped: e.skipped });
       throw e;

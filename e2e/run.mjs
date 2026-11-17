@@ -426,7 +426,7 @@ await section('Text recognition for scans', async () => {
   await pause(500);
 
   await go('#/search');
-  await page.getByRole('searchbox', { name: 'Search your books' }).fill('مصورة');
+  await page.getByRole('searchbox', { name: 'Search or ask your books' }).fill('مصورة');
   await page.getByText(/In the text: \d+ match/).waitFor({ timeout: 15000 });
   check(await page.locator('.hit-book').getByText('makhtut-scan').isVisible(), 'recognised text is searchable across the library');
 
@@ -467,7 +467,7 @@ await section('Other formats', async () => {
 
 await section('Search across the library', async () => {
   await page.goto(server.url + '#/search');
-  const box = page.getByRole('searchbox', { name: 'Search your books' });
+  const box = page.getByRole('searchbox', { name: 'Search or ask your books' });
   await box.fill('ياقوت');
   await page.getByText(/In the text: 1 match$/).waitFor({ timeout: 15000 });
   check(true, 'a word that occurs once in the library is found once');

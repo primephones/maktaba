@@ -22,7 +22,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const { setupLocal } = await import('../server/test/setup-local.mjs');
 console.log('setting up the local database');
 setupLocal(`${root}server`, 8798);
-const run = (cmd, args, opts = {}) => spawn(cmd, args, { cwd: `${root}server`, stdio: 'ignore', detached: true, env: { ...process.env, WRANGLER_SEND_METRICS: 'false', ...(opts.env ?? {}) } });
+import { openSync } from 'node:fs';
+const logFd = openSync(`${root}e2e/out/server.log`, 'w');
+const run = (cmd, args, opts = {}) => spawn(cmd, args, { cwd: `${root}server`, stdio: ['ignore', logFd, logFd], detached: true, env: { ...process.env, WRANGLER_SEND_METRICS: 'false', ...(opts.env ?? {}) } });
 console.log('starting the server');
 const mock = run('node', ['test/mock-ai.mjs'], { env: { PORT: '8798' } });
 const api = run('npx', ['wrangler', 'dev', '--local', '--port', '8788']);
@@ -120,6 +122,58 @@ try {
   await wait(500);
   check((await page.locator('.bk-pair').count()) > 5, '“Both” shows the English under the original');
   await shot('24-reader-both');
+
+  console.log('Asking your books');
+  await go('#/search');
+  await page.getByRole('searchbox', { name: 'Search or ask your books' }).fill('Is consensus a proof?');
+  await page.getByRole('button', { name: /Ask your books/ }).click();
+  await page.locator('.answer').waitFor({ timeout: 30000 });
+  check((await page.locator('.answer .cite').count()) > 0, 'an answer comes back citing passages from the books');
+  check((await page.locator('.sources li').count()) > 0, 'each cited passage is listed with where it comes from');
+  check((await page.getByText('could not be found word for word').count()) === 0, 'its quotation was checked against the passage');
+  await shot('26-ask');
+  await page.locator('.answer .cite').first().click();
+  await page.waitForSelector('.rd');
+  check(true, 'tapping a citation opens the passage in the book');
+
+  console.log('Explain and iʿrāb');
+  await page.waitForSelector('.bk');
+  await wait(600);
+  await page.evaluate(() => {
+    const p = [...document.querySelectorAll('.bk[data-t="p"]')].find((el) => /[\u0600-\u06FF]/.test(el.textContent) || el.dataset.en !== undefined);
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await wait(400);
+  await page.getByRole('button', { name: 'Explain', exact: true }).click();
+  await page.getByText('This passage says that consensus').waitFor({ timeout: 20000 });
+  check(true, 'Explain gives an explanation, marked as an AI draft');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
+  await page.evaluate(() => {
+    const p = [...document.querySelectorAll('.bk[data-t="p"]')].find((el) => el.dataset.en === undefined && /[\u0600-\u06FF]/.test(el.textContent));
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await wait(400);
+  const irabBtn = page.getByRole('button', { name: 'Iʿrāb', exact: true });
+  if (await irabBtn.count()) {
+    await irabBtn.click();
+    await page.locator('.irab-row').first().waitFor({ timeout: 20000 });
+    await page.getByRole('button', { name: 'Correct' }).click();
+    await page.locator('.irab input').first().fill('مبتدأ مرفوع وعلامة رفعه الضمة');
+    await page.getByRole('button', { name: 'Save corrections' }).click();
+    await page.getByText('Corrected by you.').waitFor();
+    check(true, 'iʿrāb can be corrected, and the correction is kept');
+    await shot('27-irab');
+    await page.getByRole('button', { name: 'Close' }).click();
+  } else {
+    check(false, 'Iʿrāb is offered for Arabic text');
+  }
 
   console.log('Sync between two phones');
   // Phone A highlights a passage and makes a folder, through the app.

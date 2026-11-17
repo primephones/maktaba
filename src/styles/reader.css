@@ -499,12 +499,22 @@ mark.flash {
   box-shadow: var(--shadow);
   animation: rise 0.22s var(--ease-out) both;
 }
+.sel-bar {
+  flex-direction: column;
+  align-items: stretch;
+}
 .sel-bar .dots {
   display: flex;
+  justify-content: center;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2px;
+}
+.sel-bar .acts {
+  display: flex;
+  justify-content: center;
   gap: 2px;
-  padding-inline-end: 6px;
-  border-inline-end: 1px solid var(--line);
-  margin-inline-end: 4px;
 }
 .dot {
   width: 38px;
@@ -895,4 +905,47 @@ mark.flash {
   font-size: 1.02rem;
   line-height: 1.65;
   color: var(--ink-2);
+}
+
+/* ---------- Explain and iʿrāb ---------- */
+.study-quote {
+  margin: 0;
+  padding-inline-start: 12px;
+  border-inline-start: 3px solid var(--gold-soft);
+  color: var(--ink-2);
+  font-family: var(--font-read);
+  line-height: 1.7;
+  max-height: 9em;
+  overflow: auto;
+}
+.study-quote[lang='ar'], .study-quote[lang='fa'] {
+  font-family: var(--font-arabic);
+  font-size: 1.2rem;
+}
+.study-text {
+  font-family: var(--font-read);
+  font-size: 1.03rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.irab {
+  display: grid;
+  gap: 10px;
+}
+.irab-row {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.irab-word {
+  font-family: var(--font-arabic);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--rubric);
+}
+.irab-text {
+  font-family: var(--font-arabic);
+  font-size: 1.1rem;
+  line-height: 1.8;
 }

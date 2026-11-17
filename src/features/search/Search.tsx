@@ -10,6 +10,7 @@ import { EmptyState } from '../../ui/EmptyState';
 import { Icon } from '../../ui/Icon';
 import { formatCitation } from '../../lib/citation';
 import { setJump } from '../reader/jump';
+import { AskPanel } from './AskPanel';
 
 const PER_BOOK = 4;
 
@@ -84,7 +85,7 @@ export function Search() {
     <div className="screen screen--plain">
       <div className="screen-head screen-head--sub">
         <button className="icon-btn" onClick={() => goBack()} aria-label="Back"><Icon name="back" /></button>
-        <h1>Search</h1>
+        <h1>Search &amp; ask</h1>
       </div>
 
       {books !== undefined && books.length === 0 ? (
@@ -103,8 +104,8 @@ export function Search() {
               inputMode="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search your books…"
-              aria-label="Search your books"
+              placeholder="Search or ask…"
+              aria-label="Search or ask your books"
               dir="auto"
             />
             {query && (
@@ -113,6 +114,8 @@ export function Search() {
               </button>
             )}
           </div>
+
+          <AskPanel question={query} />
 
           {!q && (
             <p className="muted small" style={{ marginTop: 14 }}>
@@ -187,7 +190,10 @@ export function Search() {
             );
           })}
 
-          {nothing && (
+          {nothing && q.split(/\s+/).length > 3 && (
+            <p className="muted small" style={{ marginTop: 16 }}>No passage contains these exact words. To search by meaning, use Ask your books.</p>
+          )}
+          {nothing && q.split(/\s+/).length <= 3 && (
             <EmptyState icon="search" title="No matches">
               Nothing in your books matches “{q}”.{scans ? ` ${scans} scanned book${scans === 1 ? ' is' : 's are'} still waiting for text recognition.` : ''}
             </EmptyState>
