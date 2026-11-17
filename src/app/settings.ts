@@ -35,8 +35,14 @@ export interface Flags {
   reduceMotion: boolean;
 }
 
+/** Which AI service to try first for each feature (ids, in order); the rest follow. */
+export interface AiPrefs {
+  prefer: Partial<Record<'translate' | 'ocr' | 'ask' | 'explain' | 'irab', string[]>>;
+}
+
 export interface Settings {
   theme: ThemeName;
+  ai: AiPrefs;
   reader: ReaderPrefs;
   coverStyle: CoverStyle;
   flags: Flags;
@@ -47,6 +53,7 @@ export interface Settings {
 
 export const DEFAULTS: Settings = {
   theme: 'auto',
+  ai: { prefer: { translate: ['gemini', 'groq', 'openrouter', 'workers-ai'] } },
   reader: {
     mode: 'scroll',
     fontSize: 100,

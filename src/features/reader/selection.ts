@@ -5,6 +5,8 @@ export interface SelectionPart {
   start: number;
   end: number;
   text: string;
+  /** The selection is in the English translation, not the original. */
+  en?: boolean;
 }
 
 export interface ReaderSelection {
@@ -55,6 +57,7 @@ export function readSelection(root: HTMLElement): ReaderSelection | null {
       start,
       end,
       text: (el.textContent ?? '').slice(start, end),
+      en: el.dataset.en !== undefined,
     });
   }
   return parts.length ? { parts: parts.slice(0, 40), text } : null;

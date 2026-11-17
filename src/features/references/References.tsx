@@ -77,6 +77,7 @@ export function References() {
                   >
                     {r.original}
                   </button>
+                  {r.english && <p className="ref-english" lang="en">{r.english.replace(/†/g, '')}</p>}
                   <Citation c={r.citation} />
                   {r.proves && <p className="ref-proves"><b>What it proves:</b> {r.proves}</p>}
                   {r.note && <p className="ref-note" dir="auto">{r.note}</p>}

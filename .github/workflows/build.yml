@@ -33,6 +33,15 @@ jobs:
         run: node e2e/fixtures.mjs
       - name: Run the app end to end in a phone-sized browser
         run: npm run e2e
+      - name: Test the private server
+        working-directory: server
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm test
+          WRANGLER_SEND_METRICS=false node test/live.mjs
+      - name: Translate a whole book through the server, in the app
+        run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

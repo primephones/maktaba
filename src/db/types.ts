@@ -45,6 +45,43 @@ export interface OcrPage {
   updatedAt: number;
 }
 
+export interface BookTranslation {
+  jobId: string;
+  state: 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
+  done: number;
+  total: number;
+  /** When a paused translation will carry on by itself. */
+  nextRunAt?: number;
+  /** Why it is paused, in the server's words. */
+  note?: string;
+  /** Results already fetched up to this time. */
+  cursor: number;
+  startedAt: number;
+}
+
+export type TranslationLabel = 'draft' | 'checked' | 'reviewed';
+
+export interface Uncertain {
+  span: string;
+  reason: string;
+}
+
+/** The English of one paragraph. */
+export interface Translation {
+  /** `${bookId}:${section}:${block}` */
+  id: string;
+  bookId: string;
+  section: number;
+  block: number;
+  en: string;
+  uncertain: Uncertain[];
+  /** Machine draft, checked by the reader, or reviewed by a scholar. */
+  label: TranslationLabel;
+  provider: string;
+  model: string;
+  updatedAt: number;
+}
+
 export interface TocEntry {
   title: string;
   section: number;
@@ -96,6 +133,12 @@ export interface Book {
   ocrLang?: OcrLang;
   /** For books with page images: show the pages, or the recognised text. */
   scanView?: 'page' | 'text';
+  /** Private books are never sent to an AI service that trains on what it is sent. */
+  private?: boolean;
+  /** The whole-book English translation, worked on by the server. */
+  translation?: BookTranslation;
+  /** How the reader shows a book with a translation. */
+  view?: 'en' | 'orig' | 'both';
   progress?: Progress;
 }
 

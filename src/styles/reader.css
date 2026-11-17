@@ -729,7 +729,8 @@ mark.flash {
   padding-inline-start: 10px;
   margin-inline-start: -12px;
 }
-.bk[data-low][dir='rtl'], [dir='rtl'] .bk[data-low], .bk[data-low]:dir(rtl) {
+.bk[data-low][dir='rtl'],
+[dir='rtl'] .bk[data-low] {
   background-position: right 0 top 0;
 }
 
@@ -778,4 +779,75 @@ mark.flash {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+/* ---------- Reading in English ---------- */
+.bk--en {
+  font-family: var(--rd-font);
+  cursor: pointer;
+}
+.bk--en .unc {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 4px;
+  min-width: 22px;
+  color: var(--rubric);
+  font-weight: 700;
+  border-radius: 6px;
+  vertical-align: baseline;
+  line-height: 1.2;
+}
+.bk--en .unc:active {
+  background: color-mix(in srgb, var(--rubric) 14%, transparent);
+}
+.bk[data-flip] {
+  cursor: pointer;
+}
+/* The original shown in place of the English: labelled, so it is clear how to go back. */
+.bk[data-shown-original] {
+  padding: 26px 12px 10px;
+  margin-inline: -12px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--gold-soft) 12%, transparent);
+}
+.bk[data-shown-original]::before {
+  content: 'Original · tap to return';
+  position: absolute;
+  top: 6px;
+  inset-inline-start: 12px;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  direction: ltr;
+}
+[dir='rtl'].bk[data-shown-original]::before,
+.bk[data-shown-original][dir='rtl']::before {
+  inset-inline-start: auto;
+  left: 12px;
+}
+.bk-pair {
+  margin-bottom: 1.1em;
+}
+.bk-pair > .bk {
+  margin-bottom: 0.3em;
+}
+.bk-pair > .bk--en {
+  color: var(--ink-2);
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--line-strong);
+}
+.tr-label {
+  margin: 0 0 1.2em;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.ref-english {
+  font-family: var(--font-read);
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--ink-2);
 }

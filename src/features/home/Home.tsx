@@ -11,6 +11,8 @@ import { Icon } from '../../ui/Icon';
 import { BookCover } from '../library/BookCover';
 import { BookDetails } from '../library/BookDetails';
 import { BookTile, openBook } from '../library/Library';
+import { fetchStatus, getServer } from '../../ai/client';
+import { AiAllowance } from '../settings/AiAllowance';
 
 /** Where the reader is, in words: the current chapter from the contents list. */
 function whereIn(book: Book): string {
@@ -144,9 +146,31 @@ export function Home() {
         </>
       )}
 
+      <HomeAllowance />
       <InstallHint />
       {details && <BookDetails bookId={details} onClose={() => setDetails(null)} />}
     </div>
+  );
+}
+
+/** Today's AI allowance at a glance (only once the server is set up). */
+function HomeAllowance() {
+  const [state, setState] = useState<Awaited<ReturnType<typeof fetchStatus>> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void getServer().then((cfg) => cfg && fetchStatus().then((s) => alive && setState(s)));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!state?.status) return null;
+  return (
+    <>
+      <div className="section-title">Today’s AI allowance</div>
+      <button className="card" style={{ width: '100%', textAlign: 'start' }} onClick={() => navigate('/settings/ai')}>
+        <AiAllowance status={state.status} stale={state.stale} compact />
+      </button>
+    </>
   );
 }
 

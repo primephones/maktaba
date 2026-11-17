@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, sectionId, uid } from '../../db/db';
-import type { Book, HighlightColor, Mark, Reference, Section } from '../../db/types';
+import type { Book, HighlightColor, Mark, Reference, Section, Translation } from '../../db/types';
 import { detectLang, hasArabicScript, stripTashkilWithMap } from '../../lib/arabic';
 import { clamp, percent } from '../../lib/util';
 import { closePdf } from '../../lib/pdfjs';
 import { formatCitation } from '../../lib/citation';
 import { native } from '../../native/maktaba';
+import { sourceParagraphs, translatable, translateNow } from '../../ai/translation';
 import { goBack, navigate } from '../../app/router';
 import { useSetting } from '../../app/settings';
 import { EmptyState } from '../../ui/EmptyState';
@@ -230,9 +231,13 @@ function ReaderInner({ book }: { book: Book }) {
 
   const highlight = async (color: HighlightColor, thenEdit = false) => {
     if (!selection) return;
+    if (selection.parts.every((p) => p.en)) {
+      toast('Highlights are kept on the original text. Tap the paragraph to show the original, then highlight there.');
+      return;
+    }
     const now = Date.now();
     const made: Mark[] = [];
-    for (const part of selection.parts) {
+    for (const part of selection.parts.filter((x) => !x.en)) {
       const p = toStored(part);
       if (!p) continue;
       made.push({ id: uid(), bookId: book.id, type: 'highlight', section: p.section, block: p.block, start: p.start, end: p.end, color, text: p.text, createdAt: now, updatedAt: now });
@@ -257,10 +262,15 @@ function ReaderInner({ book }: { book: Book }) {
 
   const saveReference = async () => {
     if (!selection) return;
-    const parts = selection.parts.map(toStored).filter((p): p is NonNullable<typeof p> => !!p);
+    const enParts = selection.parts.filter((p) => p.en);
+    const parts = selection.parts
+      .map((p) => (p.en ? { ...p, en: false, start: 0, end: cache.current.get(p.section)?.blocks[p.block]?.text.length ?? 0 } : p))
+      .map(toStored)
+      .filter((p): p is NonNullable<typeof p> => !!p);
     if (!parts.length) return;
     const first = parts[0];
     const now = Date.now();
+    const english = enParts.length ? enParts.map((p) => p.text).join('\n') : parts.map((p) => translations.get(`${p.section}:${p.block}`)?.en).filter(Boolean).join('\n') || undefined;
     const ref: Reference = {
       id: uid(),
       bookId: book.id,
@@ -269,6 +279,7 @@ function ReaderInner({ book }: { book: Book }) {
       start: parts.length === 1 ? first.start : undefined,
       end: parts.length === 1 ? first.end : undefined,
       original: parts.map((p) => p.text).join('\n'),
+      english,
       citation: citationAt(first.section, first.block),
       createdAt: now,
       updatedAt: now,
@@ -342,6 +353,24 @@ function ReaderInner({ book }: { book: Book }) {
   const onMark = useCallback((id: string) => setEditMark(id), []);
   const onZoom = useCallback((source: ZoomSource) => setZoom(source), []);
 
+  // ----- English translation -----
+  const trList = useLiveQuery(() => db.translations.where('bookId').equals(book.id).toArray(), [book.id]);
+  const translations = useMemo(() => new Map((trList ?? []).map((t) => [`${t.section}:${t.block}`, t] as const)), [trList]);
+  const hasTranslation = translations.size > 0;
+  const view: 'en' | 'orig' | 'both' = hasTranslation ? book.view ?? 'en' : 'orig';
+  const [flipped, setFlipped] = useState<Set<string>>(new Set());
+  const [unsure, setUnsure] = useState<Translation | null>(null);
+  const onFlip = useCallback((s: number, b: number) => {
+    setFlipped((prev) => {
+      const next = new Set(prev);
+      const k = `${s}:${b}`;
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+  }, []);
+  const onUncertain = useCallback((t: Translation) => setUnsure(t), []);
+
   // Books with page images: show the pages, or the text recognised from them.
   const hasScans = !!book.ocr;
   const scanView = book.scanView ?? 'text';
@@ -351,6 +380,16 @@ function ReaderInner({ book }: { book: Book }) {
       const out: React.ReactNode[] = [];
       let lastPage: string | undefined;
       const recognised = new Set(sec.blocks.filter((b) => b.ocr).map((b) => b.page));
+      // A short note at the head of a chapter says the English is a machine draft, and by whom.
+      const firstTr = view !== 'orig' ? sec.blocks.map((_, i) => translations.get(`${sec.idx}:${i}`)).find(Boolean) : undefined;
+      if (firstTr) {
+        out.push(
+          <div className="tr-label" key="trlabel" data-skip>
+            <span className="ai-mark" aria-hidden="true">✦</span> English: {firstTr.label === 'reviewed' ? 'reviewed by a scholar' : firstTr.label === 'checked' ? 'checked' : 'machine draft'} ({firstTr.model.replace(/^.*\//, '')}).
+            {view === 'en' ? ' Tap a paragraph for the original.' : ''}
+          </div>,
+        );
+      }
       sec.blocks.forEach((block, i) => {
         const isPageImage = block.t === 'img' && (/^page:\d+$/.test(block.src ?? '') || block.src === 'page-1');
         if (block.ocr && scanView === 'page') return;
@@ -375,12 +414,17 @@ function ReaderInner({ book }: { book: Book }) {
             onNote={onNote}
             onMark={onMark}
             onZoom={onZoom}
+            tr={translations.get(`${sec.idx}:${i}`)}
+            show={view}
+            flipped={flipped.has(`${sec.idx}:${i}`)}
+            onFlip={onFlip}
+            onUncertain={onUncertain}
           />,
         );
       });
       return out;
     },
-    [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView],
+    [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain],
   );
 
   // Recognised text arrives while the book is open: refresh the chapters on screen.
@@ -400,6 +444,7 @@ function ReaderInner({ book }: { book: Book }) {
 
   const onTap = useCallback(() => setChrome((c) => !c), []);
   const onUserMove = useCallback(() => setChrome(false), []);
+  const onReveal = useCallback(() => setChrome(true), []);
 
   const currentSection = cache.current.get(pos.section);
   const fraction = scrub ?? fractionAt(book, pos.section, pos.block, currentSection?.blocks.length ?? 0);
@@ -455,6 +500,7 @@ function ReaderInner({ book }: { book: Book }) {
         onPosition={onPosition}
         onTap={onTap}
         onUserMove={onUserMove}
+        onReveal={onReveal}
       />
 
       <div className="rd-mini" aria-hidden="true" dir="auto">{chapter || book.title}</div>
@@ -517,7 +563,27 @@ function ReaderInner({ book }: { book: Book }) {
       )}
       {sheet === 'settings' && (
         <Sheet title="Text and theme" onClose={() => setSheet(null)}>
+          {translatable(book) && <TranslationControls book={book} view={view} hasTranslation={hasTranslation} from={pos} />}
           <ReadingControls showTheme lang={book.lang} />
+        </Sheet>
+      )}
+      {unsure && (
+        <Sheet title="Why the translation is unsure" onClose={() => setUnsure(null)}>
+          {unsure.uncertain.length ? (
+            <div className="list">
+              {unsure.uncertain.map((u, i) => (
+                <div className="row" key={i}>
+                  <span className="grow">
+                    <span className="title">“{u.span}”</span>
+                    <div className="sub">{u.reason}</div>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p>The AI marked this wording as uncertain without giving a reason.</p>
+          )}
+          <p className="muted small">Tap the paragraph to compare with the original.</p>
         </Sheet>
       )}
       {note !== null && (
@@ -528,6 +594,52 @@ function ReaderInner({ book }: { book: Book }) {
       {editing && <MarkEditor mark={editing} onClose={() => setEditMark(null)} />}
       {zoom && <ZoomViewer source={zoom} onClose={() => setZoom(null)} />}
     </div>
+  );
+}
+
+/** Reader controls for the English: which language to show, and translating ahead. */
+function TranslationControls({ book, view, hasTranslation, from }: { book: Book; view: 'en' | 'orig' | 'both'; hasTranslation: boolean; from: { section: number; block: number } }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const ahead = async (count: number) => {
+    setBusy('Translating…');
+    try {
+      const have = new Set((await db.translations.where('bookId').equals(book.id).toArray()).map((t) => `${t.section}:${t.block}`));
+      const paras = (await sourceParagraphs(book, from)).filter((p) => !have.has(p.id)).slice(0, count);
+      if (!paras.length) {
+        toast('The next pages are already translated.');
+        return;
+      }
+      const n = await translateNow(book, paras);
+      toast(`${n} paragraph${n === 1 ? '' : 's'} translated.`);
+      if (!book.view) await db.books.update(book.id, { view: 'en' });
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <>
+      {hasTranslation && (
+        <div className="ctl">
+          <div className="lbl"><span>Show</span></div>
+          <div className="seg" role="group" aria-label="Language to show">
+            <button aria-pressed={view === 'en'} onClick={() => void db.books.update(book.id, { view: 'en' })}>English</button>
+            <button aria-pressed={view === 'orig'} onClick={() => void db.books.update(book.id, { view: 'orig' })}>Original</button>
+            <button aria-pressed={view === 'both'} onClick={() => void db.books.update(book.id, { view: 'both' })}>Both</button>
+          </div>
+        </div>
+      )}
+      <div className="ctl">
+        <div className="lbl"><span><span className="ai-mark" aria-hidden="true">✦</span> Translate ahead from here</span><span>about 1 request per 8 paragraphs</span></div>
+        <div className="seg" role="group" aria-label="Translate ahead">
+          <button disabled={!!busy} onClick={() => void ahead(10)}>Next 10</button>
+          <button disabled={!!busy} onClick={() => void ahead(40)}>Next 40</button>
+          <button disabled={!!busy} onClick={() => navigate('/library')}>Whole book…</button>
+        </div>
+        {busy && <p className="muted small" role="status">{busy}</p>}
+      </div>
+    </>
   );
 }
 

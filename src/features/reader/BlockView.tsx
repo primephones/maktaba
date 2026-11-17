@@ -1,6 +1,6 @@
 import { memo, useEffect, useState } from 'react';
 import { db } from '../../db/db';
-import type { Block, Lang, Mark } from '../../db/types';
+import type { Block, Lang, Mark, Translation } from '../../db/types';
 import { hasArabicScript, isRtl } from '../../lib/arabic';
 import { PdfPage } from './PdfPage';
 import { renderBlock } from './segments';
@@ -18,6 +18,14 @@ interface Props {
   onNote: (section: number, noteId: string) => void;
   onMark: (markId: string) => void;
   onZoom: (source: ZoomSource) => void;
+  /** The paragraph's English, when it has been translated. */
+  tr?: Translation;
+  /** Which language to show this paragraph in. */
+  show?: 'en' | 'orig' | 'both';
+  /** True when the reader tapped this paragraph to see the other language. */
+  flipped?: boolean;
+  onFlip?: (section: number, index: number) => void;
+  onUncertain?: (tr: Translation) => void;
 }
 
 const EMPTY: Mark[] = [];
@@ -55,7 +63,47 @@ function blockLang(block: Block, bookLang: Lang): Lang {
   return /[A-Za-z]/.test(block.text) ? 'en' : bookLang;
 }
 
-export const BlockView = memo(function BlockView({ bookId, bookLang, section, index, block, marks, flash, showTashkil, onNote, onMark, onZoom }: Props) {
+/** The English of a paragraph, with each † a button that explains the doubt. */
+function English({ tr, onUncertain, heading, section, index, onFlip }: { tr: Translation; onUncertain?: (t: Translation) => void; heading: boolean; section: number; index: number; onFlip?: (s: number, i: number) => void }) {
+  const parts = tr.en.split('†');
+  const Tag = heading ? 'h2' : 'p';
+  return (
+    <Tag
+      className="bk bk--en"
+      data-s={section}
+      data-b={index}
+      data-t={heading ? 'h' : 'p'}
+      data-en
+      data-flip
+      lang="en"
+      dir="ltr"
+      onClick={(e) => {
+        if (!window.getSelection()?.isCollapsed || (e.target as Element).closest('.unc')) return;
+        onFlip?.(section, index);
+      }}
+    >
+      {parts.map((part, i) => (
+        <span key={i}>
+          {part}
+          {i < parts.length - 1 && (
+            <button
+              className="unc"
+              aria-label="Why the translation is unsure here"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUncertain?.(tr);
+              }}
+            >
+              †
+            </button>
+          )}
+        </span>
+      ))}
+    </Tag>
+  );
+}
+
+export const BlockView = memo(function BlockView({ bookId, bookLang, section, index, block, marks, flash, showTashkil, onNote, onMark, onZoom, tr, show = 'orig', flipped, onFlip, onUncertain }: Props) {
   const common = { 'data-s': section, 'data-b': index, 'data-t': block.t } as const;
   const bookmarked = marks.some((m) => m.type === 'bookmark');
 
@@ -72,6 +120,11 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
         ) : null}
       </div>
     );
+  }
+
+  const heading = block.t === 'h';
+  if (tr && show === 'en' && !flipped) {
+    return <English tr={tr} onUncertain={onUncertain} heading={heading} section={section} index={index} onFlip={onFlip} />;
   }
 
   const lang = blockLang(block, bookLang);
@@ -95,10 +148,16 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
     />
   );
 
-  return (
+  const original = (
     <Tag
       className="bk"
       {...common}
+      data-flip={tr && show === 'en' ? true : undefined}
+      data-shown-original={tr && show === 'en' && flipped ? true : undefined}
+      onClick={tr && show === 'en' ? (e: React.MouseEvent) => {
+        if (!window.getSelection()?.isCollapsed || (e.target as Element).closest('.fn, .hl')) return;
+        onFlip?.(section, index);
+      } : undefined}
       data-l={block.level}
       lang={lang === 'other' ? undefined : lang}
       dir="auto"
@@ -139,4 +198,13 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
       {tail.map(fn)}
     </Tag>
   );
+  if (tr && show === 'both') {
+    return (
+      <div className="bk-pair">
+        {original}
+        <English tr={tr} onUncertain={onUncertain} heading={heading} section={section} index={index} />
+      </div>
+    );
+  }
+  return original;
 });

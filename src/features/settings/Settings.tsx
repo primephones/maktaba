@@ -9,6 +9,7 @@ import { ErrorBoundary } from '../../app/ErrorBoundary';
 import { Icon, type IconName } from '../../ui/Icon';
 import { BookCover } from '../library/BookCover';
 import { ReadingControls } from '../reader/ReadingControls';
+import { AiSettings } from './AiSettings';
 
 const THEMES: Array<[ThemeName, string, string]> = [
   ['auto', 'Follow phone', 'Paper by day, Lamp when the phone is in dark mode'],
@@ -19,6 +20,7 @@ const THEMES: Array<[ThemeName, string, string]> = [
 ];
 
 const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string }> = [
+  { id: 'ai', title: 'AI and sync', icon: 'sparkle', sub: 'Translation, the server, today’s allowance' },
   { id: 'theme', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },
   { id: 'reading', title: 'Reading defaults', icon: 'type', sub: 'Fonts, size, spacing and page mode' },
   { id: 'covers', title: 'Default cover style', icon: 'book', sub: 'How books look on the shelf' },
@@ -50,6 +52,7 @@ export function Settings({ page }: { page?: string }) {
             ))}
           </div>
         )}
+        {page === 'ai' && <AiSettings />}
         {page === 'theme' && <ThemePage />}
         {page === 'reading' && <ReadingPage />}
         {page === 'covers' && <CoversPage />}
@@ -227,8 +230,8 @@ function AboutPage() {
 
       <div className="section-title">In this version</div>
       <div className="card small" style={{ display: 'grid', gap: 8 }}>
-        <p><b>Working now:</b> adding PDF, EPUB, Word, FB2, text, Markdown, OpenITI and image files; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
-        <p><b>Not built yet:</b> English translation, text recognition for scans, AI questions, the dictionary, read-aloud, sync and backup. They are left out rather than shown half-finished.</p>
+        <p><b>Working now:</b> adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; offline text recognition for scans; English translation through your own server; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
+        <p><b>Not built yet:</b> AI questions, the dictionary, read-aloud, sync and backup. They are left out rather than shown half-finished.</p>
       </div>
 
       <div className="section-title">Installing on a Samsung phone</div>

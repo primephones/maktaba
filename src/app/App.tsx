@@ -27,6 +27,21 @@ export function App() {
     void resumeImports();
   }, []);
 
+  // Finished translations are collected from the server every minute and a half while the
+  // app is open, and whenever it comes back to the front.
+  useEffect(() => {
+    const pull = () => {
+      if (document.visibilityState === 'visible') void import('../ai/translation').then((t) => t.pullAll()).catch(() => undefined);
+    };
+    pull();
+    const timer = window.setInterval(pull, 90_000);
+    document.addEventListener('visibilitychange', pull);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', pull);
+    };
+  }, []);
+
   // Android back button / gesture, when running as the installed app.
   useEffect(() => {
     let remove: (() => void) | undefined;

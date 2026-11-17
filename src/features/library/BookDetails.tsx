@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, deleteBook } from '../../db/db';
 import type { Book, CoverStyle, Folder, Lang, ReadStatus } from '../../db/types';
@@ -11,6 +11,9 @@ import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
 import { BookCover, useCoverUrl } from './BookCover';
 import { CHECK_BELOW, rerunOcr, runOcrQueue } from '../../ocr/queue';
+import { getServer } from '../../ai/client';
+import { cancelBookTranslation, estimateRequests, pullBook, sourceParagraphs, startBookTranslation, translatable } from '../../ai/translation';
+import { timeUntil } from '../settings/AiAllowance';
 import { OCR_LANGS } from '../../ocr/engine';
 
 const STATUS: Array<[ReadStatus, string]> = [['want', 'Want to read'], ['reading', 'Reading'], ['finished', 'Finished']];
@@ -82,6 +85,73 @@ function OcrStatus({ book }: { book: Book }) {
         </div>
       )}
       {choosing && <p className="muted small">Choosing another language recognises the pages again. Pages you have corrected yourself are kept.</p>}
+    </div>
+  );
+}
+
+/** The book's English translation: start it, follow it, or see why it is paused. */
+function TranslationCard({ book }: { book: Book }) {
+  const t = book.translation;
+  const [busy, setBusy] = useState(false);
+  const [estimate, setEstimate] = useState<{ paras: number; requests: number } | null>(null);
+  const [connected, setConnected] = useState<boolean | null>(null);
+  const have = useLiveQuery(() => db.translations.where('bookId').equals(book.id).count(), [book.id]) ?? 0;
+
+  useEffect(() => {
+    void getServer().then((c) => setConnected(!!c));
+    if (!t) void sourceParagraphs(book).then((p) => setEstimate({ paras: p.length, requests: estimateRequests(p) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book.id, !!t]);
+
+  const start = async () => {
+    setBusy(true);
+    try {
+      await startBookTranslation(book);
+      toast('Translation started. It carries on on the server, even with Maktaba closed.');
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <span className="ai-mark" aria-hidden="true">✦</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600 }}>
+            {!t ? 'English translation' : t.state === 'done' ? 'Translated into English' : t.state === 'waiting' ? 'Translation paused' : t.state === 'failed' ? 'Translation stopped' : 'Translating into English'}
+          </div>
+          <div className="muted small">
+            {!t
+              ? have
+                ? `${have} paragraphs are already translated. Translate the rest of the book?`
+                : estimate
+                  ? `${estimate.paras} paragraphs, about ${estimate.requests} requests of free allowance${estimate.requests > 150 ? ', spread over several days' : ''}.`
+                  : 'Counting the paragraphs…'
+              : t.state === 'waiting'
+                ? `${t.done} of ${t.total} done. Today’s free allowances are used up; it carries on by itself ${t.nextRunAt ? timeUntil(t.nextRunAt) : 'soon'}.`
+                : t.state === 'failed'
+                  ? t.note ?? 'Something went wrong.'
+                  : `${t.done} of ${t.total} paragraphs done.`}
+          </div>
+        </div>
+      </div>
+      {t && t.state !== 'done' && t.state !== 'failed' && <span className="meter"><i style={{ width: percent(t.total ? t.done / t.total : 0) }} /></span>}
+      {connected === false ? (
+        <button className="btn" onClick={() => navigate('/settings/ai')}>Set up AI and sync first</button>
+      ) : !t || t.state === 'failed' ? (
+        <button className="btn" disabled={busy || (!estimate?.paras && !t)} onClick={() => void start()}>
+          <span className="ai-mark" aria-hidden="true">✦</span>{busy ? 'Starting…' : t ? 'Start again' : 'Translate the whole book'}
+        </button>
+      ) : t.state !== 'done' ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => void pullBook(book.id).catch((e) => toast((e as Error).message))}>Check now</button>
+          <button className="btn btn--quiet btn--danger" onClick={() => void cancelBookTranslation(book)}>Stop</button>
+        </div>
+      ) : null}
+      {t?.state === 'waiting' && t.note && <p className="muted small">{t.note}</p>}
     </div>
   );
 }
@@ -180,6 +250,8 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
       )}
       {ready && book.ocr && <OcrStatus book={book} />}
 
+      {ready && translatable(book) && <TranslationCard book={book} />}
+
       {ready && (
         <button className="btn btn--primary btn--block" onClick={() => navigate(`/book/${book.id}`)}>
           {book.progress && book.progress.fraction > 0.003 ? `Continue · ${percent(book.progress.fraction)}` : 'Start reading'}
@@ -235,6 +307,14 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
           </span>
           <Icon name="forward" size={18} />
         </button>
+        <div className="row">
+          <Icon name="info" />
+          <span className="grow">
+            <span className="title" id={`priv-${book.id}`}>Private book</span>
+            <div className="sub">Only sent to AI services that do not train on what they are sent.</div>
+          </span>
+          <button className="switch" role="switch" aria-checked={!!book.private} aria-labelledby={`priv-${book.id}`} onClick={() => void update({ private: !book.private })} />
+        </div>
         <button className="row btn--danger" onClick={() => setView('delete')}>
           <Icon name="trash" />
           <span className="grow title">Remove from this device</span>

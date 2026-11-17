@@ -772,3 +772,30 @@ input[type='search']::-webkit-search-decoration {
   margin: 18px auto 0;
   background: linear-gradient(90deg, transparent, var(--gold-soft), transparent);
 }
+
+/* ---------- AI ---------- */
+/* Every AI action carries a small muted-gold sparkle. */
+.ai-mark {
+  color: var(--gold);
+  font-size: 0.95em;
+}
+.allowance {
+  display: grid;
+  gap: 10px;
+}
+.allowance-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.allowance-head .muted {
+  margin-inline-start: auto;
+}
+.sync-key {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+}

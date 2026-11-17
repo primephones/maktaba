@@ -25,16 +25,20 @@ export interface ViewProps {
   onPosition: (section: number, block: number) => void;
   onTap: () => void;
   onUserMove: () => void;
+  /** Scrolling back up brings the reading bars back. */
+  onReveal?: () => void;
 }
 
-const INTERACTIVE = 'button, a, input, textarea, .fn, .hl, img, canvas, [role="button"]';
+const INTERACTIVE = 'button, a, input, textarea, .fn, .hl, img, canvas, [role="button"], [data-flip]';
+/** A tap this close to the top of the screen always shows the reading bars. */
+const TOP_ZONE = 96;
 const hasSelection = () => !(window.getSelection()?.isCollapsed ?? true);
 
 /** How many sections the scroll view keeps laid out at once. */
 const WINDOW = 4;
 
 /** Continuous scrolling: chapters are added below and above as the reader approaches them. */
-export function ScrollView({ book, target, get, load, version, layoutKey, justify, renderSection, onPosition, onTap, onUserMove }: ViewProps) {
+export function ScrollView({ book, target, get, load, version, layoutKey, justify, renderSection, onPosition, onTap, onUserMove, onReveal }: ViewProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<[number, number]>([target.section, target.section]);
   const pending = useRef<Target | null>(target);
@@ -136,7 +140,13 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
     if (b) b.scrollIntoView({ block: 'start' });
   }, [layoutKey, topBlock]);
 
+  const lastTop = useRef(0);
   const onScroll = () => {
+    const el = scroller.current;
+    if (el) {
+      if (lastTop.current - el.scrollTop > 60) onReveal?.();
+      lastTop.current = el.scrollTop;
+    }
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(() => {
       if (pending.current || !settled.current) return;
@@ -183,7 +193,9 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
       onWheel={onUserMove}
       onTouchMove={onUserMove}
       onClick={(e) => {
-        if (hasSelection() || (e.target as Element).closest(INTERACTIVE)) return;
+        if (hasSelection()) return;
+        if (e.clientY < TOP_ZONE) return onTap();
+        if ((e.target as Element).closest(INTERACTIVE)) return;
         onTap();
       }}
     >
@@ -371,8 +383,10 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
           swiped.current = false;
           return;
         }
-        if (hasSelection() || (e.target as Element).closest(INTERACTIVE)) return;
+        if (hasSelection()) return;
+        if (e.clientY < TOP_ZONE) return onTap();
         const x = e.clientX / window.innerWidth;
+        if (x >= 0.27 && x <= 0.73 && (e.target as Element).closest(INTERACTIVE)) return;
         if (x < 0.27) turn(rtl ? 1 : -1);
         else if (x > 0.73) turn(rtl ? -1 : 1);
         else onTap();

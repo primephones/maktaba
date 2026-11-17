@@ -140,7 +140,7 @@ page = await launch();
 watch(page);
 
 console.log('Starting up');
-await page.waitForSelector('.desk-head', { timeout: 30000 });
+await page.waitForSelector('.screen-head h1', { timeout: 30000 });
 const env = await page.evaluate(() => {
   const probe = document.createElement('div');
   probe.style.cssText = 'position:fixed;top:0;left:0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)';
@@ -153,7 +153,7 @@ const env = await page.evaluate(() => {
     dpr: devicePixelRatio,
     safeTop: cs.paddingTop,
     safeBottom: cs.paddingBottom,
-    headTop: document.querySelector('.desk-head')?.getBoundingClientRect().top,
+    headTop: document.querySelector('.screen-head')?.getBoundingClientRect().top,
     barBottom: innerHeight - (document.querySelector('.bar')?.getBoundingClientRect().bottom ?? 0),
     native: !!window.Capacitor?.isNativePlatform?.(),
   };
