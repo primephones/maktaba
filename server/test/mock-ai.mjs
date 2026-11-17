@@ -6,6 +6,14 @@ import { createServer } from 'node:http';
 const LIMIT = Number(process.env.LIMIT ?? 1000);
 let calls = 0;
 createServer(async (req, res) => {
+  // Answers pages in a browser too (the app calling the reader's own AI directly).
+  res.setHeader('access-control-allow-origin', '*');
+  res.setHeader('access-control-allow-headers', 'content-type, authorization, x-goog-api-key');
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
   let body = '';
   for await (const c of req) body += c;
   if (req.url === '/calls') {

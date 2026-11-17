@@ -57,6 +57,14 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
 
+            <!-- Coming back from signing in (to an AI service or a cloud) in the phone's browser. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="maktaba" android:host="auth" />
+            </intent-filter>
+
         </activity>
 
         <provider

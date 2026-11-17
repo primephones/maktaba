@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
-import { getServer } from '../../ai/client';
+import { aiReady } from '../../ai/client';
 import { askBooks, type Answer } from '../../ai/study';
 import { langAttr } from '../../lib/arabic';
 import { navigate } from '../../app/router';
@@ -27,7 +27,7 @@ export function AskPanel({ question }: { question: string }) {
   const [connected, setConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
-    void getServer().then((c) => setConnected(!!c));
+    void aiReady().then((c) => setConnected(!!c));
   }, []);
   useEffect(() => {
     setAnswer(null);

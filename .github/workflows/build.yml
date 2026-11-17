@@ -45,6 +45,8 @@ jobs:
           npx tsc --noEmit
           npm test
           WRANGLER_SEND_METRICS=false node test/live.mjs
+      - name: Use the reader's own AI, with no server
+        run: node e2e/myai.mjs
       - name: Translate a whole book through the server, in the app
         run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4

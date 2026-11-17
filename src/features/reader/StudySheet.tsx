@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Book } from '../../db/types';
 import { explainPassage, irab, saveIrab, type Explanation, type Irab } from '../../ai/study';
-import { getServer } from '../../ai/client';
+import { aiReady } from '../../ai/client';
 import { langAttr } from '../../lib/arabic';
 import { navigate } from '../../app/router';
 import { Sheet } from '../../ui/Sheet';
@@ -31,7 +31,7 @@ export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
     let alive = true;
     const book = bookRef.current;
     void (async () => {
-      if (!(await getServer())) {
+      if (!(await aiReady())) {
         if (alive) setError('setup');
         return;
       }
@@ -52,7 +52,7 @@ export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
     <Sheet title={title} onClose={onClose}>
       <blockquote className="study-quote" dir="auto" lang={langAttr(text)}>{text.length > 600 ? `${text.slice(0, 600)}…` : text}</blockquote>
       {error === 'setup' ? (
-        <button className="btn btn--block" onClick={() => navigate('/settings/ai')}>Set up AI first</button>
+        <button className="btn btn--block" onClick={() => navigate('/settings/ai')}>Connect your AI first</button>
       ) : error ? (
         <div className="banner banner--error" role="alert"><Icon name="warn" /><span className="grow">{error}</span></div>
       ) : !result ? (

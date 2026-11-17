@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type {
-  AssetRecord, Book, CoverRecord, FileRecord, Folder, Mark, OcrPage, OutboxEntry, Reference, Section, SettingRecord, Translation,
+  AiJob, AiJobItem, AssetRecord, Book, CoverRecord, FileRecord, Folder, Mark, OcrPage, OutboxEntry, Reference, Section, SettingRecord, Translation,
 } from './types';
 
 /**
@@ -20,6 +20,8 @@ export class MaktabaDB extends Dexie {
   ocrPages!: Table<OcrPage, string>;
   translations!: Table<Translation, string>;
   outbox!: Table<OutboxEntry, string>;
+  aiJobs!: Table<AiJob, string>;
+  aiJobItems!: Table<AiJobItem, [string, number]>;
 
   constructor() {
     super('maktaba');
@@ -45,6 +47,11 @@ export class MaktabaDB extends Dexie {
     // Version 4: changes waiting to sync to the user's other phones.
     this.version(4).stores({
       outbox: 'k, at',
+    });
+    // Version 5: whole-book translations done on the phone, with the reader's own AI.
+    this.version(5).stores({
+      aiJobs: 'id, state',
+      aiJobItems: '[jobId+seq], jobId, [jobId+status], [jobId+doneAt]',
     });
   }
 }

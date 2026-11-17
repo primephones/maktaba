@@ -11,7 +11,7 @@ import { Icon } from '../../ui/Icon';
 import { BookCover } from '../library/BookCover';
 import { BookDetails } from '../library/BookDetails';
 import { BookTile, openBook } from '../library/Library';
-import { fetchStatus, getServer } from '../../ai/client';
+import { fetchStatus, aiReady } from '../../ai/client';
 import { AiAllowance } from '../settings/AiAllowance';
 import { backupDue } from '../settings/BackupPage';
 import { useSetting } from '../../app/settings';
@@ -175,7 +175,7 @@ function HomeAllowance() {
   const [state, setState] = useState<Awaited<ReturnType<typeof fetchStatus>> | null>(null);
   useEffect(() => {
     let alive = true;
-    void getServer().then((cfg) => cfg && fetchStatus().then((s) => alive && setState(s)));
+    void aiReady().then((cfg) => cfg && fetchStatus().then((s) => alive && setState(s)));
     return () => {
       alive = false;
     };

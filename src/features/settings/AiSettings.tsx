@@ -12,7 +12,8 @@ const TRAINS: Record<string, string> = {
   unknown: 'Its training policy could not be confirmed: never gets private books.',
 };
 
-export function AiSettings() {
+/** The private Maktaba server: an advanced option for someone who runs their own. */
+export function ServerPanel() {
   const [cfg, setCfg] = useState<ServerConfig | null | undefined>(undefined);
   const [status, setStatus] = useState<{ status: ServerStatus | null; error?: string; stale: boolean } | null>(null);
 
@@ -22,7 +23,7 @@ export function AiSettings() {
   useEffect(() => {
     if (!cfg) return;
     let alive = true;
-    void fetchStatus().then((s) => alive && setStatus(s));
+    void fetchStatus(cfg).then((s) => alive && setStatus(s));
     return () => {
       alive = false;
     };
@@ -30,6 +31,7 @@ export function AiSettings() {
 
   if (cfg === undefined) return <p className="muted" aria-busy="true">Loading…</p>;
   if (!cfg) return <Connect onDone={setCfg} />;
+
 
   return (
     <>
@@ -105,7 +107,7 @@ function SyncStatus() {
   );
 }
 
-function TranslateOrder({ providers }: { providers: Array<{ id: string; name: string }> }) {
+export function TranslateOrder({ providers }: { providers: Array<{ id: string; name: string }> }) {
   const ai = useSetting('ai');
   const order = [...(ai.prefer.translate ?? [])].filter((id) => providers.some((p) => p.id === id));
   for (const p of providers) if (!order.includes(p.id)) order.push(p.id);
@@ -197,7 +199,7 @@ function Connect({ onDone }: { onDone: (c: ServerConfig) => void }) {
   return (
     <>
       <p style={{ marginBottom: 14 }}>
-        Translation, Ask, Explain and sync use Maktaba’s own small server, which holds the AI keys. Nobody without your key can use it. No Google or email sign-in.
+        If you run your own Maktaba server (it holds AI keys for you and translates whole books while your phone is off), connect to it here. Most people do not need one.
       </p>
       <div className="seg" role="group" aria-label="How this phone connects" style={{ marginBottom: 16 }}>
         <button aria-pressed={mode === 'owner'} onClick={() => setMode('owner')}>New server</button>
@@ -221,8 +223,8 @@ function Connect({ onDone }: { onDone: (c: ServerConfig) => void }) {
           </label>
         )}
         {error && <div className="banner banner--error" role="alert"><Icon name="warn" /><span className="grow">{error}</span></div>}
-        <button className="btn btn--primary btn--block" disabled={busy} onClick={() => void go()}>{busy ? 'Connecting…' : 'Connect'}</button>
-        <p className="muted small">{mode === 'owner' ? 'This phone will make your private sync key. You will see it after connecting, to type on your other phone.' : mode === 'second' ? 'Type the key shown in Settings › AI and sync on your first phone.' : 'Ask the owner for an invitation code.'}</p>
+        <button className="btn btn--block" disabled={busy} onClick={() => void go()}>{busy ? 'Connecting…' : 'Connect to the server'}</button>
+        <p className="muted small">{mode === 'owner' ? 'This phone will make your private sync key. You will see it after connecting, to type on your other phone.' : mode === 'second' ? 'Type the key shown in Settings › Your AI › Advanced on your first phone.' : 'Ask the owner for an invitation code.'}</p>
       </div>
     </>
   );

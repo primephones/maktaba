@@ -409,6 +409,19 @@ public class MaktabaPlugin extends Plugin {
         }
     }
 
+    /** Opens a web page in the phone's browser (for signing in to an AI service or a cloud). */
+    @PluginMethod
+    public void openUrl(PluginCall call) {
+        try {
+            Intent view = new Intent(Intent.ACTION_VIEW, Uri.parse(call.getString("url", "")));
+            view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(view);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Could not open the browser: " + e.getMessage());
+        }
+    }
+
     /** Opens a file in the phone's own app for it (a PDF viewer, an e-book reader, Word). */
     @PluginMethod
     public void openFile(PluginCall call) {
@@ -484,6 +497,14 @@ public class MaktabaPlugin extends Plugin {
     private void receive(Intent intent) {
         if (intent == null || intent.getBooleanExtra(HANDLED, false)) return;
         String action = intent.getAction();
+        // A sign-in finishing in the browser hands back to the app as maktaba://auth?...
+        if (Intent.ACTION_VIEW.equals(action) && intent.getData() != null && "maktaba".equals(intent.getData().getScheme())) {
+            intent.putExtra(HANDLED, true);
+            JSObject data = new JSObject();
+            data.put("url", intent.getData().toString());
+            notifyListeners("authCallback", data, true);
+            return;
+        }
         List<Uri> uris = new ArrayList<>();
         if (Intent.ACTION_SEND.equals(action)) {
             Uri u = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri.class);

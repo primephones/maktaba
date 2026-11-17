@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Book } from '../../db/types';
-import { getServer } from '../../ai/client';
+import { aiReady } from '../../ai/client';
 import { chapterAt, summariseChapter, type Summary } from '../../ai/study';
 import { langAttr } from '../../lib/arabic';
 import { navigate } from '../../app/router';
@@ -28,7 +28,7 @@ export function SummarySheet({ book, at, onGo, onClose }: Props) {
     setResult(null);
     setError('');
     void (async () => {
-      if (!(await getServer())) {
+      if (!(await aiReady())) {
         if (alive) setError('setup');
         return;
       }
@@ -61,7 +61,7 @@ export function SummarySheet({ book, at, onGo, onClose }: Props) {
     <Sheet title="Chapter summary" onClose={onClose}>
       <p className="eyebrow" dir="auto" lang={langAttr(title)} style={{ margin: 0 }}>{title}</p>
       {error === 'setup' ? (
-        <button className="btn btn--block" onClick={() => navigate('/settings/ai')}>Set up AI first</button>
+        <button className="btn btn--block" onClick={() => navigate('/settings/ai')}>Connect your AI first</button>
       ) : error ? (
         <div className="banner banner--error" role="alert"><Icon name="warn" /><span className="grow">{error}</span></div>
       ) : !result ? (

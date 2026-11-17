@@ -10,7 +10,8 @@ import { db } from '../db/db';
 const TABLES = ['books', 'sections', 'folders', 'marks', 'refs', 'settings', 'ocrPages', 'translations'] as const;
 type TableName = (typeof TABLES)[number];
 const ROWS_PER_PART = 300;
-const SKIP_SETTINGS = new Set(['server', 'aiStatus']);
+// Keys and sign-ins stay on the phone they were made on; a backup file never carries them.
+const SKIP_SETTINGS = new Set(['server', 'aiStatus', 'serverStatus', 'myAi', 'myAiUsage', 'cloud']);
 
 export interface Progress {
   stage: string;

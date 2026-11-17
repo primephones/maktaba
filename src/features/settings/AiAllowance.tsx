@@ -13,8 +13,13 @@ export function timeUntil(t: number): string {
 }
 
 /** Today's use of every AI service in one bar, split by feature, with what is left. */
+/** A daily allowance this large means the service has none. */
+export const UNLIMITED = 100_000;
+
 export function AiAllowance({ status, stale, compact }: { status: ServerStatus; stale?: boolean; compact?: boolean }) {
-  const usable = status.providers.filter((p) => p.configured);
+  // A service of the reader's own with no daily limit is not counted in the allowance.
+  const unlimited = status.providers.some((p) => p.configured && p.dailyLimit >= UNLIMITED);
+  const usable = status.providers.filter((p) => p.configured && p.dailyLimit < UNLIMITED);
   const limit = usable.reduce((n, p) => n + p.dailyLimit, 0) || 1;
   const used = usable.reduce((n, p) => n + Math.min(p.usedToday, p.dailyLimit), 0);
   const left = Math.max(0, limit - used);
@@ -23,7 +28,7 @@ export function AiAllowance({ status, stale, compact }: { status: ServerStatus; 
     <div className="allowance">
       <div className="allowance-head">
         <span className="ai-mark" aria-hidden="true">✦</span>
-        <b>{left} requests left today</b>
+        <b>{unlimited && !usable.length ? 'No daily limit' : `${left} requests left today`}</b>
         <span className="muted small">resets {timeUntil(status.resetAt)}</span>
       </div>
       <div className="storage-bar" role="img" aria-label={`${used} of ${limit} requests used today`}>
@@ -37,7 +42,7 @@ export function AiAllowance({ status, stale, compact }: { status: ServerStatus; 
         </div>
       )}
       <p className="muted small">
-        About {Math.floor(left * 8)} paragraphs of translation left today.
+        {unlimited && !usable.length ? 'Your own service sets its own limits.' : `About ${Math.floor(left * 8)} paragraphs of translation left today.`}
         {stale && ` Last checked ${new Date(status.fetchedAt).toLocaleString(undefined, { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}; the server can’t be reached right now.`}
       </p>
     </div>

@@ -273,3 +273,36 @@ export interface SettingRecord {
   key: string;
   value: unknown;
 }
+
+/** A whole-book translation worked through on the phone with the reader's own AI. */
+export interface AiJob {
+  id: string;
+  title: string;
+  lang: 'ar' | 'ur' | 'fa';
+  private: boolean;
+  glossary: Array<{ ar: string; forms?: string[]; tr: string; en: string }>;
+  prefer: string[];
+  state: 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'cancelled';
+  total: number;
+  done: number;
+  next_run_at: number;
+  last_error: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AiJobItem {
+  jobId: string;
+  seq: number;
+  pid: string;
+  text: string;
+  kind: string;
+  chapter?: string;
+  status: 'todo' | 'done' | 'failed';
+  attempts: number;
+  en?: string;
+  uncertain?: unknown[];
+  provider?: string;
+  model?: string;
+  doneAt: number;
+}

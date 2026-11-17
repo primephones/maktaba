@@ -9,7 +9,7 @@ import { ErrorBoundary } from '../../app/ErrorBoundary';
 import { Icon, type IconName } from '../../ui/Icon';
 import { BookCover } from '../library/BookCover';
 import { ReadingControls } from '../reader/ReadingControls';
-import { AiSettings } from './AiSettings';
+import { AiSettings } from './MyAiSettings';
 import { BackupPage } from './BackupPage';
 import { VoicePage } from './VoicePage';
 
@@ -22,7 +22,7 @@ const THEMES: Array<[ThemeName, string, string]> = [
 ];
 
 const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string }> = [
-  { id: 'ai', title: 'AI and sync', icon: 'sparkle', sub: 'Translation, the server, today’s allowance' },
+  { id: 'ai', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account; today’s allowance' },
   { id: 'voice', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
   { id: 'backup', title: 'Backup', icon: 'download', sub: 'One file with everything, and a reminder' },
   { id: 'theme', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },

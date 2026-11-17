@@ -77,9 +77,34 @@ export async function setServer(cfg: ServerConfig | null): Promise<void> {
   else await db.settings.delete('server');
 }
 
+/** Requests the reader's own AI can answer on the phone, without a server. */
+const ON_PHONE = /^\/v1\/(status|translate|study|jobs)(\/|$|\?)/;
+
+/**
+ * Is AI set up on this phone, one way or the other: the reader's own AI account, or a
+ * private Maktaba server?
+ */
+export async function aiReady(): Promise<boolean> {
+  const { getMyAi, hasMyAi } = await import('./device');
+  return hasMyAi(await getMyAi()) || !!(await getServer());
+}
+
 export async function request<T>(path: string, opts: { method?: string; body?: unknown; timeoutMs?: number; cfg?: ServerConfig } = {}): Promise<T> {
+  // The reader's own AI answers on the phone itself; a server is only for what it cannot do.
+  if (!opts.cfg && ON_PHONE.test(path)) {
+    const { getMyAi, hasMyAi, handle, DeviceError } = await import('./device');
+    if (hasMyAi(await getMyAi())) {
+      if (path !== '/v1/status' && typeof navigator !== 'undefined' && navigator.onLine === false) throw new ServerError('You are offline.', 0);
+      try {
+        return (await handle(path, opts.method ?? (opts.body ? 'POST' : 'GET'), opts.body as Record<string, unknown> | undefined)) as T;
+      } catch (e) {
+        if (e instanceof DeviceError) throw new ServerError(e.message, e.status, e.data);
+        throw new ServerError((e as Error).message || 'Your AI could not be reached.', 0);
+      }
+    }
+  }
   const cfg = opts.cfg ?? (await getServer());
-  if (!cfg) throw new ServerError('Maktaba is not connected to its server yet. Set it up in Settings › AI and sync.', 0);
+  if (!cfg) throw new ServerError('Connect your AI first, in Settings › AI.', 0);
   if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new ServerError('You are offline.', 0);
   let res: Response;
   try {
@@ -99,12 +124,13 @@ export async function request<T>(path: string, opts: { method?: string; body?: u
 }
 
 /** Fetches the server's status, keeping the last answer for when it cannot be reached. */
-export async function fetchStatus(): Promise<{ status: ServerStatus | null; error?: string; stale: boolean }> {
-  const last = (await db.settings.get('aiStatus'))?.value as ServerStatus | undefined;
+export async function fetchStatus(cfg?: ServerConfig): Promise<{ status: ServerStatus | null; error?: string; stale: boolean }> {
+  const store = cfg ? 'serverStatus' : 'aiStatus';
+  const last = (await db.settings.get(store))?.value as ServerStatus | undefined;
   try {
-    const s = await request<Omit<ServerStatus, 'fetchedAt'>>('/v1/status', { timeoutMs: 8000 });
+    const s = await request<Omit<ServerStatus, 'fetchedAt'>>('/v1/status', { timeoutMs: 8000, cfg });
     const status = { ...s, fetchedAt: Date.now() };
-    await db.settings.put({ key: 'aiStatus', value: status });
+    await db.settings.put({ key: store, value: status });
     return { status, stale: false };
   } catch (e) {
     return { status: last ?? null, error: (e as Error).message, stale: true };

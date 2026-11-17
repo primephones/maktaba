@@ -56,9 +56,10 @@ try {
 
   console.log('Connecting to the server');
   await go('#/settings/ai');
+  await page.getByText('Advanced: your own Maktaba server').click();
   await page.getByLabel('Server address').fill('http://127.0.0.1:8788');
   await page.getByLabel(/Setup code/).fill('test-setup');
-  await page.getByRole('button', { name: 'Connect' }).click();
+  await page.getByRole('button', { name: 'Connect to the server' }).click();
   await page.getByText('requests left today').waitFor({ timeout: 15000 });
   key = await page.locator('.sync-key').first().textContent();
   check(/^HSY(-[A-Z2-9]{4}){5}$/.test(key ?? ''), `the phone makes a private sync key (${key})`);
@@ -238,12 +239,14 @@ try {
   const phoneB = await ctxB.newPage();
   phoneB.on('pageerror', (e) => errors.push('B: ' + e.message));
   await phoneB.goto(app.url + '#/settings/ai');
+  await phoneB.getByText('Advanced: your own Maktaba server').click();
   await phoneB.getByRole('button', { name: 'My other phone' }).click();
   await phoneB.getByLabel('Server address').fill('http://127.0.0.1:8788');
   await phoneB.getByLabel(/Your sync key/).fill(key.toLowerCase().replace(/-/g, ' '));
-  await phoneB.getByRole('button', { name: 'Connect' }).click();
+  await phoneB.getByRole('button', { name: 'Connect to the server' }).click();
   await phoneB.getByText('requests left today').waitFor({ timeout: 15000 });
   check(true, 'phone B joins with the key typed in any style');
+  await phoneB.screenshot({ path: `${shots}29-phone-b-connected.png`, fullPage: true });
   await phoneB.getByRole('button', { name: 'Sync now' }).click();
   await phoneB.getByText('Up to date with your other phones.').waitFor({ timeout: 20000 });
   const seen = await phoneB.evaluate(async () => {

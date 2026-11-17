@@ -27,6 +27,25 @@ export function App() {
     void resumeImports();
   }, []);
 
+  // Signing in to an AI service comes back here (the page address, or maktaba://auth on
+  // Android); book translations done on the phone pick up where they stopped.
+  useEffect(() => {
+    void import('../ai/signin').then((m) =>
+      m.listenForSignIns((ok, message) => {
+        toast(message);
+        if (ok) window.dispatchEvent(new Event('maktaba:connected'));
+      }),
+    );
+    const resume = () => void import('../ai/device').then(async (d) => d.hasMyAi(await d.getMyAi()) && d.runJobs());
+    resume();
+    window.addEventListener('maktaba:connected', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      window.removeEventListener('maktaba:connected', resume);
+      document.removeEventListener('visibilitychange', resume);
+    };
+  }, []);
+
   // Sync with the reader's other phones, once the server is set up.
   useEffect(() => {
     let stop: (() => void) | undefined;

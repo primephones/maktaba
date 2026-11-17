@@ -13,7 +13,7 @@ import { toast } from '../../ui/toast';
 import { mimeOf, openOriginal, saveFile } from '../../lib/saveFile';
 import { BookCover, useCoverUrl } from './BookCover';
 import { CHECK_BELOW, rerunOcr, runOcrQueue } from '../../ocr/queue';
-import { getServer } from '../../ai/client';
+import { aiReady } from '../../ai/client';
 import { cancelBookTranslation, estimateRequests, pullBook, sourceParagraphs, startBookTranslation, translatable } from '../../ai/translation';
 import { timeUntil } from '../settings/AiAllowance';
 import { OCR_LANGS } from '../../ocr/engine';
@@ -100,7 +100,7 @@ function TranslationCard({ book }: { book: Book }) {
   const have = useLiveQuery(() => db.translations.where('bookId').equals(book.id).count(), [book.id]) ?? 0;
 
   useEffect(() => {
-    void getServer().then((c) => setConnected(!!c));
+    void aiReady().then((c) => setConnected(!!c));
     if (!t) void sourceParagraphs(book).then((p) => setEstimate({ paras: p.length, requests: estimateRequests(p) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book.id, !!t]);
@@ -142,7 +142,7 @@ function TranslationCard({ book }: { book: Book }) {
       </div>
       {t && t.state !== 'done' && t.state !== 'failed' && <span className="meter"><i style={{ width: percent(t.total ? t.done / t.total : 0) }} /></span>}
       {connected === false ? (
-        <button className="btn" onClick={() => navigate('/settings/ai')}>Set up AI and sync first</button>
+        <button className="btn" onClick={() => navigate('/settings/ai')}>Connect your AI first</button>
       ) : !t || t.state === 'failed' ? (
         <button className="btn" disabled={busy || (!estimate?.paras && !t)} onClick={() => void start()}>
           <span className="ai-mark" aria-hidden="true">✦</span>{busy ? 'Starting…' : t ? 'Start again' : 'Translate the whole book'}

@@ -22,6 +22,7 @@ interface MaktabaNative {
   saveFileEnd(o: { id: string }): Promise<{ location: string; uri: string }>;
   shareFile(o: { uri: string; mime: string; title: string }): Promise<void>;
   openFile(o: { uri: string; mime: string; title: string }): Promise<void>;
+  openUrl(o: { url: string }): Promise<void>;
   addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;
 }
 
@@ -30,6 +31,7 @@ export interface NativeEvents {
   volumeKey: { direction: 1 | -1 };
   sharedFiles: { files: SharedFile[]; failed: string[] };
   sharedText: { text: string };
+  authCallback: { url: string };
 }
 
 /** True inside the installed Android app (not on the web or iPhone). */
