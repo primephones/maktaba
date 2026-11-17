@@ -17,6 +17,11 @@ import android.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import android.view.WindowManager;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
+import android.speech.tts.Voice;
+import java.util.Locale;
+import java.util.Set;
 import androidx.core.content.IntentCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -66,6 +71,8 @@ public class MaktabaPlugin extends Plugin {
     protected void handleOnDestroy() {
         if (instance == this) instance = null;
         volumeKeysEnabled = false;
+        if (tts != null) tts.shutdown();
+        tts = null;
     }
 
     // ------------------------------------------------------------------ background work
@@ -126,6 +133,136 @@ public class MaktabaPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("granted", getPermissionState("notifications") == PermissionState.GRANTED);
         call.resolve(ret);
+    }
+
+    // ------------------------------------------------------------------ reading aloud
+
+    private TextToSpeech tts;
+    private boolean ttsReady = false;
+    private final List<Runnable> afterTts = new ArrayList<>();
+    private final List<PluginCall> callsWaitingForTts = new ArrayList<>();
+
+    /** Runs `then` once the phone's speech engine is ready; rejects the call if there is none. */
+    private void withTts(PluginCall call, Runnable then) {
+        if (tts != null && ttsReady) {
+            then.run();
+            return;
+        }
+        afterTts.add(then);
+        callsWaitingForTts.add(call);
+        if (tts != null) return;
+        tts = new TextToSpeech(getContext(), status -> {
+            ttsReady = status == TextToSpeech.SUCCESS;
+            if (ttsReady) {
+                tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                    @Override
+                    public void onStart(String id) {
+                        emitSpeech("start", id, -1, -1);
+                    }
+
+                    @Override
+                    public void onDone(String id) {
+                        emitSpeech("done", id, -1, -1);
+                    }
+
+                    @Override
+                    @Deprecated
+                    public void onError(String id) {
+                        emitSpeech("error", id, -1, -1);
+                    }
+
+                    @Override
+                    public void onRangeStart(String id, int start, int end, int frame) {
+                        emitSpeech("range", id, start, end);
+                    }
+
+                    @Override
+                    public void onStop(String id, boolean interrupted) {
+                        emitSpeech("stopped", id, -1, -1);
+                    }
+                });
+                for (Runnable r : new ArrayList<>(afterTts)) r.run();
+            } else {
+                for (PluginCall c : new ArrayList<>(callsWaitingForTts)) c.reject("This phone has no text-to-speech engine.");
+                tts = null;
+            }
+            afterTts.clear();
+            callsWaitingForTts.clear();
+        });
+    }
+
+    private void emitSpeech(String type, String id, int start, int end) {
+        JSObject data = new JSObject();
+        data.put("type", type);
+        data.put("id", id);
+        if (start >= 0) {
+            data.put("start", start);
+            data.put("end", end);
+        }
+        notifyListeners("speech", data);
+    }
+
+    /** The voices installed on the phone for a language, best (offline, high quality) first. */
+    @PluginMethod
+    public void speechVoices(PluginCall call) {
+        withTts(call, () -> {
+            JSArray list = new JSArray();
+            Set<Voice> voices = tts.getVoices();
+            if (voices != null) {
+                for (Voice v : voices) {
+                    JSObject o = new JSObject();
+                    o.put("name", v.getName());
+                    o.put("lang", v.getLocale().toLanguageTag());
+                    o.put("quality", v.getQuality());
+                    o.put("offline", !v.isNetworkConnectionRequired());
+                    list.put(o);
+                }
+            }
+            JSObject ret = new JSObject();
+            ret.put("voices", list);
+            call.resolve(ret);
+        });
+    }
+
+    /**
+     * Queues one piece of speech. Each piece has its own voice, so an Arabic term inside an
+     * English sentence can be said by an Arabic voice.
+     */
+    @PluginMethod
+    public void speak(PluginCall call) {
+        String text = call.getString("text", "");
+        String id = call.getString("id", UUID.randomUUID().toString());
+        String lang = call.getString("lang", "en");
+        String voiceName = call.getString("voice", null);
+        float rate = call.getFloat("rate", 1.0f);
+        boolean flush = call.getBoolean("flush", false);
+        withTts(call, () -> {
+            Voice chosen = null;
+            Set<Voice> voices = tts.getVoices();
+            if (voices != null) {
+                for (Voice v : voices) {
+                    if (voiceName != null && v.getName().equals(voiceName)) chosen = v;
+                }
+                if (chosen == null) {
+                    for (Voice v : voices) {
+                        if (v.getLocale().getLanguage().equals(new Locale(lang).getLanguage()) && !v.isNetworkConnectionRequired()
+                            && (chosen == null || v.getQuality() > chosen.getQuality())) chosen = v;
+                    }
+                }
+            }
+            if (chosen != null) tts.setVoice(chosen);
+            else tts.setLanguage(Locale.forLanguageTag(lang));
+            tts.setSpeechRate(rate);
+            int r = tts.speak(text, flush ? TextToSpeech.QUEUE_FLUSH : TextToSpeech.QUEUE_ADD, null, id);
+            if (r == TextToSpeech.ERROR) call.reject("This piece could not be spoken.");
+            else call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void stopSpeaking(PluginCall call) {
+        if (tts != null) tts.stop();
+        call.resolve();
     }
 
     // ------------------------------------------------------------------ reading

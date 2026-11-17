@@ -11,6 +11,7 @@ import { BookCover } from '../library/BookCover';
 import { ReadingControls } from '../reader/ReadingControls';
 import { AiSettings } from './AiSettings';
 import { BackupPage } from './BackupPage';
+import { VoicePage } from './VoicePage';
 
 const THEMES: Array<[ThemeName, string, string]> = [
   ['auto', 'Follow phone', 'Paper by day, Lamp when the phone is in dark mode'],
@@ -22,6 +23,7 @@ const THEMES: Array<[ThemeName, string, string]> = [
 
 const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string }> = [
   { id: 'ai', title: 'AI and sync', icon: 'sparkle', sub: 'Translation, the server, today’s allowance' },
+  { id: 'voice', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
   { id: 'backup', title: 'Backup', icon: 'download', sub: 'One file with everything, and a reminder' },
   { id: 'theme', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },
   { id: 'reading', title: 'Reading defaults', icon: 'type', sub: 'Fonts, size, spacing and page mode' },
@@ -56,6 +58,7 @@ export function Settings({ page }: { page?: string }) {
         )}
         {page === 'ai' && <AiSettings />}
         {page === 'backup' && <BackupPage />}
+        {page === 'voice' && <VoicePage />}
         {page === 'theme' && <ThemePage />}
         {page === 'reading' && <ReadingPage />}
         {page === 'covers' && <CoversPage />}
@@ -233,8 +236,8 @@ function AboutPage() {
 
       <div className="section-title">In this version</div>
       <div className="card small" style={{ display: 'grid', gap: 8 }}>
-        <p><b>Working now:</b> adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; offline text recognition for scans; English translation through your own server; Ask your books, Explain and Iʿrāb; sync between your phones; one-file backup; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
-        <p><b>Not built yet:</b> the dictionary, read-aloud, issue boards and exports. They are left out rather than shown half-finished.</p>
+        <p><b>Working now:</b> adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; offline text recognition for scans; English translation through your own server; Ask your books, Explain and Iʿrāb; sync between your phones; one-file backup; reading aloud; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
+        <p><b>Not built yet:</b> the dictionary, issue boards, exports, and lock-screen controls for reading aloud. They are left out rather than shown half-finished.</p>
       </div>
 
       <div className="section-title">Sources</div>

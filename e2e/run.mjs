@@ -327,6 +327,16 @@ await section('Reader', async () => {
   await page.goBack();
   await pause();
 
+  // Reading aloud: the player opens and marks the paragraph being read.
+  await showChrome();
+  await page.getByRole('button', { name: 'Read aloud' }).first().click();
+  await page.getByRole('region', { name: 'Reading aloud' }).waitFor();
+  await page.locator('.listen-play').click();
+  await page.waitForSelector('.bk[data-speaking]', { timeout: 10000 });
+  check(true, 'reading aloud starts and marks the paragraph being read');
+  await page.getByRole('button', { name: 'Stop reading aloud' }).click();
+  await pause();
+
   // Leave and come back: the place is remembered.
   const before = await topText();
   await page.waitForTimeout(1000);

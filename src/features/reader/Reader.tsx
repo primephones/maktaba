@@ -11,6 +11,8 @@ import { sourceParagraphs, translatable, translateNow } from '../../ai/translati
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
 import { StudySheet } from './StudySheet';
+import { Listen } from './Listen';
+import { canSpeak } from '../../speech/speech';
 import { goBack, navigate } from '../../app/router';
 import { useSetting } from '../../app/settings';
 import { EmptyState } from '../../ui/EmptyState';
@@ -386,6 +388,7 @@ function ReaderInner({ book }: { book: Book }) {
   }, []);
   const onUncertain = useCallback((t: Translation) => setUnsure(t), []);
   const [quran, setQuran] = useState<QuranMatch | null>(null);
+  const [listening, setListening] = useState(false);
   const onQuran = useCallback((m: QuranMatch) => setQuran(m), []);
 
   // Books with page images: show the pages, or the text recognised from them.
@@ -536,6 +539,7 @@ function ReaderInner({ book }: { book: Book }) {
             <Icon name="scan" />
           </button>
         )}
+        {canSpeak() && <button className="icon-btn" onClick={() => setListening(true)} aria-label="Read aloud" aria-pressed={listening}><Icon name="speaker" /></button>}
         <button className="icon-btn" onClick={() => setSheet('search')} aria-label="Search in this book"><Icon name="search" /></button>
         <button className="icon-btn" onClick={() => void toggleBookmark()} aria-label={bookmarkHere ? 'Remove bookmark' : 'Bookmark this place'} aria-pressed={!!bookmarkHere}>
           <Icon name={bookmarkHere ? 'bookmarkOn' : 'bookmark'} />
@@ -616,6 +620,7 @@ function ReaderInner({ book }: { book: Book }) {
       {editing && <MarkEditor mark={editing} onClose={() => setEditMark(null)} />}
       {zoom && <ZoomViewer source={zoom} onClose={() => setZoom(null)} />}
       {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
+      {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} />}
       {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}
     </div>
   );
