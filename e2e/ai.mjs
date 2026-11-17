@@ -2,7 +2,7 @@
 // app to the server, translates a whole book, and reads it in English.
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { startServer } from './server.mjs';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
@@ -19,16 +19,16 @@ const check = (ok, what) => {
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-rmSync(`${root}server/.wrangler`, { recursive: true, force: true });
-const run = (cmd, args, opts = {}) => spawn(cmd, args, { cwd: `${root}server`, stdio: 'ignore', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', ...(opts.env ?? {}) } });
+const { setupLocal } = await import('../server/test/setup-local.mjs');
 console.log('setting up the local database');
-await new Promise((r) => run('npx', ['wrangler', 'd1', 'migrations', 'apply', 'maktaba', '--local']).on('exit', r));
+setupLocal(`${root}server`, 8798);
+const run = (cmd, args, opts = {}) => spawn(cmd, args, { cwd: `${root}server`, stdio: 'ignore', detached: true, env: { ...process.env, WRANGLER_SEND_METRICS: 'false', ...(opts.env ?? {}) } });
 console.log('starting the server');
-const mock = run('node', ['test/mock-ai.mjs']);
-const api = run('npx', ['wrangler', 'dev', '--local', '--port', '8787']);
+const mock = run('node', ['test/mock-ai.mjs'], { env: { PORT: '8798' } });
+const api = run('npx', ['wrangler', 'dev', '--local', '--port', '8788']);
 for (let i = 0; i < 120; i++) {
   try {
-    if ((await fetch('http://127.0.0.1:8787')).ok) break;
+    if ((await fetch('http://127.0.0.1:8788')).ok) break;
   } catch {
     /* starting */
   }
@@ -53,7 +53,7 @@ try {
 
   console.log('Connecting to the server');
   await go('#/settings/ai');
-  await page.getByLabel('Server address').fill('http://127.0.0.1:8787');
+  await page.getByLabel('Server address').fill('http://127.0.0.1:8788');
   await page.getByLabel(/Setup code/).fill('test-setup');
   await page.getByRole('button', { name: 'Connect' }).click();
   await page.getByText('requests left today').waitFor({ timeout: 15000 });
@@ -127,7 +127,12 @@ try {
 check(errors.length === 0, `no errors in the page ${JSON.stringify(errors.slice(0, 2))}`);
 await browser.close();
 app.stop();
-api.kill();
-mock.kill();
+for (const p of [api, mock]) {
+  try {
+    process.kill(-p.pid, 'SIGKILL');
+  } catch {
+    /* already gone */
+  }
+}
 console.log(`\n${passed} checks passed, ${failures.length} failed`);
 process.exit(failures.length ? 1 : 0);

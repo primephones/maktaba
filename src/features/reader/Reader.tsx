@@ -8,6 +8,8 @@ import { closePdf } from '../../lib/pdfjs';
 import { formatCitation } from '../../lib/citation';
 import { native } from '../../native/maktaba';
 import { sourceParagraphs, translatable, translateNow } from '../../ai/translation';
+import type { QuranMatch } from '../../quran/refs';
+import { QuranSheet } from '../quran/QuranSheet';
 import { goBack, navigate } from '../../app/router';
 import { useSetting } from '../../app/settings';
 import { EmptyState } from '../../ui/EmptyState';
@@ -370,6 +372,8 @@ function ReaderInner({ book }: { book: Book }) {
     });
   }, []);
   const onUncertain = useCallback((t: Translation) => setUnsure(t), []);
+  const [quran, setQuran] = useState<QuranMatch | null>(null);
+  const onQuran = useCallback((m: QuranMatch) => setQuran(m), []);
 
   // Books with page images: show the pages, or the text recognised from them.
   const hasScans = !!book.ocr;
@@ -419,12 +423,13 @@ function ReaderInner({ book }: { book: Book }) {
             flipped={flipped.has(`${sec.idx}:${i}`)}
             onFlip={onFlip}
             onUncertain={onUncertain}
+            onQuran={onQuran}
           />,
         );
       });
       return out;
     },
-    [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain],
+    [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran],
   );
 
   // Recognised text arrives while the book is open: refresh the chapters on screen.
@@ -593,6 +598,7 @@ function ReaderInner({ book }: { book: Book }) {
       )}
       {editing && <MarkEditor mark={editing} onClose={() => setEditMark(null)} />}
       {zoom && <ZoomViewer source={zoom} onClose={() => setZoom(null)} />}
+      {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
     </div>
   );
 }

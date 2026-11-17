@@ -851,3 +851,48 @@ mark.flash {
   line-height: 1.6;
   color: var(--ink-2);
 }
+
+/* ---------- The Qur'an in the text ---------- */
+/* Quoted verses stand apart in colour, as rubricated verses do in a manuscript. */
+.ayah {
+  color: var(--slate);
+  cursor: pointer;
+}
+.qref {
+  color: var(--rubric);
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.25em;
+  cursor: pointer;
+}
+.verses {
+  display: grid;
+  gap: 16px;
+}
+.verse {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.verse:last-child {
+  border-bottom: 0;
+}
+.verse-ar {
+  font-family: var(--font-arabic);
+  font-size: 1.6rem;
+  line-height: 2.1;
+  text-align: start;
+  color: var(--ink);
+}
+.ayah-no {
+  color: var(--gold);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+.verse-en {
+  font-family: var(--font-read);
+  font-size: 1.02rem;
+  line-height: 1.65;
+  color: var(--ink-2);
+}

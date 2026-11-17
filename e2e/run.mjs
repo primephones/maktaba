@@ -312,6 +312,21 @@ await section('Reader', async () => {
   await pause(900);
   check((await page.locator('mark.flash').textContent()) === 'زبرجد', 'opening a search hit shows and marks the word');
 
+  // The Qur'an: a reference and a quotation without one, both open the verse offline.
+  await page.locator('.qref').first().click();
+  await page.getByText('Al-Baqarah 2:255').waitFor({ timeout: 10000 });
+  check(await page.locator('.verse-ar').first().textContent().then((t) => t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').replace(/ٱ/g, 'ا').includes('القيوم')), 'a Qur’an reference opens the verse in Arabic');
+  check(await page.locator('.verse-en').first().textContent().then((t) => /Ever-Living|Sustainer/.test(t)), '…with its English meaning');
+  await shot('18-quran-popup');
+  await page.goBack();
+  await pause();
+  const quotes = page.locator('.ayah');
+  await quotes.nth((await quotes.count()) - 1).click();
+  await page.getByText('Al-Ikhlas 112:1').waitFor({ timeout: 10000 });
+  check(true, 'a quoted verse with no reference is recognised by its words');
+  await page.goBack();
+  await pause();
+
   // Leave and come back: the place is remembered.
   const before = await topText();
   await page.waitForTimeout(1000);

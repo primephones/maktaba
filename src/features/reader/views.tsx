@@ -29,7 +29,7 @@ export interface ViewProps {
   onReveal?: () => void;
 }
 
-const INTERACTIVE = 'button, a, input, textarea, .fn, .hl, img, canvas, [role="button"], [data-flip]';
+const INTERACTIVE = 'button, a, input, textarea, .fn, .hl, .qref, .ayah, img, canvas, [role="button"], [data-flip]';
 /** A tap this close to the top of the screen always shows the reading bars. */
 const TOP_ZONE = 96;
 const hasSelection = () => !(window.getSelection()?.isCollapsed ?? true);

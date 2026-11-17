@@ -58,7 +58,7 @@ const epub = zipSync({
   'OEBPS/cover.png': [new Uint8Array(coverPng), { level: 0 }],
   'OEBPS/c1.xhtml': strToU8(chapter(1, 'المقدمة')),
   'OEBPS/c2.xhtml': strToU8(chapter(2, 'باب الإجماع')),
-  'OEBPS/c3.xhtml': strToU8(chapter(3, 'باب القياس', '<p>الكلمة المميزة: زبرجد.</p>')),
+  'OEBPS/c3.xhtml': strToU8(chapter(3, 'باب القياس', '<p>الكلمة المميزة: زبرجد.</p><p>قال تعالى: ﴿اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ﴾ [البقرة: ٢٥٥]، وقال: ﴿قُلْ هُوَ اللَّهُ أَحَدٌ﴾.</p>')),
 });
 writeFileSync(new URL('usul.epub', out), epub);
 

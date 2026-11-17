@@ -1,5 +1,6 @@
 import type { Block, HighlightColor, Mark } from '../../db/types';
 import { hasArabicScript, stripTashkilWithMap } from '../../lib/arabic';
+import type { QuranMatch } from '../../quran/refs';
 
 export interface Segment {
   text: string;
@@ -10,6 +11,8 @@ export interface Segment {
   flash?: boolean;
   /** Footnote markers that sit immediately before this run. */
   notesBefore?: Array<{ id: string; label: string }>;
+  /** A Qur'an reference or quoted verse this run belongs to. */
+  q?: QuranMatch;
 }
 
 export interface Rendered {
@@ -24,7 +27,7 @@ export interface Rendered {
  * Cuts a block's text into runs that share the same styling, so bold, italics, highlights,
  * notes, search flashes and footnote markers can all overlap freely.
  */
-export function renderBlock(block: Block, marks: Mark[], flash: [number, number] | undefined, showTashkil: boolean): Rendered {
+export function renderBlock(block: Block, marks: Mark[], flash: [number, number] | undefined, showTashkil: boolean, links: QuranMatch[] = []): Rendered {
   let text = block.text;
   let toDisp: ((n: number) => number) | null = null;
   let map: number[] | undefined;
@@ -50,11 +53,13 @@ export function renderBlock(block: Block, marks: Mark[], flash: [number, number]
     .map((m) => ({ s: conv(m.start!), e: conv(m.end!), id: m.id, color: m.color ?? 'gold', note: !!m.note }));
   const fl = flash ? { s: conv(flash[0]), e: conv(flash[1]) } : null;
   const notes = (block.notes ?? []).map((n) => ({ at: conv(n.at), id: n.id, label: n.label }));
+  const qs = links.map((q) => ({ ...q, s: conv(q.start), e: conv(q.end) }));
 
   for (const s of spans) { cuts.add(s.s); cuts.add(s.e); }
   for (const h of hls) { cuts.add(h.s); cuts.add(h.e); }
   if (fl) { cuts.add(fl.s); cuts.add(fl.e); }
   for (const n of notes) cuts.add(n.at);
+  for (const q of qs) { cuts.add(q.s); cuts.add(q.e); }
 
   const points = [...cuts].filter((c) => c >= 0 && c <= text.length).sort((a, b) => a - b);
   const segments: Segment[] = [];
@@ -68,6 +73,8 @@ export function renderBlock(block: Block, marks: Mark[], flash: [number, number]
     const h = hls.filter((x) => x.s <= s && x.e >= e).pop();
     if (h) seg.mark = { id: h.id, color: h.color, note: h.note };
     if (fl && fl.s <= s && fl.e >= e) seg.flash = true;
+    const q = qs.find((x) => x.s <= s && x.e >= e);
+    if (q) seg.q = q;
     const before = notes.filter((n) => n.at === s);
     if (before.length) seg.notesBefore = before;
     segments.push(seg);

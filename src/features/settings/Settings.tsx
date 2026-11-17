@@ -234,6 +234,12 @@ function AboutPage() {
         <p><b>Not built yet:</b> AI questions, the dictionary, read-aloud, sync and backup. They are left out rather than shown half-finished.</p>
       </div>
 
+      <div className="section-title">Sources</div>
+      <div className="card small" style={{ display: 'grid', gap: 6 }}>
+        <p>Qur’an text: the Uthmani text from QuranEnc (The Noble Qur’an Encyclopedia). English meanings: Saheeh International, via QuranEnc and Tanzil.</p>
+        <p>Text recognition: Tesseract, with its Arabic, Urdu, Persian and English data. PDF: pdf.js. Kindle books: foliate-js.</p>
+      </div>
+
       <div className="section-title">Installing on a Samsung phone</div>
       <div className="card small">
         <ol style={{ margin: 0, paddingInlineStart: 20, display: 'grid', gap: 8 }}>

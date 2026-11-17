@@ -24,4 +24,7 @@ for (const f of ['tesseract-core-simd-lstm.wasm.js', 'tesseract-core-lstm.wasm.j
 for (const lang of ['ara', 'urd', 'fas', 'eng']) {
   cpSync(new URL(`@tesseract.js-data/${lang}/4.0.0_best_int/${lang}.traineddata.gz`, nm), new URL(`lang/${lang}.traineddata.gz`, ocr));
 }
+// The Qur'an: Uthmani text with the Saheeh International English, for offline verse popups.
+mkdirSync(new URL('quran/', pub), { recursive: true });
+cpSync(new URL('quran-json/dist/quran_en.json', nm), new URL('quran/quran_en.json', pub));
 console.log('runtime assets copied');

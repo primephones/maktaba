@@ -1,6 +1,9 @@
 // Runs the real server locally (Cloudflare's runtime + local database) against the
 // stand-in AI service, and walks through what the app will do.
 import { spawn } from 'node:child_process';
+import { setupLocal } from './setup-local.mjs';
+
+setupLocal(decodeURIComponent(new URL('..', import.meta.url).pathname));
 
 const S = 'http://127.0.0.1:8787';
 const MOCK = 'http://127.0.0.1:8799';
@@ -19,8 +22,18 @@ const call = async (path, { method = 'GET', body, as = key } = {}) => {
   return { status: res.status, data: await res.json().catch(() => ({})) };
 };
 
-const mock = spawn('node', ['test/mock-ai.mjs'], { env: { ...process.env, LIMIT: '6' }, stdio: 'inherit' });
-const server = spawn('npx', ['wrangler', 'dev', '--local', '--port', '8787', '--test-scheduled'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' } });
+const mock = spawn('node', ['test/mock-ai.mjs'], { env: { ...process.env, LIMIT: '6' }, stdio: 'inherit', detached: true });
+const server = spawn('npx', ['wrangler', 'dev', '--local', '--port', '8787', '--test-scheduled'], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, WRANGLER_SEND_METRICS: 'false' }, detached: true });
+// Stop the whole process group, so nothing is left holding the ports.
+const stopAll = () => {
+  for (const p of [server, mock]) {
+    try {
+      process.kill(-p.pid, 'SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  }
+};
 let log = '';
 server.stdout.on('data', (d) => (log += d));
 server.stderr.on('data', (d) => (log += d));
@@ -87,8 +100,7 @@ try {
   failures.push(String(e));
 } finally {
   if (failures.length) console.log(log.split('\n').filter((l) => /error|Error|✘/.test(l)).slice(-20).join('\n'));
-  server.kill();
-  mock.kill();
+  stopAll();
 }
 console.log(`\n${passed} checks passed, ${failures.length} failed`);
 process.exit(failures.length ? 1 : 0);
