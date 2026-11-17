@@ -1,7 +1,7 @@
 # Maktaba · مكتبة
 
-A personal library for Islamic scholarship: Arabic, Urdu and Persian books, read on an
-Android phone (and in a browser or on an iPhone as a home-screen app).
+A personal library for Islamic scholarship: Arabic and Urdu books first, Persian too, read
+in English on an Android phone (and in a browser or on an iPhone as a home-screen app).
 
 This is a ground-up rebuild. It is being built in phases, and each phase is tested before
 the next begins. Features that are not finished are left out of the app rather than shown

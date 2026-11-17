@@ -43,8 +43,10 @@ for (let i = 0; i < 40; i++) {
 const app = await startServer();
 const browser = await chromium.launch();
 const errors = [];
-const phone = async (name) => {
+const phone = async (name, mobileData = false) => {
   const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  // A phone on mobile data says so, the way Android's browser engine does.
+  if (mobileData) await ctx.addInitScript(() => Object.defineProperty(navigator, 'connection', { value: { type: 'cellular' } }));
   const p = await ctx.newPage();
   p.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
   await p.goto(app.url);
@@ -162,6 +164,51 @@ try {
   const stA = (await read(A, 'books')).find((b) => b.id === usulA.id).status;
   const stB = (await read(B, 'books')).find((b) => b.id === usulA.id).status;
   check(stA === 'want' && stB === 'want', `both phones end with the later change (A: ${stA}, B: ${stB})`);
+
+  console.log('Making the free space go further');
+  const s3 = await stats();
+  const syncFolder = s3.files.find((f) => f.name === 'Sync').id;
+  const syncFiles = s3.files.filter((f) => f.parents.includes(syncFolder));
+  check(syncFiles.length > 0 && syncFiles.every((f) => f.name.endsWith('.json.gz')), `study data is stored compressed (${syncFiles.map((f) => f.name.split('.').slice(1).join('.')).join(', ')})`);
+  const booksBefore = s3.files.filter((f) => f.parents.includes(booksFolder)).length;
+  await A.evaluate(() => { location.hash = '#/settings/cloud'; });
+  await A.getByText(/Maktaba \(3 books, notes and translations\)/).waitFor({ timeout: 15000 });
+  check(true, 'the cloud page shows how much of the Drive Maktaba uses');
+  check(await A.getByText('Free', { exact: true }).isVisible(), 'and how much is free');
+  await A.screenshot({ path: `${shots}52-cloud-space.png`, fullPage: true });
+  await A.evaluate(() => { location.hash = '#/library'; });
+  await wait(700);
+  await A.getByRole('button', { name: 'Details for big-notes' }).dispatchEvent('click');
+  await A.getByRole('button', { name: /Remove from this device/ }).click();
+  check(await A.getByText('Also remove it from my Google Drive').waitFor({ timeout: 8000 }).then(() => true, () => false), 'removing a book offers to free its Drive space');
+  await A.getByRole('button', { name: 'Remove book' }).click();
+  await A.getByText(/freed in your Drive/).waitFor({ timeout: 15000 });
+  const booksAfter = (await stats()).files.filter((f) => f.parents.includes(booksFolder)).length;
+  check(booksAfter === booksBefore - 1, `…and does (${booksBefore} → ${booksAfter} files in Drive)`);
+
+  console.log('On mobile data');
+  const C = await phone('C', true);
+  await connectCloud(C);
+  let cBooks = [];
+  for (let i = 0; i < 30; i++) {
+    cBooks = await read(C, 'books');
+    if (cBooks.length >= 2) break;
+    await wait(1000);
+  }
+  await wait(2000);
+  check(cBooks.length >= 2 && cBooks.every((b) => b.import.state === 'missing'), `on mobile data the library arrives, but book files wait for Wi-Fi (${cBooks.map((b) => b.import.state).join(', ')})`);
+  check((await read(C, 'marks')).length > 0, 'notes and highlights still sync on mobile data');
+  await C.evaluate(() => { location.hash = '#/settings/cloud'; });
+  await C.getByText(/waiting for Wi-Fi/).waitFor({ timeout: 15000 });
+  check(true, 'and the cloud page says how many are waiting for Wi-Fi');
+  await C.getByRole('switch', { name: 'Use mobile data for books' }).click();
+  await C.getByRole('button', { name: 'Sync now' }).click();
+  for (let i = 0; i < 30; i++) {
+    cBooks = await read(C, 'books');
+    if (cBooks.every((b) => b.import.state === 'ready')) break;
+    await wait(1000);
+  }
+  check(cBooks.every((b) => b.import.state === 'ready'), 'allowing mobile data fetches them');
 
   console.log('Nothing else');
   const s2 = await stats();

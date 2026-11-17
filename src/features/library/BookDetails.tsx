@@ -131,7 +131,7 @@ function TranslationCard({ book }: { book: Book }) {
               ? have
                 ? `${have} paragraphs are already translated. Translate the rest of the book?`
                 : estimate
-                  ? `${estimate.paras} paragraphs, about ${estimate.requests} requests of free allowance${estimate.requests > 150 ? ', spread over several days' : ''}.`
+                  ? `${estimate.paras} paragraph${estimate.paras === 1 ? '' : 's'}, about ${estimate.requests} request${estimate.requests === 1 ? '' : 's'} of free allowance${estimate.requests > 150 ? ', spread over several days' : ''}.`
                   : 'Counting the paragraphs…'
               : t.state === 'waiting'
                 ? `${t.done} of ${t.total} done. Today’s free allowances are used up; it carries on by itself ${t.nextRunAt ? timeUntil(t.nextRunAt) : 'soon'}.`
@@ -198,25 +198,7 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
     );
   }
 
-  if (view === 'delete') {
-    return (
-      <Sheet title="Remove this book?" onClose={() => setView('main')}>
-        <p>“{book.title}” will be removed from this device along with its highlights, notes and bookmarks. This can’t be undone.</p>
-        <button
-          className="btn btn--primary btn--block"
-          onClick={async () => {
-            cancelImport(book.id);
-            await deleteBook(book.id);
-            toast('Book removed.');
-            onClose();
-          }}
-        >
-          Remove book
-        </button>
-        <button className="btn btn--block" onClick={() => setView('main')}>Keep it</button>
-      </Sheet>
-    );
-  }
+  if (view === 'delete') return <RemoveBook book={book} onBack={() => setView('main')} onDone={onClose} />;
 
   return (
     <Sheet title="Book details" onClose={onClose}>
@@ -416,5 +398,56 @@ function OriginalFile({ book }: { book: Book }) {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Removing a book. With a cloud connected, its file can also be removed from the reader's
+ * Drive to free the space (their other phones keep their own copies).
+ */
+function RemoveBook({ book, onBack, onDone }: { book: Book; onBack: () => void; onDone: () => void }) {
+  const [inCloud, setInCloud] = useState(false);
+  const [alsoCloud, setAlsoCloud] = useState(true);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void import('../../cloud/drive').then(async (d) => setInCloud(!!(await d.getCloud()) && !!(book.cloudFileId || book.hash)));
+  }, [book.cloudFileId, book.hash]);
+  return (
+    <Sheet title="Remove this book?" onClose={onBack}>
+      <p>“{book.title}” will be removed from this device along with its highlights, notes and bookmarks. This can’t be undone.</p>
+      {inCloud && (
+        <div className="row" style={{ padding: 0 }}>
+          <span className="grow">
+            <span className="title" id={`rm-cloud-${book.id}`}>Also remove it from my Google Drive</span>
+            <div className="sub">Frees {formatBytes(book.size)} of your Drive space. Your other phones keep their own copies.</div>
+          </span>
+          <button className="switch" role="switch" aria-checked={alsoCloud} aria-labelledby={`rm-cloud-${book.id}`} onClick={() => setAlsoCloud(!alsoCloud)} />
+        </div>
+      )}
+      <button
+        className="btn btn--primary btn--block"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          cancelImport(book.id);
+          let note = '';
+          if (inCloud && alsoCloud) {
+            try {
+              const { removeFromCloud } = await import('../../sync/cloudSync');
+              await removeFromCloud(book);
+              note = ` ${formatBytes(book.size)} freed in your Drive.`;
+            } catch (e) {
+              note = ` It could not be removed from your Drive (${(e as Error).message}); try again from there.`;
+            }
+          }
+          await deleteBook(book.id);
+          toast(`Book removed.${note}`);
+          onDone();
+        }}
+      >
+        {busy ? 'Removing…' : 'Remove book'}
+      </button>
+      <button className="btn btn--block" onClick={onBack}>Keep it</button>
+    </Sheet>
   );
 }

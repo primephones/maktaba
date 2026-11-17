@@ -56,3 +56,26 @@ describe('volume detection', () => {
     expect(parseVolume('Kitab al-Umm')).toBeNull();
   });
 });
+
+describe('searching Urdu and Persian', () => {
+  const finds = (text: string, q: string) => findAll(text, normalizeForSearch(q)).length > 0;
+  it('matches Urdu written with Arabic letters, and the reverse', () => {
+    expect(finds('امام شافعی رحمہ اللہ نے کہا', 'الشافعي')).toBe(false); // the article is part of the word
+    expect(finds('امام شافعی رحمہ اللہ نے کہا', 'شافعي')).toBe(true);
+    expect(finds('رحمه الله', 'رحمہ اللہ')).toBe(true);
+    expect(finds('کتاب الصلوٰۃ', 'كتاب الصلوه')).toBe(true);
+  });
+  it('ignores nūn ghunna, aspirate hāʾ and yāʾ spellings', () => {
+    expect(finds('میں نے یہ کتاب پڑھی', 'مين')).toBe(true);
+    expect(finds('انہوں نے فرمایا', 'انهون')).toBe(true);
+    expect(finds('بڑے', 'بڑي')).toBe(true);
+  });
+  it('ignores the invisible joiner inside Persian and Urdu words', () => {
+    expect(finds('می‌روم به مدرسه', 'میروم')).toBe(true);
+    expect(finds('میروم', 'می‌روم')).toBe(true);
+    expect(finds('خانهٔ ما', 'خانه ما')).toBe(true);
+  });
+  it('reads Urdu and Persian digits', () => {
+    expect(finds('صفحہ ۱۲۳', '123')).toBe(true);
+  });
+});

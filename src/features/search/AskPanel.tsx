@@ -54,7 +54,7 @@ export function AskPanel({ question }: { question: string }) {
   if (connected === false) {
     return (
       <div className="ask">
-        <button className="btn btn--block" onClick={() => navigate('/settings/ai')}><span className="ai-mark" aria-hidden="true">✦</span>Set up AI to ask your books</button>
+        <button className="btn btn--block" onClick={() => navigate('/setup/ai')}><span className="ai-mark" aria-hidden="true">✦</span>Connect your AI to ask your books</button>
       </div>
     );
   }

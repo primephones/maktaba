@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { accessToken, cloudAvailable, ensureFolders, getCloud, setCloud, whoAmI, type CloudConfig } from '../../cloud/drive';
+import { accessToken, cloudAvailable, driveSpace, ensureFolders, getCloud, setCloud, whoAmI, type CloudConfig } from '../../cloud/drive';
+import { formatBytes } from '../../lib/util';
 import type { SyncState } from '../../sync/sync';
 import type { FileSyncState } from '../../sync/cloudSync';
 import { db } from '../../db/db';
@@ -16,8 +17,10 @@ import { navigate } from '../../app/router';
  */
 /** Signs in to the reader's own Google Drive, makes the Maktaba folder and starts syncing. */
 export async function connectDrive(): Promise<void> {
+  // Signing in again keeps the existing connection if it does not go through.
+  const before = await getCloud();
   try {
-    await setCloud({ provider: 'gdrive' });
+    await setCloud({ provider: 'gdrive', folders: before?.folders });
     await accessToken(true);
     await ensureFolders();
     const me = await whoAmI().catch(() => ({}) as { email?: string; name?: string });
@@ -27,7 +30,7 @@ export async function connectDrive(): Promise<void> {
     const { syncNow } = await import('../../sync/sync');
     void syncNow();
   } catch (e) {
-    await setCloud(null);
+    await setCloud(before);
     throw e;
   }
 }
@@ -94,12 +97,24 @@ function Connected({ cfg }: { cfg: CloudConfig }) {
   const [s, setS] = useState<SyncState | null>(null);
   const [files, setFiles] = useState<FileSyncState | null>(null);
   const [autoDown, setAutoDown] = useState(true);
+  const [mobile, setMobile] = useState(false);
+  const [space, setSpace] = useState<{ mine: number; bookCount: number; usage: number; limit?: number } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void Promise.all([import('../../sync/cloudSync').then((m) => m.cloudUsage()), driveSpace()])
+      .then(([u, d]) => alive && setSpace({ mine: u.books + u.study, bookCount: u.bookCount, usage: d.usage, limit: d.limit }))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [s?.lastSyncAt]);
   useEffect(() => {
     let off1: (() => void) | undefined;
     let off2: (() => void) | undefined;
     void import('../../sync/sync').then((m) => (off1 = m.onSyncState(setS)));
     void import('../../sync/cloudSync').then((m) => (off2 = m.onFileSync(setFiles)));
     void db.settings.get('cloudDownloadsOff').then((r) => setAutoDown(r?.value !== true));
+    void db.settings.get('cloudUseMobileData').then((r) => setMobile(r?.value === true));
     return () => {
       off1?.();
       off2?.();
@@ -115,6 +130,9 @@ function Connected({ cfg }: { cfg: CloudConfig }) {
             <span className="muted small">{cfg.email ? `${cfg.name ? `${cfg.name} · ` : ''}${cfg.email}` : 'Connected'}</span>
           </span>
         </div>
+        {s?.error && /sign in|could not open|cancelled|not finished/i.test(s.error) && (
+          <button className="btn btn--primary btn--block" onClick={() => void connectDrive().catch(() => undefined)}>Sign in to Google Drive again</button>
+        )}
         {s && (
           <div className="cloud-state" role="status">
             <Icon name={s.error ? 'warn' : s.syncing || s.pending ? 'retry' : 'check'} size={18} />
@@ -124,9 +142,30 @@ function Connected({ cfg }: { cfg: CloudConfig }) {
             </span>
           </div>
         )}
+        {space && (
+          <div className="space">
+            <div className="storage-bar" role="img" aria-label={`Maktaba uses ${formatBytes(space.mine)}; ${space.limit ? `${formatBytes(Math.max(0, space.limit - space.usage))} free of ${formatBytes(space.limit)}` : ''}`}>
+              {space.limit ? (
+                <>
+                  <i style={{ width: `${Math.min(100, (space.mine / space.limit) * 100)}%`, background: 'var(--rubric)' }} />
+                  <i style={{ width: `${Math.min(100, (Math.max(0, space.usage - space.mine) / space.limit) * 100)}%`, background: 'var(--ink-3)' }} />
+                </>
+              ) : null}
+            </div>
+            <div className="legend">
+              <div><i style={{ background: 'var(--rubric)' }} /><span>Maktaba ({space.bookCount} book{space.bookCount === 1 ? '' : 's'}, notes and translations)</span><span>{formatBytes(space.mine)}</span></div>
+              <div><i style={{ background: 'var(--ink-3)' }} /><span>Gmail, Photos and other files</span><span>{formatBytes(Math.max(0, space.usage - space.mine))}</span></div>
+              {space.limit ? <div><i style={{ background: 'var(--line)' }} /><span>Free</span><span>{formatBytes(Math.max(0, space.limit - space.usage))}</span></div> : null}
+            </div>
+          </div>
+        )}
         {files && files.total > 0 && (
           <p className="muted small" style={{ margin: 0 }}>
-            {files.uploading ? `Saving “${files.uploading}” to your Drive…` : files.downloading ? `Fetching “${files.downloading}” from your Drive…` : `${files.inCloud} of ${files.total} books saved in your Drive.`}
+            {files.uploading
+              ? `Saving “${files.uploading}” to your Drive…`
+              : files.downloading
+                ? `Fetching “${files.downloading}” from your Drive…`
+                : `${files.inCloud} of ${files.total} books saved in your Drive.${files.waitingForWifi ? ` ${files.waitingForWifi} waiting for Wi-Fi.` : ''}`}
           </p>
         )}
         <div className="row-btns">
@@ -163,6 +202,27 @@ function Connected({ cfg }: { cfg: CloudConfig }) {
           />
         </div>
       </div>
+      <div className="list">
+        <div className="row">
+          <Icon name="cloud" />
+          <span className="grow">
+            <span className="title" id="cloud-mobile">Use mobile data for books</span>
+            <div className="sub">Off: book files go up and come down on Wi-Fi only, to save your data bundle. Notes and reading places always sync.</div>
+          </span>
+          <button
+            className="switch"
+            role="switch"
+            aria-checked={mobile}
+            aria-labelledby="cloud-mobile"
+            onClick={async () => {
+              const next = !mobile;
+              setMobile(next);
+              await db.settings.put({ key: 'cloudUseMobileData', value: next });
+            }}
+          />
+        </div>
+      </div>
+      <p className="muted small">Your Drive space goes as far as it can: each book is kept there once (never twice, whichever phone added it), notes and translations are stored compressed, and old sync files are cleared away. Removing a book can free its space too.</p>
       <p className="muted small">In your Drive, the folder Maktaba holds Books (the original files, exactly as you added them) and Sync (your notes, places and the rest). Maktaba sees nothing else in your Drive.</p>
     </>
   );

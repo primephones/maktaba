@@ -5,6 +5,8 @@ import { createServer } from 'node:http';
 
 const LIMIT = Number(process.env.LIMIT ?? 1000);
 let calls = 0;
+/** What the AI was last sent, for tests to look at. */
+const last = [];
 createServer(async (req, res) => {
   // Answers pages in a browser too (the app calling the reader's own AI directly).
   res.setHeader('access-control-allow-origin', '*');
@@ -20,12 +22,22 @@ createServer(async (req, res) => {
     res.end(JSON.stringify({ calls }));
     return;
   }
+  if (req.url === '/last') {
+    res.end(JSON.stringify(last));
+    return;
+  }
   if (req.url === '/reset') {
     calls = 0;
     res.end('{}');
     return;
   }
   calls++;
+  try {
+    last.push(JSON.parse(body).messages);
+    if (last.length > 30) last.shift();
+  } catch {
+    /* not JSON */
+  }
   if (calls > LIMIT) {
     res.writeHead(429, { 'retry-after': '1' });
     res.end('{"error":"rate limited"}');

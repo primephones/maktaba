@@ -15,6 +15,22 @@ import { local, outgoing, setLocal, syncable, TABLES, type Change, type SyncTabl
  * fetches it from there by itself.
  */
 
+/**
+ * Study data is sent compressed (about a third of the size: translations shrink most), so
+ * the reader's free Drive space goes further. Older uncompressed files are still read.
+ */
+async function pack(data: unknown): Promise<Blob> {
+  const raw = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  if (typeof CompressionStream === 'undefined') return raw;
+  return new Response(raw.stream().pipeThrough(new CompressionStream('gzip'))).blob().then((b) => new Blob([b], { type: 'application/gzip' }));
+}
+async function unpack<T>(f: DriveFile): Promise<T> {
+  if (!f.name.endsWith('.gz')) return downloadJson<T>(f.id);
+  const blob = await download(f.id);
+  return new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).json() as Promise<T>;
+}
+const ext = () => (typeof CompressionStream === 'undefined' ? 'json' : 'json.gz');
+
 /** Change files older than a snapshot by this much are cleared away. */
 const KEEP_AFTER_SNAPSHOT = 7 * 86_400_000;
 /** Drive's clock and listing can lag a little: always look back this far, and skip what was seen. */
@@ -32,8 +48,7 @@ export function cloudTransport() {
     async exchange(device: string, out: Change[]) {
       const { sync } = await ensureFolders();
       if (out.length) {
-        const body = new Blob([JSON.stringify({ device, changes: out })], { type: 'application/json' });
-        await uploadSmall(`${device}-${Date.now()}.json`, sync, body, { device, kind: 'changes' });
+        await uploadSmall(`${device}-${Date.now()}.${ext()}`, sync, await pack({ device, changes: out }), { device, kind: 'changes' });
       }
       return { incoming: await pull(device, sync), more: false };
     },
@@ -54,7 +69,7 @@ async function pull(device: string, sync: string): Promise<Change[]> {
   // A snapshot first (it holds everything), then the changes, oldest first.
   fresh.sort((a, b) => (a.appProperties?.kind === 'snapshot' ? -1 : 0) - (b.appProperties?.kind === 'snapshot' ? -1 : 0) || time(a) - time(b));
   for (const f of fresh) {
-    const data = await downloadJson<{ changes: Change[] }>(f.id).catch(() => null);
+    const data = await unpack<{ changes: Change[] }>(f).catch(() => null);
     if (data?.changes) incoming.push(...data.changes);
   }
   const newest = Math.max(cursor.time, ...files.map(time));
@@ -91,7 +106,7 @@ async function compactIfNeeded() {
       changes.push({ tbl, key, data, at: stamp?.at ?? 1 });
     }
   }
-  const made = await uploadSmall(`snapshot-${device}-${Date.now()}.json`, sync, new Blob([JSON.stringify({ device, changes })], { type: 'application/json' }), { device, kind: 'snapshot' });
+  const made = await uploadSmall(`snapshot-${device}-${Date.now()}.${ext()}`, sync, await pack({ device, changes }), { device, kind: 'snapshot' });
   const cutoff = (made.createdTime ? Date.parse(made.createdTime) : Date.now()) - KEEP_AFTER_SNAPSHOT;
   const all = await listFiles(`'${sync}' in parents and trashed = false`);
   for (const f of all) {
@@ -108,6 +123,15 @@ export interface FileSyncState {
   downloading?: string;
   inCloud: number;
   total: number;
+  /** Books waiting for Wi-Fi to go up or come down. */
+  waitingForWifi?: number;
+}
+
+/** On mobile data (where the phone says so), books wait for Wi-Fi unless the reader allows it. */
+async function onMobileData(): Promise<boolean> {
+  const c = (navigator as Navigator & { connection?: { type?: string } }).connection;
+  if (c?.type !== 'cellular') return false;
+  return (await local('cloudUseMobileData')) !== true;
 }
 const fileListeners = new Set<(s: FileSyncState) => void>();
 let fileState: FileSyncState = { inCloud: 0, total: 0 };
@@ -131,7 +155,9 @@ async function syncFiles() {
   const inDrive = await listFiles(`'${books}' in parents and trashed = false`, 'id,name,size,appProperties');
   const byHash = new Map(inDrive.filter((f) => f.appProperties?.hash).map((f) => [f.appProperties!.hash, f]));
   const all = await db.books.toArray();
-  setFiles({ total: all.length, inCloud: all.filter((b) => byHash.has(b.hash) || b.cloudFileId).length });
+  setFiles({ total: all.length, inCloud: all.filter((b) => byHash.has(b.hash) || b.cloudFileId).length, waitingForWifi: 0 });
+  const wifiOnly = await onMobileData();
+  let waiting = 0;
 
   // Up: every book whose file is here and not yet in the cloud.
   for (const b of all) {
@@ -143,6 +169,10 @@ async function syncFiles() {
     }
     const rec = await db.files.get(b.id);
     if (!rec) continue;
+    if (wifiOnly) {
+      waiting++;
+      continue;
+    }
     setFiles({ uploading: b.title });
     try {
       const made = await uploadLarge(`${b.title.replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 120)}${extOf(b)}`, books, rec.blob, { hash: b.hash, bookId: b.id, fileName: b.fileName.slice(0, 100) });
@@ -155,9 +185,13 @@ async function syncFiles() {
   }
 
   // Down: books that arrived from another phone without their file.
-  if ((await local('cloudDownloadsOff')) === true) return;
   const missing = (await db.books.toArray()).filter((b) => b.import.state === 'missing');
-  if (!missing.length) return;
+  if ((await local('cloudDownloadsOff')) === true || !missing.length || wifiOnly) {
+    if (wifiOnly) waiting += missing.length;
+    setFiles({ waitingForWifi: waiting });
+    return;
+  }
+  setFiles({ waitingForWifi: waiting });
   const { addFiles } = await import('../import');
   for (const b of missing) {
     const f = (b.cloudFileId && inDrive.find((x) => x.id === b.cloudFileId)) || byHash.get(b.hash);
@@ -170,4 +204,21 @@ async function syncFiles() {
       setFiles({ downloading: undefined });
     }
   }
+}
+
+/** How much of the reader's Drive Maktaba's own folder takes: books, and study data. */
+export async function cloudUsage(): Promise<{ books: number; bookCount: number; study: number }> {
+  const { books, sync } = await ensureFolders();
+  const size = (fs: DriveFile[]) => fs.reduce((n, f) => n + Number(f.size ?? 0), 0);
+  const [b, s] = await Promise.all([listFiles(`'${books}' in parents and trashed = false`, 'id,size'), listFiles(`'${sync}' in parents and trashed = false`, 'id,size')]);
+  return { books: size(b), bookCount: b.length, study: size(s) };
+}
+
+/** Removes a book's file from the reader's Drive, to free the space. */
+export async function removeFromCloud(book: Book): Promise<void> {
+  const { books } = await ensureFolders();
+  const ids = new Set<string>();
+  if (book.cloudFileId) ids.add(book.cloudFileId);
+  if (book.hash) for (const f of await listFiles(`'${books}' in parents and trashed = false`, 'id,appProperties')) if (f.appProperties?.hash === book.hash) ids.add(f.id);
+  for (const id of ids) await remove(id);
 }

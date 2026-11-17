@@ -41,7 +41,7 @@ const RULES: Array<{ test: RegExp; help: Help }> = [
     },
   },
   {
-    test: /sign in to your google drive again|needs_consent/i,
+    test: /sign in to your google drive again|needs_consent|could not open/i,
     help: {
       title: 'Google asks you to sign in again',
       steps: ['This happens now and then (for example after a password change). Tap Connect Google Drive and choose the same account. Nothing is lost.'],

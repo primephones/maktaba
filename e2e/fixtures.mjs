@@ -135,3 +135,8 @@ execFileSync('python3', [decodeURIComponent(new URL('./make-mobi.py', import.met
 // ---------- Not a book ----------
 writeFileSync(new URL('notes.xyz', out), new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
 console.log('fixtures written to', out.pathname);
+
+// Books with real Urdu and Persian titles, headings, Qur'an and ḥadīth quotations and the
+// marks Urdu writers use (ﷺ, ؒ, ۔), to check them on every screen.
+writeFileSync(new URL('نماز کے احکام.md', out), readFileSync(new URL('./data/namaz.md', import.meta.url)));
+writeFileSync(new URL('رساله در فقه.md', out), readFileSync(new URL('./data/risala-fa.md', import.meta.url)));

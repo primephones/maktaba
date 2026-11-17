@@ -38,7 +38,7 @@ export interface TranslateRequest {
   previous?: string;
 }
 
-const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urdu', fa: 'Persian' };
+const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urdu', fa: 'Persian (Fārsī)' };
 
 export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | 'user'; content: string }> {
   const all = req.paragraphs.map((p) => p.text).join('\n');
@@ -53,7 +53,12 @@ export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | '
     '2. Mark every uncertainty. If a word or phrase is ambiguous, corrupt, or you are not sure of it, put † immediately after the English words concerned and list it under "uncertain" with a short reason (for example: "the manuscript reading is unclear", "could also mean …", "unknown place name").',
     '3. Use the glossary. Write each listed term in its transliteration followed by the English in brackets the first time it appears in a paragraph, e.g. "ijmāʿ (consensus)", and the transliteration alone after that. Keep transliteration consistent with the glossary exactly.',
     '4. Qurʾān: translate the meaning of quoted verses and keep the surah:verse reference if the text gives one. Ḥadīth: translate the chain of narrators as "So-and-so narrated to us from So-and-so…" with names transliterated.',
-    '5. Names of people and places are transliterated (with ʿ, ʾ and macrons). Honorifics are kept: ﷺ or صلى الله عليه وسلم → "(may God bless him and grant him peace)"; رضي الله عنه → "(may God be pleased with him)"; رحمه الله → "(may God have mercy on him)"; تعالى → "the Exalted".',
+    '5. Names of people and places are transliterated (with ʿ, ʾ and macrons). Honorifics are kept, in every spelling and abbreviation: ﷺ, ؐ, صلى الله عليه وسلم, صلی اللہ علیہ وسلم, (ص) → "(may God bless him and grant him peace)"; ؑ, عليه السلام, علیہ السلام, (ع) → "(peace be upon him)"; ؓ, رضي الله عنه, رضی اللہ عنہ, (رض) → "(may God be pleased with him)" (or "her"/"them" as the form shows); ؒ, رحمه الله, رحمۃ اللہ علیہ, رحمہ اللہ, (ره) → "(may God have mercy on him)"; ﷻ, جل جلاله, عز وجل → "(Mighty and Majestic)"; تعالى, تعالیٰ → "the Exalted".',
+    ...(req.lang === 'ar'
+      ? []
+      : [
+          `5a. ${req.lang === 'ur' ? 'Urdu' : 'Persian'} works quote Arabic (Qurʾān, ḥadīth, juristic texts) inside the ${req.lang === 'ur' ? 'Urdu' : 'Persian'}. Translate the Arabic quotation too, inside quotation marks, and then the author’s own words; if the author paraphrases the quotation, translate both as written rather than merging them. Religious words the language takes from Persian (e.g. ${req.lang === 'ur' ? 'نماز, روزہ' : 'نماز, روزه'}) are given as the matching Arabic term from the glossary (ṣalāt, ṣawm).`,
+        ]),
     '6. Write clear, natural English with the formality of the original. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.',
     '',
     'Answer with JSON only, in this shape:',

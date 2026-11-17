@@ -1,3 +1,14 @@
+/* The honorific ligatures (ﷺ, ﷻ, ﷽ and kin) are drawn very tall in Nastaliq and collide
+   with the line above. In Urdu text they come from Amiri instead, a little smaller, so they
+   sit on the line, on every screen. Only those characters use this face. */
+@font-face {
+  font-family: 'Maktaba Honorifics';
+  src: url('../../node_modules/@fontsource/amiri/files/amiri-arabic-400-normal.woff2') format('woff2');
+  unicode-range: U+FDF0-FDFF;
+  size-adjust: 78%;
+  font-display: swap;
+}
+
 /* Maktaba design tokens: a scholarly manuscript, not a tech product.
    Vellum paper, iron-gall ink, rubric red for emphasis, slate for quiet structure,
    muted gold reserved for AI actions and book foil. */
@@ -7,7 +18,7 @@
   --font-read: 'Literata Variable', 'Literata', Georgia, serif;
   --font-arabic: 'Amiri', 'IBM Plex Sans Arabic', serif;
   --font-arabic-sans: 'IBM Plex Sans Arabic', 'Amiri', sans-serif;
-  --font-urdu: 'Noto Nastaliq Urdu', 'Amiri', serif;
+  --font-urdu: 'Maktaba Honorifics', 'Noto Nastaliq Urdu', 'Amiri', serif;
 
   --r-sm: 8px;
   --r-md: 14px;

@@ -48,6 +48,7 @@ export function Settings({ page }: { page?: string }) {
         <h1>{info?.title ?? 'Settings'}</h1>
       </div>
       <ErrorBoundary what="these settings" compact resetKey={page}>
+        <div className="settings-page">
         {!info && (
           <div className="list">
             {PAGES.map((p) => (
@@ -74,6 +75,7 @@ export function Settings({ page }: { page?: string }) {
         {page === 'switches' && <SwitchesPage />}
         {page === 'storage' && <StoragePage />}
         {page === 'about' && <AboutPage />}
+        </div>
       </ErrorBoundary>
     </div>
   );
@@ -164,6 +166,7 @@ interface Usage {
   books: number;
   text: number;
   covers: number;
+  study: number;
   total?: number;
   quota?: number;
   persisted: boolean;
@@ -183,9 +186,15 @@ function StoragePage() {
       await db.covers.each((c) => { covers += c.blob.size; });
       await db.assets.each((a) => { covers += a.blob.size; });
       await db.sections.each((s) => { text += s.chars * 2 + 200; });
+      // Translations, recognised scan pages, notes and highlights: measured as stored text.
+      let study = 0;
+      await db.translations.each((t) => { study += (t.en?.length ?? 0) * 2 + 120; });
+      await db.ocrPages.each((o) => { study += JSON.stringify(o).length * 2; });
+      await db.marks.each((m) => { study += JSON.stringify(m).length * 2; });
+      await db.refs.each((r) => { study += JSON.stringify(r).length * 2; });
       const est = await navigator.storage?.estimate?.().catch(() => undefined);
       const persisted = (await navigator.storage?.persisted?.().catch(() => false)) ?? false;
-      if (alive) setUsage({ books, covers, text, total: est?.usage, quota: est?.quota, persisted });
+      if (alive) setUsage({ books, covers, text, study, total: est?.usage, quota: est?.quota, persisted });
     })();
     return () => {
       alive = false;
@@ -193,10 +202,11 @@ function StoragePage() {
   }, [count]);
 
   if (!usage) return <p className="muted" aria-busy="true">Measuring…</p>;
-  const sum = Math.max(1, usage.books + usage.text + usage.covers);
+  const sum = Math.max(1, usage.books + usage.text + usage.covers + usage.study);
   const parts: Array<[string, number, string]> = [
-    ['Book files', usage.books, 'var(--rubric)'],
+    ['Original book files', usage.books, 'var(--rubric)'],
     ['Reading text', usage.text, 'var(--slate)'],
+    ['Translations, notes and recognised pages', usage.study, 'var(--gold)'],
     ['Covers and pictures', usage.covers, 'var(--gold-soft)'],
   ];
   const free = usage.quota && usage.total !== undefined ? usage.quota - usage.total : undefined;
@@ -216,7 +226,7 @@ function StoragePage() {
           ))}
         </div>
       </div>
-      <div className="banner" style={{ marginTop: 14 }}>
+      <div className="banner">
         <Icon name={usage.persisted ? 'check' : 'info'} />
         <span className="grow">
           {usage.persisted
@@ -227,7 +237,7 @@ function StoragePage() {
           <button className="btn" onClick={async () => { const ok = await requestPersistence(); setUsage({ ...usage, persisted: ok }); }}>Protect</button>
         )}
       </div>
-      <p className="muted small" style={{ marginTop: 14 }}>Translations, the search index and recognised scan text will be listed here when those features arrive.</p>
+      <p className="muted small">This is the space on this phone. Your Google Drive space is under Settings › Your cloud.</p>
     </>
   );
 }
@@ -245,8 +255,8 @@ function AboutPage() {
 
       <div className="section-title">In this version</div>
       <div className="card small" style={{ display: 'grid', gap: 8 }}>
-        <p><b>Working now:</b> adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; offline text recognition for scans; English translation through your own server; Ask your books, Explain and Iʿrāb; sync between your phones; one-file backup; reading aloud; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
-        <p><b>Not built yet:</b> the dictionary, issue boards, exports, and lock-screen controls for reading aloud. They are left out rather than shown half-finished.</p>
+        <p><b>Working now:</b> Arabic and Urdu first, Persian too: adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; the original file kept exactly and one tap away (the printed page itself for PDFs); offline text recognition for scans; whole-book English translation with your own AI, with a glossary of terms in Arabic, Urdu and Persian spelling; Ask your books, Explain, Iʿrāb and chapter summaries; your library in your own Google Drive, in step on all your phones; a setup guide with help along the way; one-file backup; reading aloud; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books that ignores vowel marks and Urdu and Persian spellings; saved references and copy with citation; Qur’an verses on a tap.</p>
+        <p><b>Not built yet:</b> ḥadīth popups, the dictionary, comparing books, exports, and lock-screen controls for reading aloud. They are left out rather than shown half-finished.</p>
       </div>
 
       <div className="section-title">Sources</div>

@@ -53,3 +53,23 @@ describe('batching', () => {
     expect(b.flat().length).toBe(30);
   });
 });
+
+describe('Urdu and Persian', () => {
+  it('tells the AI how Urdu books quote Arabic and write honorifics, with the glossary terms found in Urdu spelling', () => {
+    const [sys, user] = buildMessages({ lang: 'ur', glossary: SEED_GLOSSARY, paragraphs: [{ id: 'p1', text: 'نبی کریم ﷺ نے فرمایا کہ طہارت نصف ایمان ہے۔ امام ابوحنیفہؒ کے نزدیک وضو میں نیت سنت ہے۔' }] });
+    expect(sys.content).toMatch(/Urdu works quote Arabic/);
+    expect(sys.content).toMatch(/صلی اللہ علیہ وسلم/);
+    expect(sys.content).toMatch(/ؒ/);
+    expect(user.content).toMatch(/ṭahāra/);
+    expect(user.content).toMatch(/wuḍūʾ/);
+    expect(user.content).toMatch(/sunna/);
+  });
+  it('gives Persian its own note, and Arabic none', () => {
+    expect(buildMessages({ lang: 'fa', glossary: SEED_GLOSSARY, paragraphs: [{ id: 'p1', text: 'طهارت' }] })[0].content).toMatch(/Persian works quote Arabic/);
+    expect(buildMessages({ lang: 'ar', glossary: SEED_GLOSSARY, paragraphs: [{ id: 'p1', text: 'الطهارة' }] })[0].content).not.toMatch(/works quote Arabic/);
+  });
+  it('keeps Urdu digits in the number check', () => {
+    expect(checkAnswer([{ id: 'p1', text: 'فجر کی دو رکعتیں ہیں، اور سورۃ البقرۃ کی آیت ۲۲۲ میں ہے۔' }], [{ id: 'p1', en: 'Fajr has two rakʿas, and verse 222 of al-Baqara says so.', uncertain: [] }])).toEqual([]);
+    expect(checkAnswer([{ id: 'p1', text: 'فجر کی دو رکعتیں ہیں، اور سورۃ البقرۃ کی آیت ۲۲۲ میں ہے۔' }], [{ id: 'p1', en: 'Fajr has two rakʿas, and a verse of al-Baqara says so.', uncertain: [] }])[0].problem).toMatch(/222/);
+  });
+});

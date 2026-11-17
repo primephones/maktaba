@@ -115,7 +115,7 @@ function appear<T>(find: () => T | null | undefined, within = 320): Promise<T | 
  * from its cover grows out of the cover, and shrinks back into it on the way out.
  */
 function withTransition(change: () => void, dir: Direction = 'forward', closingBook?: string) {
-  const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void>; ready: Promise<void>; updateCallbackDone: Promise<void> } };
   if (!doc.startViewTransition || reducedMotion() || document.visibilityState !== 'visible') {
     change();
     return;
@@ -151,10 +151,15 @@ function withTransition(change: () => void, dir: Direction = 'forward', closingB
         );
       }
     });
-    void t.finished.finally(() => {
-      named.forEach((el) => (el.style.viewTransitionName = ''));
-      if (root.dataset.nav === dir) delete root.dataset.nav;
-    });
+    // A busy phone can make the browser skip the animation; the screen still changes.
+    t.ready.catch(() => undefined);
+    t.updateCallbackDone.catch(() => undefined);
+    void t.finished
+      .catch(() => undefined)
+      .finally(() => {
+        named.forEach((el) => (el.style.viewTransitionName = ''));
+        if (root.dataset.nav === dir) delete root.dataset.nav;
+      });
   } catch {
     named.forEach((el) => (el.style.viewTransitionName = ''));
     change();

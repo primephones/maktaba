@@ -78,8 +78,18 @@ export const SEED_GLOSSARY: Term[] = [
   { ar: 'العقيدة', forms: ['عقيدة'], tr: 'ʿaqīda', en: 'creed' },
   { ar: 'الطهارة', forms: ['طهارة'], tr: 'ṭahāra', en: 'ritual purity' },
   { ar: 'الوضوء', forms: ['وضوء'], tr: 'wuḍūʾ', en: 'ablution' },
-  { ar: 'الزكاة', forms: ['زكاة'], tr: 'zakāt', en: 'obligatory alms' },
-  { ar: 'الصلاة', forms: ['صلاة'], tr: 'ṣalāt', en: 'ritual prayer' },
+  { ar: 'الزكاة', forms: ['زكاة', 'زکوٰۃ', 'زکات'], tr: 'zakāt', en: 'obligatory alms' },
+  { ar: 'الصلاة', forms: ['صلاة', 'صلوٰۃ', 'نماز', 'نمازیں', 'نمازوں'], tr: 'ṣalāt', en: 'ritual prayer' },
+  { ar: 'الصوم', forms: ['صوم', 'الصيام', 'صيام', 'روزہ', 'روزے', 'روزه'], tr: 'ṣawm', en: 'fasting' },
+  { ar: 'الحج', forms: ['حج'], tr: 'ḥajj', en: 'the pilgrimage' },
+  { ar: 'الغسل', forms: ['غسل'], tr: 'ghusl', en: 'full ritual bath' },
+  { ar: 'التيمم', forms: ['تيمم'], tr: 'tayammum', en: 'dry ablution' },
+  { ar: 'الأذان', forms: ['أذان', 'اذان'], tr: 'adhān', en: 'call to prayer' },
+  // Scholars and schools (common in Urdu and Persian works)
+  { ar: 'الفقهاء', forms: ['فقهاء', 'فقہاء'], tr: 'fuqahāʾ', en: 'jurists' },
+  { ar: 'الجمهور', forms: ['جمهور', 'جمہور'], tr: 'the majority of scholars', en: 'jumhūr' },
+  { ar: 'الحنفية', forms: ['حنفية', 'الأحناف', 'احناف'], tr: 'the Ḥanafīs', en: 'followers of the Ḥanafī school' },
+  { ar: 'المسلك', forms: ['مسلک'], tr: 'maslak', en: 'school, way' },
 ];
 
 export interface GlossaryHit {
@@ -88,25 +98,47 @@ export interface GlossaryHit {
   found: string;
 }
 
+/** Folds spelling differences away: vowel marks, hamza seats, and the Urdu and Persian letters. */
 const fold = (s: string) =>
   s
-    .replace(/[ً-ٰٟـ]/g, '')
+    .replace(/[\u200c\u200d]/g, '')
+    .replace(/[\u0610-\u061a\u064b-\u065f\u0670\u0640]/g, '')
     .replace(/[أإآٱ]/g, 'ا')
-    .replace(/ة/g, 'ه')
-    .replace(/ى/g, 'ي');
+    .replace(/[ةۃہھۀە]/g, 'ه')
+    .replace(/[ىیےۓ]/g, 'ي')
+    .replace(/[کڪ]/g, 'ك')
+    .replace(/ں/g, 'ن');
+
+/**
+ * The shapes one term takes in Arabic, Urdu and Persian writing: with or without the
+ * article; a final tāʾ marbūṭa written as ت (Urdu and Persian طہارت, سنت); a final hamza
+ * dropped (Urdu وضو).
+ */
+function variants(form: string): string[] {
+  const f = fold(form);
+  const out = new Set([f]);
+  const bare = f.replace(/^ال/, '');
+  if (bare.length >= 2) out.add(bare);
+  for (const v of [...out]) {
+    if (v.endsWith('ه')) out.add(`${v.slice(0, -1)}ت`);
+    if (v.endsWith('ء')) out.add(v.slice(0, -1));
+  }
+  return [...out];
+}
 
 /** The glossary terms that occur in a passage, longest first, so only those go to the AI. */
 export function termsIn(text: string, glossary: Term[]): GlossaryHit[] {
   const hay = ` ${fold(text)} `;
   const hits: GlossaryHit[] = [];
   for (const term of glossary) {
-    for (const form of [term.ar, ...(term.forms ?? [])]) {
-      const f = fold(form);
-      // Arabic attaches و ف ب ل ك to the front of words; allow those, but not other letters.
-      const re = new RegExp(`(?:^|[\\s\\p{P}]|[وفبلك])${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[\\s\\p{P}])`, 'u');
-      if (re.test(hay)) {
-        hits.push({ term, found: form });
-        break;
+    found: for (const form of [term.ar, ...(term.forms ?? [])]) {
+      for (const f of variants(form)) {
+        // Arabic attaches و ف ب ل ك to the front of words; allow those, but not other letters.
+        const re = new RegExp(`(?:^|[\\s\\p{P}]|[وفبلك])${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[\\s\\p{P}])`, 'u');
+        if (re.test(hay)) {
+          hits.push({ term, found: form });
+          break found;
+        }
       }
     }
   }

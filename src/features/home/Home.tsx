@@ -23,6 +23,8 @@ function whereIn(book: Book): string {
   if (!p) return '';
   let title = '';
   for (const t of book.toc) {
+    // The book's own title at the head of its contents is not a chapter.
+    if (t.title.trim() === book.title.trim()) continue;
     if (t.section < p.section || (t.section === p.section && (t.block ?? 0) <= p.block)) title = t.title;
     else break;
   }

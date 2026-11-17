@@ -1246,3 +1246,28 @@ details.advanced > summary {
 .guide-name .badge {
   margin: 0;
 }
+
+/* Settings pages: one even rhythm between cards, lists and notes. */
+.settings-page {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.settings-page > p,
+.settings-page > .section-title {
+  margin: 0;
+}
+.settings-page > .section-title {
+  margin-top: 10px;
+}
+.space {
+  display: grid;
+  gap: 10px;
+}
+.space .storage-bar i {
+  min-width: 4px;
+}
+.space .legend span:last-child,
+.allowance .legend span:last-child {
+  white-space: nowrap;
+}

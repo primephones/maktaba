@@ -55,6 +55,8 @@ jobs:
         run: node e2e/cloud.mjs
       - name: The setup guide, as someone new meets it
         run: node e2e/setup.mjs
+      - name: Urdu and Persian on every screen, at three screen sizes
+        run: node e2e/look-urdu.mjs
       - name: Translate a whole book through the server, in the app
         run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4
@@ -65,6 +67,7 @@ jobs:
             e2e/out/shots
             e2e/out/themes
             e2e/out/motion
+            e2e/out/urdu
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

@@ -131,6 +131,46 @@ try {
   check(true, 'chapter summaries come from the reader’s own AI');
   await page.getByRole('button', { name: 'Close' }).click();
 
+  console.log('An Urdu book, translated with your own AI');
+  const namaz = readFileSync(fx('نماز کے احکام.md')).toString('base64');
+  await page.evaluate((b64) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], 'نماز کے احکام.md'));
+    const input = document.querySelector('[data-testid=add-input]');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, namaz);
+  await wait(3000);
+  await go('#/library');
+  await page.getByRole('button', { name: 'Details for نماز کے احکام' }).dispatchEvent('click');
+  await page.getByRole('button', { name: /Translate the whole book/ }).click();
+  let ur;
+  for (let i = 0; i < 60; i++) {
+    const book = (await dbRead('books')).find((b) => b.title === 'نماز کے احکام');
+    const n = (await dbRead('translations')).filter((t) => t.bookId === book.id).length;
+    ur = { t: book.translation, n };
+    if (ur.t?.state === 'done' && n >= ur.t.total) break;
+    const btn = page.getByRole('button', { name: 'Check now' });
+    if (await btn.count()) await btn.click().catch(() => undefined);
+    await wait(1500);
+  }
+  check(ur.t?.state === 'done' && ur.n === ur.t.total, `the whole Urdu book is translated (${ur.n} of ${ur.t?.total})`);
+  const sent = (await (await fetch(`http://127.0.0.1:${PORT}/last`)).json()).filter((m) => /Urdu/.test(m[0].content));
+  const all = sent.map((m) => m.map((x) => x.content).join('\n')).join('\n');
+  check(sent.length > 0 && /Urdu works quote Arabic/.test(all), 'the AI is told how Urdu books quote Arabic');
+  check(/صلی اللہ علیہ وسلم/.test(all) && /ؒ/.test(all), 'and how Urdu writes the honorifics');
+  check(/ṭahāra/.test(all) && /wuḍūʾ/.test(all) && /sunna/.test(all) && /ṣalāt/.test(all), 'and gets the glossary terms found in the Urdu spelling (ṭahāra, wuḍūʾ, sunna, ṣalāt)');
+  await page.getByRole('button', { name: 'Close' }).click().catch(() => undefined);
+  await go('#/library');
+  const bookId = (await dbRead('books')).find((b) => b.title === 'نماز کے احکام').id;
+  await go(`#/book/${bookId}`);
+  await page.waitForSelector('.bk--en', { timeout: 15000 });
+  check(/English of paragraph/.test(await page.locator('.bk--en').first().textContent()), 'the Urdu book reads in English');
+  await page.locator('.bk--en').nth(1).click();
+  await wait(500);
+  check(await page.locator('.bk[lang="ur"]').first().isVisible().catch(() => false), 'and a tap shows the Urdu original');
+  await page.screenshot({ path: `${shots}42-urdu-in-english.png` });
+
   console.log('Keys stay on this phone');
   check(serverCalls.length === 0, `no request went to any Maktaba server (${serverCalls.length})`);
   await go('#/settings/backup');

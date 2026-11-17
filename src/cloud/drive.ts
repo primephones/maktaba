@@ -177,14 +177,23 @@ async function folder(name: string, parent?: string): Promise<string> {
   return made.id;
 }
 
-/** The Maktaba folders in the reader's Drive, made the first time. */
-export async function ensureFolders(): Promise<NonNullable<CloudConfig['folders']>> {
-  const cfg = await getCloud();
-  if (cfg?.folders) return cfg.folders;
-  const root = await folder('Maktaba');
-  const folders = { root, books: await folder('Books', root), sync: await folder('Sync', root) };
-  if (cfg) await db.settings.put({ key: 'cloud', value: { ...cfg, folders } });
-  return folders;
+let making: Promise<NonNullable<CloudConfig['folders']>> | null = null;
+
+/**
+ * The Maktaba folders in the reader's Drive, made the first time. Only one look-up runs at
+ * once: two parts of the app asking together must not each make their own folders.
+ */
+export function ensureFolders(): Promise<NonNullable<CloudConfig['folders']>> {
+  making ??= (async () => {
+    const cfg = await getCloud();
+    if (cfg?.folders) return cfg.folders;
+    const root = await folder('Maktaba');
+    const folders = { root, books: await folder('Books', root), sync: await folder('Sync', root) };
+    const now = await getCloud();
+    if (now) await db.settings.put({ key: 'cloud', value: { ...now, folders } });
+    return folders;
+  })().finally(() => (making = null));
+  return making;
 }
 
 /** Who is signed in, for the settings screen. */
