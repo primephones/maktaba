@@ -12,6 +12,8 @@ interface Props {
   current: { section: number; block: number };
   onGo: (section: number, block: number) => void;
   onEditMark: (id: string) => void;
+  /** Opens a summary of the chapter being read. */
+  onSummary?: () => void;
   onClose: () => void;
 }
 
@@ -34,7 +36,7 @@ export async function findPage(book: Book, wanted: string): Promise<{ section: n
   return null;
 }
 
-export function Contents({ book, marks, current, onGo, onEditMark, onClose }: Props) {
+export function Contents({ book, marks, current, onGo, onEditMark, onSummary, onClose }: Props) {
   const [tab, setTab] = useState<'contents' | 'bookmarks' | 'notes'>('contents');
   const [page, setPage] = useState('');
   const [pageError, setPageError] = useState('');
@@ -69,6 +71,11 @@ export function Contents({ book, marks, current, onGo, onEditMark, onClose }: Pr
 
       {tab === 'contents' && (
         <>
+          {onSummary && (
+            <button className="btn btn--block" onClick={onSummary}>
+              <span className="ai-mark" aria-hidden="true">✦</span> Summarise this chapter
+            </button>
+          )}
           {hasPages && (
             <form
               style={{ display: 'flex', gap: 8 }}

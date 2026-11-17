@@ -134,3 +134,83 @@ export async function irab(book: Book, sentence: string): Promise<Irab> {
 export async function saveIrab(sentence: string, value: Irab): Promise<void> {
   await db.settings.put({ key: irabKey(sentence), value: { ...value, corrected: true } });
 }
+
+export interface Summary {
+  summary: string;
+  sources: Source[];
+  /** Paragraphs the summary was made from, out of the chapter's total. */
+  covered: number;
+  total: number;
+  title: string;
+  provider: string;
+  model: string;
+}
+
+/** About how much of a chapter one request can carry. */
+const SUMMARY_CHARS = 28_000;
+
+const summaryKey = (bookId: string, section: number, block: number) => `summary:${bookId}:${section}:${block}`;
+
+/** Where a chapter starts and ends, from the contents list (or the whole section). */
+export function chapterAt(book: Book, at: { section: number; block: number }) {
+  let i = -1;
+  book.toc.forEach((t, k) => {
+    if (t.section < at.section || (t.section === at.section && (t.block ?? 0) <= at.block)) i = k;
+  });
+  const here = book.toc[i];
+  const next = book.toc[i + 1];
+  if (!here) return { title: book.title, from: { section: at.section, block: 0 }, to: { section: at.section + 1, block: 0 } };
+  return {
+    title: here.title,
+    from: { section: here.section, block: here.block ?? 0 },
+    to: next ? { section: next.section, block: next.block ?? 0 } : { section: book.sectionCount, block: 0 },
+  };
+}
+
+export async function savedSummary(book: Book, at: { section: number; block: number }): Promise<Summary | undefined> {
+  const ch = chapterAt(book, at);
+  return (await db.settings.get(summaryKey(book.id, ch.from.section, ch.from.block)))?.value as Summary | undefined;
+}
+
+/**
+ * Summarises the chapter the reader is in, only from its own paragraphs, each point tied
+ * to the paragraph it came from. Kept, so it is asked for once.
+ */
+export async function summariseChapter(book: Book, at: { section: number; block: number }, again = false): Promise<Summary> {
+  const ch = chapterAt(book, at);
+  const key = summaryKey(book.id, ch.from.section, ch.from.block);
+  if (!again) {
+    const saved = (await db.settings.get(key))?.value as Summary | undefined;
+    if (saved) return saved;
+  }
+  const trs = new Map((await db.translations.where('bookId').equals(book.id).toArray()).map((t) => [`${t.section}:${t.block}`, t.en]));
+  const all: Source[] = [];
+  for (let s = ch.from.section; s < Math.min(ch.to.section + 1, book.sectionCount); s++) {
+    const sec = await db.sections.get(sectionId(book.id, s));
+    if (!sec) continue;
+    sec.blocks.forEach((b, i) => {
+      if (s === ch.from.section && i < ch.from.block) return;
+      if (s > ch.to.section || (s === ch.to.section && i >= ch.to.block)) return;
+      // Headings name the chapter; only its paragraphs are summarised.
+      if (b.t === 'img' || b.t === 'h' || b.text.trim().length < 2) return;
+      const page = b.printed ?? (b.page ? String(b.page) : undefined);
+      all.push({ id: '', bookId: book.id, section: s, block: i, text: b.text, en: trs.get(`${s}:${i}`), cite: formatCitation({ author: book.author, book: book.title, page, chapter: sec.title }) });
+    });
+  }
+  if (!all.length) throw new Error('This chapter has no text to summarise (its pages are images that have not been recognised yet).');
+  const sources: Source[] = [];
+  let size = 0;
+  for (const src of all) {
+    const len = src.text.length + (src.en?.length ?? 0);
+    if (sources.length && size + len > SUMMARY_CHARS) break;
+    size += len;
+    sources.push({ ...src, text: src.text.slice(0, 4000), en: src.en?.slice(0, 4000), id: `p${sources.length + 1}` });
+  }
+  const r = await study<{ summary: string }>({ task: 'summarise', passages: sources.map(({ id, text, en, cite }) => ({ id, text, en, cite })) }, !!book.private, 'explain');
+  // A citation to a paragraph that was not given is removed rather than shown.
+  const known = new Set(sources.map((s) => s.id));
+  const summary = r.result.summary.replace(/\s*\[([^\]\s]+)\]/g, (m, id: string) => (known.has(id) ? m : ''));
+  const out: Summary = { summary, sources, covered: sources.length, total: all.length, title: ch.title, provider: r.provider, model: r.model };
+  await db.settings.put({ key, value: out });
+  return out;
+}

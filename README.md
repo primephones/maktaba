@@ -39,7 +39,7 @@ half-working.
   Saheeh International English, offline.
 - **Study:** search across every book (Arabic search ignores vowel marks and spelling
   variants); Ask your books (answers only from passages in your books, each cited and
-  checked word for word); Explain a passage; Iʿrāb (word-by-word grammar) for Arabic;
+  checked word for word); Summarise a chapter (each point linked to its paragraph); Explain a passage; Iʿrāb (word-by-word grammar) for Arabic;
   saved references with citations.
 - **Listening:** read aloud in English, the original, or both, with the phone's voices;
   Arabic terms in English said by an Arabic voice; speed and sleep timer.

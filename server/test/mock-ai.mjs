@@ -36,6 +36,10 @@ createServer(async (req, res) => {
     const words = m ? m[2].split(/\s+/).slice(0, 4).join(' ') : '';
     return reply({ found: !!m, answer: m ? `The passages say that consensus is a decisive proof [${m[1]}].` : 'Not in the passages.', quotes: m ? [{ id: m[1], text: words }] : [] });
   }
+  if (system.includes('Summarise the chapter')) {
+    const ids = [...user.matchAll(/\[(p\d+)\]/g)].map((m) => m[1]);
+    return reply({ summary: `The chapter defines analogy (qiyās) [${ids[0]}].\nIt names consensus as a proof [${ids[1] ?? ids[0]}] and cites a passage that does not exist [p999].` });
+  }
   if (system.includes('You explain a passage')) return reply({ explanation: 'This passage says that consensus (ijmāʿ) is a decisive proof.', terms: [{ term: 'ijmāʿ', meaning: 'consensus' }] });
   if (system.includes('iʿrāb')) return reply({ words: user.trim().split(/\s+/).slice(0, 6).map((w) => ({ word: w, irab: 'اسم مرفوع', en: 'a noun' })), note: '' });
   const part = user.slice(user.indexOf('Translate these paragraphs:'));

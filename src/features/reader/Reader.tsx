@@ -12,6 +12,7 @@ import { sourceParagraphs, translatable, translateNow } from '../../ai/translati
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
 import { StudySheet } from './StudySheet';
+import { SummarySheet } from './SummarySheet';
 import { Listen } from './Listen';
 import { canSpeak } from '../../speech/speech';
 import { goBack, navigate } from '../../app/router';
@@ -75,7 +76,7 @@ function ReaderInner({ book }: { book: Book }) {
   const [target, setTarget] = useState<Target>({ section: opening.section, block: opening.block, nonce: 0 });
   const [pos, setPos] = useState({ section: target.section, block: target.block });
   const [chrome, setChrome] = useState(true);
-  const [sheet, setSheet] = useState<null | 'contents' | 'settings' | 'search'>(null);
+  const [sheet, setSheet] = useState<null | 'contents' | 'settings' | 'search' | 'summary'>(null);
   const [flash, setFlash] = useState<{ section: number; block: number; range: [number, number] } | null>(
     opening.flash ? { section: opening.section, block: opening.block, range: opening.flash } : null,
   );
@@ -586,8 +587,9 @@ function ReaderInner({ book }: { book: Book }) {
       )}
 
       {sheet === 'contents' && (
-        <Contents book={book} marks={marks} current={pos} onGo={(s, b) => goTo(s, b)} onEditMark={setEditMark} onClose={() => setSheet(null)} />
+        <Contents book={book} marks={marks} current={pos} onGo={(s, b) => goTo(s, b)} onEditMark={setEditMark} onSummary={() => setSheet('summary')} onClose={() => setSheet(null)} />
       )}
+      {sheet === 'summary' && <SummarySheet book={book} at={pos} onGo={(s, b) => goTo(s, b)} onClose={() => setSheet(null)} />}
       {sheet === 'search' && (
         <BookSearch book={book} onGo={(h) => goTo(h.section, h.block, [h.start, h.end])} onClose={() => setSheet(null)} />
       )}

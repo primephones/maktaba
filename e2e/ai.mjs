@@ -175,6 +175,25 @@ try {
     check(false, 'Iʿrāb is offered for Arabic text');
   }
 
+  console.log('Chapter summary');
+  await page.evaluate(() => getSelection().removeAllRanges());
+  await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();
+  await page.getByRole('button', { name: /Summarise this chapter/ }).click();
+  await page.getByText('The chapter defines analogy').waitFor({ timeout: 20000 });
+  const cites = await page.locator('.summary-text .cite').count();
+  check(cites === 2, `the summary cites its passages, and a made-up citation is dropped (${cites} citations)`);
+  await shot('28-summary');
+  await page.locator('.summary-text .cite').first().click();
+  await wait(700);
+  check((await page.locator('.sheet').count()) === 0, 'tapping a citation goes to the passage');
+  // Asked once: opening it again needs no new request.
+  await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();
+  await page.getByRole('button', { name: /Summarise this chapter/ }).click();
+  await page.getByText('The chapter defines analogy').waitFor({ timeout: 3000 });
+  check(true, 'the summary is kept and shown again at once');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
+
   console.log('Sync between two phones');
   // Phone A highlights a passage and makes a folder, through the app.
   await go('#/library');

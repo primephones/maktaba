@@ -936,3 +936,6 @@ input[type='search']::-webkit-search-decoration {
 .sheet-head {
   touch-action: none;
 }
+.summary-text p {
+  margin: 0 0 10px;
+}

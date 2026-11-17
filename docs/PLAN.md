@@ -11,7 +11,7 @@ phase starts. Numbers in brackets refer to the feature list (Part A) in the brie
 | 4 | Server and AI allowance | Private key-gated server; usage bar split by feature, resets, last-known when offline [14]; fallback between free services; private books never sent to a service that trains | **Done** (needs your free accounts to switch on) |
 | 5 | Translation and reading in English | Whole-book translation on the server that pauses and resumes by itself [9]; tap for the original [8]; draft labels; † with reasons; translate ahead | **Done**; glossary editing, consistency check, compare AIs and names index still to come |
 | 6 | References and dictionary | Qurʾān popups offline [7.8]; saved references with citations | **Partly done**: ḥadīth popups, "what it proves", issue boards, Lane's Lexicon still to come |
-| 7 | Search & ask | Answers only from your books, every claim cited and checked [11]; Explain; Iʿrāb with corrections | **Done**; summarise chapter and compare books still to come |
+| 7 | Search & ask | Answers only from your books, every claim cited and checked [11]; Explain; Iʿrāb with corrections; chapter summaries, cited and kept | **Done**; compare books still to come |
 | 8 | Read aloud | Phone voices offline; Arabic terms said by an Arabic voice; Fix a word; speed, sleep timer, English/Original/Both [13] | **Done**; lock-screen and headphone controls still to come |
 | 9 | Sync, backup, sharing | HSY key sync with an offline outbox; one-file backup and reminder; invitations for 1–2 people [15] | **Done** |
 | 10 | Sources | Internet Archive, OpenITI, Shamela and Noor Book inside the app; the reading list [6] | To do; needs your reading-list file |
