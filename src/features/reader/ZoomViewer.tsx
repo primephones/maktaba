@@ -8,7 +8,15 @@ import { drawPdfPage } from './PdfPage';
 export type ZoomSource = { kind: 'pdf'; bookId: string; page: number } | { kind: 'img'; url: string };
 
 /** Full-screen view of a scanned page or picture: pinch to zoom, drag to move, double-tap. */
-export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: () => void }) {
+export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, onSwipe }: {
+  source: ZoomSource;
+  onClose: () => void;
+  label?: string;
+  /** Controls drawn over the page (the original-page viewer's page buttons). */
+  children?: React.ReactNode;
+  /** A sideways swipe while not zoomed in: -1 for the page before, 1 for the page after. */
+  onSwipe?: (dir: 1 | -1) => void;
+}) {
   const stage = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const view = useRef({ scale: 1, x: 0, y: 0 });
@@ -35,11 +43,30 @@ export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: (
     };
   }, []);
 
+  const pdfKey = source.kind === 'pdf' ? `${source.bookId}:${source.page}` : '';
   useEffect(() => {
+    // A new page starts unzoomed.
+    view.current = { scale: 1, x: 0, y: 0 };
+    if (stage.current) stage.current.style.transform = '';
     if (source.kind !== 'pdf' || !canvas.current) return;
+    let current = true;
+    // Drawn out of sight, then shown: turning pages quickly never mixes two pages.
+    const off = document.createElement('canvas');
     const width = Math.min(3000, window.innerWidth * Math.min(3, (window.devicePixelRatio || 1) * 1.6));
-    void drawPdfPage(source.bookId, source.page, canvas.current, width).catch(() => undefined);
-  }, [source]);
+    void drawPdfPage(source.bookId, source.page, off, width)
+      .then(() => {
+        const c = canvas.current;
+        if (!current || !c) return;
+        c.width = off.width;
+        c.height = off.height;
+        c.getContext('2d')?.drawImage(off, 0, 0);
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfKey]);
 
   const apply = () => {
     const v = view.current;
@@ -62,16 +89,18 @@ export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: (
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ dist: number; scale: number } | null>(null);
   const lastTap = useRef(0);
+  const swipe = useRef<{ x: number; y: number } | null>(null);
 
   return createPortal(
     <div
       className="zoom"
       role="dialog"
       aria-modal="true"
-      aria-label="Zoomed page"
+      aria-label={label}
       onPointerDown={(e) => {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
         pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        swipe.current = pointers.current.size === 1 && view.current.scale <= 1.01 ? { x: e.clientX, y: e.clientY } : null;
         if (pointers.current.size === 2) {
           const [a, b] = [...pointers.current.values()];
           gesture.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale: view.current.scale };
@@ -85,6 +114,8 @@ export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: (
           const [a, b] = [...pointers.current.values()];
           const dist = Math.hypot(a.x - b.x, a.y - b.y);
           zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, gesture.current.scale * (dist / gesture.current.dist));
+        } else if (pointers.current.size === 1 && swipe.current && onSwipe) {
+          // Not zoomed in: a sideways swipe turns the page instead of moving it.
         } else if (pointers.current.size === 1) {
           view.current.x += e.clientX - prev.x;
           view.current.y += e.clientY - prev.y;
@@ -92,6 +123,16 @@ export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: (
         }
       }}
       onPointerUp={(e) => {
+        const start = swipe.current;
+        swipe.current = null;
+        if (start && onSwipe && pointers.current.size === 1) {
+          const dx = e.clientX - start.x;
+          if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(e.clientY - start.y) * 1.5) {
+            pointers.current.delete(e.pointerId);
+            onSwipe(dx < 0 ? 1 : -1);
+            return;
+          }
+        }
         const moved = pointers.current.get(e.pointerId);
         pointers.current.delete(e.pointerId);
         if (pointers.current.size < 2) gesture.current = null;
@@ -121,7 +162,7 @@ export function ZoomViewer({ source, onClose }: { source: ZoomSource; onClose: (
       >
         <Icon name="close" />
       </button>
-      <div className="zoom-hint">Pinch or double-tap to zoom</div>
+      {children ?? <div className="zoom-hint">Pinch or double-tap to zoom</div>}
     </div>,
     document.body,
   );

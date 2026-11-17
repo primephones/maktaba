@@ -740,3 +740,31 @@
   font-family: var(--font-arabic);
   font-size: 0.86rem;
 }
+
+/* The original file, in a book's details. */
+.orig-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.orig-file .grow {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.orig-file .title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.orig-file svg {
+  color: var(--ink-3);
+  flex: none;
+}
+.row-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.row-btns .btn {
+  flex: 1;
+}

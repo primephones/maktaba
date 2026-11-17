@@ -13,6 +13,8 @@ import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
 import { StudySheet } from './StudySheet';
 import { SummarySheet } from './SummarySheet';
+import { OriginalViewer } from './OriginalViewer';
+import { openOriginal } from '../../lib/saveFile';
 import { Listen } from './Listen';
 import { canSpeak } from '../../speech/speech';
 import { goBack, navigate } from '../../app/router';
@@ -83,6 +85,7 @@ function ReaderInner({ book }: { book: Book }) {
   const [note, setNote] = useState<string | null>(null);
   const [editMark, setEditMark] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomSource | null>(null);
+  const [originalPage, setOriginalPage] = useState<number | null>(null);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [scrub, setScrub] = useState<number | null>(null);
 
@@ -357,6 +360,29 @@ function ReaderInner({ book }: { book: Book }) {
     toast('Bookmarked.');
   };
 
+  /**
+   * The book as it was given, for checking: a PDF opens on the printed page being read
+   * (or the page of the paragraph chosen); any other kind of file opens untouched in the
+   * phone's own app for it.
+   */
+  const showOriginal = async (at: { section: number; block: number } = pos) => {
+    if (book.format === 'pdf') {
+      const blocks = cache.current.get(at.section)?.blocks ?? (await db.sections.get(sectionId(book.id, at.section)))?.blocks ?? [];
+      let page: number | undefined;
+      for (let i = Math.min(at.block, blocks.length - 1); i >= 0 && page === undefined; i--) page = blocks[i]?.page;
+      if (page === undefined) page = blocks.find((b) => b.page)?.page;
+      setOriginalPage(page ?? 1);
+      return;
+    }
+    const rec = await db.files.get(book.id);
+    if (!rec) {
+      toast('The original file is not on this phone. Add it again to see it.');
+      return;
+    }
+    toast('Opening the original file…');
+    await openOriginal(rec.blob, book.fileName || book.title).catch((e) => toast(`Could not open it: ${(e as Error).message}`));
+  };
+
   // ----- Rendering -----
   const marksByBlock = useMemo(() => {
     const map = new Map<string, Mark[]>();
@@ -544,6 +570,7 @@ function ReaderInner({ book }: { book: Book }) {
             <Icon name="scan" />
           </button>
         )}
+        <button className="icon-btn" onClick={() => void showOriginal()} aria-label={book.format === 'pdf' ? 'See this page in the original' : 'Open the original file'}><Icon name="original" /></button>
         {canSpeak() && <button className="icon-btn" onClick={() => setListening(true)} aria-label="Read aloud" aria-pressed={listening}><Icon name="speaker" /></button>}
         <button className="icon-btn" onClick={() => setSheet('search')} aria-label="Search in this book"><Icon name="search" /></button>
         <button className="icon-btn" onClick={() => void toggleBookmark()} aria-label={bookmarkHere ? 'Remove bookmark' : 'Bookmark this place'} aria-pressed={!!bookmarkHere}>
@@ -581,6 +608,18 @@ function ReaderInner({ book }: { book: Book }) {
             <button className="sel-act" onClick={() => void saveReference()}><Icon name="references" size={20} />Reference</button>
             <button className="sel-act" onClick={() => openStudy('explain')}><Icon name="sparkle" size={20} />Explain</button>
             {hasArabicScript(selection.text) && <button className="sel-act" onClick={() => openStudy('irab')}><Icon name="sparkle" size={20} />Iʿrāb</button>}
+            {book.format === 'pdf' && (
+              <button
+                className="sel-act"
+                onClick={() => {
+                  const first = selection.parts[0];
+                  getSelection()?.removeAllRanges();
+                  void showOriginal({ section: first.section, block: first.block });
+                }}
+              >
+                <Icon name="original" size={20} />Page
+              </button>
+            )}
             <button className="sel-act" onClick={() => void copy()}><Icon name="copy" size={20} />Copy</button>
           </div>
         </div>
@@ -625,6 +664,7 @@ function ReaderInner({ book }: { book: Book }) {
       )}
       {editing && <MarkEditor mark={editing} onClose={() => setEditMark(null)} />}
       {zoom && <ZoomViewer source={zoom} onClose={() => setZoom(null)} />}
+      {originalPage !== null && <OriginalViewer book={book} page={originalPage} onGo={(s, b) => goTo(s, b)} onClose={() => setOriginalPage(null)} />}
       {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
       {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} />}
       {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}

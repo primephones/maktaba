@@ -10,6 +10,7 @@ import { useApp } from '../../app/AppContext';
 import { Sheet } from '../../ui/Sheet';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
+import { mimeOf, openOriginal, saveFile } from '../../lib/saveFile';
 import { BookCover, useCoverUrl } from './BookCover';
 import { CHECK_BELOW, rerunOcr, runOcrQueue } from '../../ocr/queue';
 import { getServer } from '../../ai/client';
@@ -329,7 +330,8 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
           <span className="grow title">Remove from this device</span>
         </button>
       </div>
-      <p className="muted small">File: {book.fileName}{book.edition ? ` · Edition: ${book.edition}` : ''}</p>
+      <OriginalFile book={book} />
+      {book.edition && <p className="muted small">Edition: {book.edition}</p>}
     </Sheet>
   );
 }
@@ -373,5 +375,45 @@ function EditBook({ book, onDone }: { book: Book; onDone: () => void }) {
       </div>
       <button className="btn btn--primary btn--block" onClick={() => void save()}>Save</button>
     </Sheet>
+  );
+}
+
+/** The file exactly as it was added: kept untouched, to open or save a copy at any time. */
+function OriginalFile({ book }: { book: Book }) {
+  const file = useLiveQuery(() => db.files.get(book.id), [book.id]);
+  const name = book.fileName || book.title;
+  return (
+    <>
+      <div className="section-title">Original file</div>
+      <div className="card orig-file">
+        <Icon name="original" />
+        <span className="grow">
+          <span className="title" dir="auto">{name}</span>
+          <span className="muted small">
+            {file ? `${formatBytes(file.blob.size)} · kept exactly as you added it` : 'Not on this phone: add the file again to keep it here'}
+          </span>
+        </span>
+      </div>
+      {file && (
+        <div className="row-btns">
+          <button className="btn" onClick={() => void openOriginal(file.blob, name).catch((e) => toast(`Could not open it: ${(e as Error).message}`))}>
+            <Icon name="original" size={18} />Open
+          </button>
+          <button
+            className="btn"
+            onClick={async () => {
+              try {
+                const saved = await saveFile(file.blob, name, file.blob.type || mimeOf(name));
+                toast(`Saved to ${saved.location}.`);
+              } catch (e) {
+                toast(`Could not save it: ${(e as Error).message}`);
+              }
+            }}
+          >
+            <Icon name="download" size={18} />Save a copy
+          </button>
+        </div>
+      )}
+    </>
   );
 }

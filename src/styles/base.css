@@ -577,6 +577,8 @@ input[type='range'] {
   /* The sheet sits above the bar, so its last item only needs to clear the screen edge. */
   padding: 4px 20px calc(var(--safe-bottom) + 28px);
   display: grid;
+  /* Every row as tall as its content: the body scrolls, nothing in it is squeezed. */
+  grid-auto-rows: max-content;
   gap: 14px;
   align-content: start;
 }

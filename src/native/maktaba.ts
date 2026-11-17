@@ -17,10 +17,11 @@ interface MaktabaNative {
   keepScreenOn(o: { on: boolean }): Promise<void>;
   setOrientation(o: { orientation: 'auto' | 'portrait' | 'landscape' }): Promise<void>;
   releaseSharedFiles(o: { paths: string[] }): Promise<void>;
-  saveFileBegin(o: { name: string; mime: string }): Promise<{ id: string }>;
+  saveFileBegin(o: { name: string; mime: string; temp?: boolean }): Promise<{ id: string }>;
   saveFileChunk(o: { id: string; data: string }): Promise<void>;
   saveFileEnd(o: { id: string }): Promise<{ location: string; uri: string }>;
   shareFile(o: { uri: string; mime: string; title: string }): Promise<void>;
+  openFile(o: { uri: string; mime: string; title: string }): Promise<void>;
   addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;
 }
 

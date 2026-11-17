@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.database.Cursor;
 import android.net.Uri;
+import androidx.core.content.FileProvider;
 import android.os.Build;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
@@ -333,7 +334,15 @@ public class MaktabaPlugin extends Plugin {
             Uri uri;
             OutputStream out;
             String location;
-            if (Build.VERSION.SDK_INT >= 29) {
+            if (call.getBoolean("temp", false)) {
+                // A private copy only for opening in another app (the original file of a book).
+                File dir = new File(ctx.getCacheDir(), "originals");
+                dir.mkdirs();
+                File f = new File(dir, name);
+                uri = FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", f);
+                out = new FileOutputStream(f);
+                location = f.getAbsolutePath();
+            } else if (Build.VERSION.SDK_INT >= 29) {
                 ContentValues v = new ContentValues();
                 v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
                 v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
@@ -386,7 +395,7 @@ public class MaktabaPlugin extends Plugin {
         }
         try {
             s.out.close();
-            if (Build.VERSION.SDK_INT >= 29) {
+            if (Build.VERSION.SDK_INT >= 29 && "content".equals(s.uri.getScheme()) && s.uri.getAuthority() != null && s.uri.getAuthority().startsWith("media")) {
                 ContentValues v = new ContentValues();
                 v.put(MediaStore.MediaColumns.IS_PENDING, 0);
                 getContext().getContentResolver().update(s.uri, v, null, null);
@@ -397,6 +406,25 @@ public class MaktabaPlugin extends Plugin {
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("Finishing the file failed: " + e.getMessage());
+        }
+    }
+
+    /** Opens a file in the phone's own app for it (a PDF viewer, an e-book reader, Word). */
+    @PluginMethod
+    public void openFile(PluginCall call) {
+        try {
+            Uri uri = Uri.parse(call.getString("uri", ""));
+            Intent view = new Intent(Intent.ACTION_VIEW);
+            view.setDataAndType(uri, call.getString("mime", "application/octet-stream"));
+            view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (view.resolveActivity(getContext().getPackageManager()) == null) {
+                call.reject("NO_APP");
+                return;
+            }
+            getContext().startActivity(Intent.createChooser(view, call.getString("title", "Open with")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Opening failed: " + e.getMessage());
         }
     }
 

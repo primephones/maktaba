@@ -473,6 +473,60 @@ await section('Other formats', async () => {
   await pause(900);
   check(/p\. 7/.test(await page.locator('.rd-bottom-bar .where').textContent()), 'go-to-page lands on that page');
   check((await page.locator('.pgmark').count()) > 3, 'printed page numbers are marked between paragraphs');
+  // The original, one tap away: the printed page being read, as it is in the PDF.
+  await showChrome();
+  await page.getByRole('button', { name: 'See this page in the original' }).click();
+  const orig = page.getByRole('dialog', { name: /^Original, page \d+ of \d+$/ });
+  await orig.waitFor({ timeout: 8000 });
+  const label = await orig.getAttribute('aria-label');
+  check(/page 7 of/.test(label), `the original opens on the page being read (${label})`);
+  await pause(1500);
+  // Paper white at the margin, ink in the text: the page really is drawn (and stays drawn).
+  const drawn = await orig.locator('canvas').evaluate((c) => {
+    const ctx = c.getContext('2d');
+    const at = (x, y) => [...ctx.getImageData(x, y, 1, 1).data].slice(0, 3);
+    const corner = at(4, 4);
+    const row = ctx.getImageData(0, Math.round(c.height * 0.3), c.width, 1).data;
+    let dark = 0;
+    for (let i = 0; i < row.length; i += 4) if (row[i] < 120) dark++;
+    return c.width > 100 && corner.every((v) => v > 240) && dark > 0;
+  });
+  check(drawn, 'the original page is drawn, paper and ink');
+  await shot('10b-original-page');
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await pause(500);
+  check(/page 8 of/.test(await orig.getAttribute('aria-label')), 'the next page of the original is one tap away');
+  await page.getByRole('button', { name: 'Read from here' }).click();
+  await pause(900);
+  check((await orig.count()) === 0 && /p\. 8/.test(await page.locator('.rd-bottom-bar .where').textContent()), 'Read from here returns to the text at that page');
+  // From a chosen paragraph straight to its page.
+  await page.evaluate(() => {
+    const p = [...document.querySelectorAll('.bk[data-t="p"]')].find((el) => el.getBoundingClientRect().top > 120);
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await pause(400);
+  await page.locator('.sel-bar').getByRole('button', { name: 'Page' }).click();
+  await orig.waitFor({ timeout: 8000 });
+  check(true, 'a selected paragraph opens its page in the original');
+  await page.keyboard.press('Escape');
+  await pause(300);
+  // Any other kind of book: the file itself, untouched.
+  await page.goto(server.url + '#/library');
+  await page.getByRole('button', { name: 'Details for مختصر في أصول الفقه' }).click();
+  await page.getByText('kept exactly as you added it').waitFor({ timeout: 8000 });
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByRole('button', { name: 'Save a copy' }).click()]);
+  const original = (await import('node:fs')).readFileSync(fx('usul.epub'));
+  const savedPath = await dl.path();
+  const saved = (await import('node:fs')).readFileSync(savedPath);
+  check(dl.suggestedFilename() === 'usul.epub' && Buffer.compare(saved, original) === 0, 'the original file is kept byte for byte, and can be saved');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await openBook('مختصر في أصول الفقه');
+  await showChrome();
+  const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByRole('button', { name: 'Open the original file' }).click()]);
+  check(dl2.suggestedFilename() === 'usul.epub', 'the reader opens the original file in one tap');
 });
 
 await section('Search across the library', async () => {
@@ -539,6 +593,15 @@ await section('Backup and restore', async () => {
   await page.getByText(/^Saved to/).waitFor();
   check(/Maktaba backup .*\.maktaba$/.test(download.suggestedFilename()), `a one-file backup is made (${download.suggestedFilename()})`);
   const before = await books();
+  const progressOf = (pg) => pg.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const all = await new Promise((r) => (dbh.transaction('books').objectStore('books').getAll().onsuccess = (e) => r(e.target.result)));
+    dbh.close();
+    const b = all.find((x) => x.title === 'مختصر في أصول الفقه');
+    return b?.progress ? `${b.progress.section}:${b.progress.block}` : 'none';
+  });
+  const placeBefore = await progressOf(page);
   const marksBefore = await page.evaluate(async () => {
     const req = indexedDB.open('maktaba');
     const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
@@ -562,12 +625,13 @@ await section('Backup and restore', async () => {
   });
   check(after.books === before.length && after.files === before.length, `every book and its file comes back (${after.books} of ${before.length})`);
   check(after.marks === marksBefore && after.refs > 0, `highlights, notes, bookmarks and references come back (${after.marks} marks)`);
+  const placeAfter = await progressOf(p2);
   await p2.evaluate(() => { location.hash = '#/library'; });
   await p2.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
   await p2.waitForSelector('.bk');
   await p2.waitForTimeout(800);
   const at = await p2.locator('.rd-bottom-bar .where').textContent();
-  check(/باب القياس/.test(at ?? ''), `a restored book opens at the place reading stopped (${at})`);
+  check(placeBefore !== 'none' && placeAfter === placeBefore && !!at, `a restored book opens at the place reading stopped (${placeBefore} → ${placeAfter}, ${at})`);
   await fresh.close();
 });
 await ctx.close();
