@@ -5,17 +5,17 @@ phase starts. Numbers in brackets refer to the feature list (Part A) in the brie
 
 | # | Phase | What it delivers | State |
 |---|---|---|---|
-| 1 | Design and foundation | The look of the app; library, folders, covers [4]; adding books [5.1–5.2]; the reader [7]; offline use [1.3]; search across books; saved references; the installable web app | Built, tested in a browser. Awaiting the on-phone check. |
-| 2 | Android shell | Share-to-Maktaba, processing that carries on in the background with a notification and resumes after a restart [5.4], the update notice [1.4], volume-key page turning | Next |
-| 3 | Processing | Text recognition for scans in Arabic, Urdu, Persian and English [5.3]; scan review [5.6]; chapters and page numbers rebuilt; a fast search index; Kindle formats | |
-| 4 | Server and AI allowance | A private, key-gated server; the usage bar and cost hints [14]; automatic fallback between free services; private books never sent to a service that trains on them | Needs your free accounts |
-| 5 | Translation and reading in English | Whole-book translation that resumes and spreads over days [9]; tap for the original [8]; draft labels and uncertainty marks; the glossary | |
-| 6 | References and dictionary | Qur'an, ḥadīth and source detection with popups [7.8, 7.9, 10.1]; "what it proves"; issue boards [10.5]; Lane's Lexicon offline [12] | |
-| 7 | Search & ask | Answers only from your books, with checked quotes [11]; explain, summarise, iʿrāb | |
-| 8 | Read aloud | Offline English voice with Arabic terms pronounced properly; a voice for Arabic passages [13] | |
-| 9 | Sync, backup, sharing | The HSY key, offline queue, one-file backup, sharing with 1–2 people [15] | |
-| 10 | Sources | Internet Archive, OpenITI, Shamela and Noor Book inside the app; the reading list [6] | Needs your reading-list file |
-| 11 | Exports and the rest | Word, PDF and EPUB export [9.11, 10.6]; comparing translations; names index; then the "later" items [17] | |
+| 1 | Design and foundation | The look of the app; library, folders, covers [4]; adding books [5.1–5.2]; the reader [7]; offline use [1.3]; search across books; saved references; the installable web app | **Done**, tested in a browser and on GitHub |
+| 2 | Android shell | Share-to-Maktaba and Open with; work that carries on in the background with a progress notification, and a notice after a restart [5.4]; volume-key page turning, screen on, orientation lock | **Done**; on-emulator test being finished |
+| 3 | Processing | Offline text recognition for scans in Arabic, Urdu, Persian and English [5.3]; scan review [5.6]; Kindle (MOBI, AZW3) | **Done** |
+| 4 | Server and AI allowance | Private key-gated server; usage bar split by feature, resets, last-known when offline [14]; fallback between free services; private books never sent to a service that trains | **Done** (needs your free accounts to switch on) |
+| 5 | Translation and reading in English | Whole-book translation on the server that pauses and resumes by itself [9]; tap for the original [8]; draft labels; † with reasons; translate ahead | **Done**; glossary editing, consistency check, compare AIs and names index still to come |
+| 6 | References and dictionary | Qurʾān popups offline [7.8]; saved references with citations | **Partly done**: ḥadīth popups, "what it proves", issue boards, Lane's Lexicon still to come |
+| 7 | Search & ask | Answers only from your books, every claim cited and checked [11]; Explain; Iʿrāb with corrections | **Done**; summarise chapter and compare books still to come |
+| 8 | Read aloud | Phone voices offline; Arabic terms said by an Arabic voice; Fix a word; speed, sleep timer, English/Original/Both [13] | **Done**; lock-screen and headphone controls still to come |
+| 9 | Sync, backup, sharing | HSY key sync with an offline outbox; one-file backup and reminder; invitations for 1–2 people [15] | **Done** |
+| 10 | Sources | Internet Archive, OpenITI, Shamela and Noor Book inside the app; the reading list [6] | To do; needs your reading-list file |
+| 11 | Exports and the rest | Word, PDF and EPUB export [9.11, 10.6]; comparing translations; names index; the "later" items [17] | To do |
 
 ## Added beyond the brief
 
@@ -26,6 +26,10 @@ phase starts. Numbers in brackets refer to the feature list (Part A) in the brie
 - Arabic-script books are bound and turn like the real thing: spine on the right, forward
   is a tap on the left.
 - An automated test that installs the APK on an Android emulator and uses it, on every change.
+- Books from your other phone appear in the library waiting for their file; adding the same file
+  brings back all their notes, highlights, place and translation.
+- Every translated paragraph is stored on the server too, so the same text is never paid for twice.
+- Uncertain recognised text is marked in the margin; hand-corrected pages are never overwritten.
 
 ## Known limits
 
