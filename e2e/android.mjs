@@ -109,6 +109,25 @@ process.on('unhandledRejection', (e) => {
   process.exit(1);
 });
 
+// A step that takes over three minutes is reported with what the phone logged, not left to hang.
+let step = 'starting';
+let stepAt = Date.now();
+const origLog = console.log;
+console.log = (...a) => {
+  if (typeof a[0] === 'string' && !a[0].startsWith(' ') && !a[0].startsWith('<<<') && !a[0].startsWith('---')) {
+    step = a[0];
+    stepAt = Date.now();
+  }
+  origLog(...a);
+};
+setInterval(() => {
+  if (Date.now() - stepAt > 180_000) {
+    origLog(`TEST STUCK for 3 minutes during: ${step}`);
+    diagnose();
+    process.exit(1);
+  }
+}, 5000).unref();
+
 let page = await launch();
 const errors = [];
 const watch = (p) => {

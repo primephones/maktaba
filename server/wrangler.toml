@@ -1,0 +1,17 @@
+# Maktaba's private server. Deploy with: npx wrangler deploy (see server/README.md).
+name = "maktaba-server"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+# Whole-book translation carries on here every five minutes, phone or no phone.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "maktaba"
+database_id = "REPLACE_WITH_YOUR_DATABASE_ID"
+migrations_dir = "migrations"
+
+[ai]
+binding = "AI"
