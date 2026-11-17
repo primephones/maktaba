@@ -54,7 +54,11 @@ print(base64.encodebytes(buf.getvalue()).decode())`, file]).toString();
 };
 
 /** Adds a file through the app's own Add input, as choosing it in the file picker would. */
-const addFile = (page, name, type) => page.evaluate(([b64, fileName, mime]) => {
+const addFile = (page, name, type) => {
+  console.log(`   adding ${name} (${fx(name).length} bytes)`);
+  return addFileNow(page, name, type);
+};
+const addFileNow = (page, name, type) => page.evaluate(([b64, fileName, mime]) => {
   const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
   const dt = new DataTransfer();
   dt.items.add(new File([bytes], fileName, { type: mime }));
@@ -85,7 +89,13 @@ const diagnose = () => {
   };
   console.log('--- adb devices ---\n' + adb('devices'));
   console.log('--- crash log ---\n' + adb('logcat', '-d', '-b', 'crash', '-t', '60'));
-  const log = adb('logcat', '-d', '-t', '4000').split('\n').filter((l) => /maktaba|chromium|FATAL|AndroidRuntime|lowmemory|Out of memory|renderer|WebView|ANR in/i.test(l));
+  let saved = '';
+  try {
+    saved = readFileSync(`${out}logcat.txt`, 'utf8');
+  } catch {
+    /* none */
+  }
+  const log = (saved || adb('logcat', '-d', '-t', '4000')).split('\n').filter((l) => /maktaba|chromium|FATAL|AndroidRuntime|lowmemory|Out of memory|renderer|WebView|ANR in/i.test(l));
   console.log('--- app and WebView log (last lines) ---\n' + log.slice(-70).join('\n'));
 };
 process.on('uncaughtException', (e) => {
@@ -154,8 +164,9 @@ const addAndWait = async (name, type, count) => {
   }
   console.log(`   ${name}: ${Date.now() - t0} ms`);
 };
-await addAndWait('usul.epub', 'application/epub+zip', 1);
-await addAndWait('urdu-risala.txt', 'text/plain', 2);
+await addAndWait('urdu-risala.txt', 'text/plain', 1);
+await shot('02a-after-first-book', true);
+await addAndWait('usul.epub', 'application/epub+zip', 2);
 await addAndWait('makhtut-scan.pdf', 'application/pdf', 3);
 check(list.length === 3 && list.every((b) => b.state === 'ready'), `an EPUB, a text file and a scanned PDF all import (${JSON.stringify(list)})`);
 await wait(800);

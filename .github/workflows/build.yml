@@ -124,15 +124,19 @@ jobs:
       - name: Install Maktaba on the phone and use it
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 34
           arch: x86_64
           target: google_apis
-          profile: pixel_7
+          profile: pixel_6
           cores: 3
           ram-size: 4096M
-          disable-animations: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disk-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
+            mkdir -p e2e/out/phone
+            adb logcat -c || true
+            (adb logcat -v time > e2e/out/phone/logcat.txt 2>&1 &)
             adb install -r apk/*.apk
             node e2e/android.mjs
       - uses: actions/upload-artifact@v4
