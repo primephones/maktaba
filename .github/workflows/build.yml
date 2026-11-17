@@ -6,7 +6,8 @@ on:
 
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: true
+  # Let a run finish (the phone test takes a while); the newest push waits its turn.
+  cancel-in-progress: false
 
 permissions:
   contents: read
