@@ -334,7 +334,7 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
     };
   }, [turn, rtl]);
 
-  const drag = useRef<{ x: number; y: number; dx: number; active: boolean } | null>(null);
+  const drag = useRef<{ x: number; y: number; dx: number; active: boolean; t: number; v: number } | null>(null);
   const swiped = useRef(false);
   const base = (rtl ? 1 : -1) * page * size.w;
   const setDrag = (dx: number, dragging: boolean) => {
@@ -349,7 +349,7 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
       className="pg"
       onPointerDown={(e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        drag.current = { x: e.clientX, y: e.clientY, dx: 0, active: false };
+        drag.current = { x: e.clientX, y: e.clientY, dx: 0, active: false, t: e.timeStamp, v: 0 };
         swiped.current = false;
       }}
       onPointerMove={(e) => {
@@ -359,6 +359,10 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
         const dy = e.clientY - d.y;
         if (!d.active && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) d.active = true;
         if (d.active) {
+          // Speed of the finger, smoothed, so a quick flick turns the page as a long drag does.
+          const dt = Math.max(1, e.timeStamp - d.t);
+          d.v = 0.7 * ((dx - d.dx) / dt) + 0.3 * d.v;
+          d.t = e.timeStamp;
           d.dx = dx;
           setDrag(dx, true);
         }
@@ -369,7 +373,8 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
         if (!d?.active) return;
         swiped.current = true;
         setDrag(0, false);
-        if (Math.abs(d.dx) > Math.min(90, size.w * 0.18)) {
+        const flick = Math.abs(d.v) > 0.45 && Math.abs(d.dx) > 24 && Math.sign(d.v) === Math.sign(d.dx);
+        if (flick || Math.abs(d.dx) > Math.min(90, size.w * 0.18)) {
           const forward = rtl ? d.dx > 0 : d.dx < 0;
           turn(forward ? 1 : -1);
         }

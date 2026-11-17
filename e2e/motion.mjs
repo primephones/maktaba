@@ -105,6 +105,29 @@ await drag(range.x + range.width / 2, range.y + range.height / 2, range.y + 200)
 await page.waitForTimeout(400);
 check((await page.locator('.sheet').count()) === 1, 'dragging on a slider does not close the sheet');
 
+// Page mode: a quick short flick turns the page, a short slow drag does not.
+await page.locator('.sheet').getByText('Pages', { exact: true }).click({ timeout: 10000 });
+await page.waitForTimeout(300);
+await page.keyboard.press('Escape');
+await page.locator('.sheet').waitFor({ state: 'detached', timeout: 10000 });
+await page.waitForSelector('.pg-foot', { timeout: 10000 });
+await page.waitForTimeout(700);
+const foot = () => page.locator('.pg-foot').textContent();
+const before = await foot();
+// The book is Arabic (right to left): the next page comes from a swipe to the right.
+await drag(150, 450, 450, 1, 0); // settle
+await touch('touchStart', 150, 450);
+for (let i = 1; i <= 4; i++) { await touch('touchMove', 150 + i * 15, 452); await page.waitForTimeout(8); }
+await touch('touchEnd');
+await page.waitForTimeout(600);
+const afterFlick = await foot();
+check(before !== afterFlick && /^2 \//.test(afterFlick ?? ''), `a quick flick turns the page (${before} → ${afterFlick})`);
+await touch('touchStart', 150, 450);
+for (let i = 1; i <= 10; i++) { await touch('touchMove', 150 + i * 4, 451); await page.waitForTimeout(60); }
+await touch('touchEnd');
+await page.waitForTimeout(600);
+check((await foot()) === afterFlick, 'a short slow drag springs back');
+
 check(errors.length === 0, `no errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
 await browser.close();
 server.stop();
