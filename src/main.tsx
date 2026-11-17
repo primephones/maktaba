@@ -24,6 +24,10 @@ import { bootTheme } from './app/settings';
 
 bootTheme();
 
+// One orchestrated moment per launch: the shelves fill in. Later visits are instant.
+document.documentElement.dataset.entrance = '';
+window.setTimeout(() => delete document.documentElement.dataset.entrance, 1400);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary what="the app">

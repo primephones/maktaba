@@ -856,3 +856,83 @@ input[type='search']::-webkit-search-decoration {
   font-size: 1.1rem;
   line-height: 1.7;
 }
+
+/* ---------- Moving between screens ---------- */
+
+/* Screens slide the way the reader is going: on, further in, back out. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 300ms;
+  animation-timing-function: var(--ease-out);
+}
+:root[data-nav='forward']::view-transition-old(root) { animation-name: vt-fade-out, vt-to-start; }
+:root[data-nav='forward']::view-transition-new(root) { animation-name: vt-fade-in, vt-from-end; }
+:root[data-nav='back']::view-transition-old(root) { animation-name: vt-fade-out, vt-to-end; }
+:root[data-nav='back']::view-transition-new(root) { animation-name: vt-fade-in, vt-from-start; }
+/* Tabs sit side by side: a quick cross-fade, no travel. */
+:root[data-nav='tab']::view-transition-old(root),
+:root[data-nav='tab']::view-transition-new(root) { animation-duration: 180ms; }
+
+@keyframes vt-fade-in { from { opacity: 0; } }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-from-end { from { transform: translateX(28px); } }
+@keyframes vt-to-start { to { transform: translateX(-14px); } }
+@keyframes vt-from-start { from { transform: translateX(-14px); } }
+@keyframes vt-to-end { to { transform: translateX(28px); } }
+
+/* The bar stays put while the screen above it changes. */
+.bar { view-transition-name: tabbar; }
+::view-transition-group(tabbar) { animation-duration: 300ms; animation-timing-function: var(--ease-out); }
+
+/* Opening a book: its cover grows into the page, and closing shrinks the page back. */
+::view-transition-group(book) {
+  animation-duration: 440ms;
+  animation-timing-function: cubic-bezier(0.3, 0.9, 0.25, 1);
+  border-radius: 4px;
+}
+::view-transition-image-pair(book) { overflow: clip; }
+::view-transition-old(book),
+::view-transition-new(book) {
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+:root[data-nav='forward']::view-transition-old(book) { animation: vt-fade-out 260ms ease-in both; }
+:root[data-nav='forward']::view-transition-new(book) { animation: vt-fade-in 300ms 80ms ease-out both; }
+:root[data-nav='back']::view-transition-old(book) { animation: vt-fade-out 240ms ease-in both; }
+:root[data-nav='back']::view-transition-new(book) { animation: vt-fade-in 220ms 120ms ease-out both; }
+
+/* ---------- The first look at the shelves ---------- */
+
+/* Once per launch, the shelves fill from the start, one book after another. */
+:root[data-entrance] .continue,
+:root[data-entrance] .shelf > .tile,
+:root[data-entrance] .grid > .tile {
+  animation: rise 0.5s var(--ease-out) both;
+}
+:root[data-entrance] .shelf > .tile:nth-child(2), :root[data-entrance] .grid > .tile:nth-child(2) { animation-delay: 45ms; }
+:root[data-entrance] .shelf > .tile:nth-child(3), :root[data-entrance] .grid > .tile:nth-child(3) { animation-delay: 90ms; }
+:root[data-entrance] .shelf > .tile:nth-child(4), :root[data-entrance] .grid > .tile:nth-child(4) { animation-delay: 135ms; }
+:root[data-entrance] .shelf > .tile:nth-child(5), :root[data-entrance] .grid > .tile:nth-child(5) { animation-delay: 180ms; }
+:root[data-entrance] .shelf > .tile:nth-child(6), :root[data-entrance] .grid > .tile:nth-child(6) { animation-delay: 225ms; }
+:root[data-entrance] .shelf > .tile:nth-child(n + 7), :root[data-entrance] .grid > .tile:nth-child(n + 7) { animation-delay: 270ms; }
+
+/* ---------- Sheets follow the finger ---------- */
+
+.sheet[data-dragging='true'] {
+  animation: none;
+  transition: none;
+}
+.sheet[data-released='true'] {
+  animation: none;
+  transition: transform 0.32s var(--ease-spring);
+}
+.sheet-root[data-closing='true'] .sheet[data-released='true'] {
+  animation: none;
+  transition: transform 0.2s ease-in;
+  transform: translateY(100%) !important;
+}
+.sheet-grab,
+.sheet-head {
+  touch-action: none;
+}

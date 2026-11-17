@@ -95,7 +95,7 @@ export function BookCover({ book, style, showState = true }: Props) {
   const inProgress = showState && book.status === 'reading' && !busy && !failed;
 
   return (
-    <span className="cover" data-style={face} data-leather={leather} data-rtl={rtl}>
+    <span className="cover" data-book={book.id} data-style={face} data-leather={leather} data-rtl={rtl}>
       {face !== 'designed' && url && <img src={url} alt="" loading="lazy" decoding="async" draggable={false} />}
       {face === 'designed' && (
         <span className="cover-face" dir={rtl ? 'rtl' : 'ltr'}>

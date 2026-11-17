@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { haptic } from '../../lib/haptics';
 import { db, sectionId, uid } from '../../db/db';
 import type { Book, HighlightColor, Mark, Reference, Section, Translation } from '../../db/types';
 import { detectLang, hasArabicScript, stripTashkilWithMap } from '../../lib/arabic';
@@ -249,6 +250,7 @@ function ReaderInner({ book }: { book: Book }) {
     }
     if (!made.length) return;
     await db.marks.bulkAdd(made);
+    haptic('light');
     clearSelection();
     if (thenEdit) setEditMark(made[0].id);
   };
@@ -342,6 +344,7 @@ function ReaderInner({ book }: { book: Book }) {
   const toggleBookmark = async () => {
     if (bookmarkHere) {
       await db.marks.delete(bookmarkHere.id);
+      haptic('light');
       toast('Bookmark removed.');
       return;
     }
@@ -349,6 +352,7 @@ function ReaderInner({ book }: { book: Book }) {
     const now = Date.now();
     const label = block?.t === 'img' ? `Page ${block.printed ?? block.page ?? ''}`.trim() : (block?.text ?? '').slice(0, 140);
     await db.marks.add({ id: uid(), bookId: book.id, type: 'bookmark', section: pos.section, block: pos.block, text: label, createdAt: now, updatedAt: now });
+    haptic('medium');
     toast('Bookmarked.');
   };
 

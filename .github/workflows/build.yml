@@ -36,6 +36,8 @@ jobs:
         run: npm run e2e
       - name: Check every screen is readable in every theme
         run: npm run e2e:themes
+      - name: Check the motion (opening books, going back, dragging sheets)
+        run: node e2e/motion.mjs
       - name: Test the private server
         working-directory: server
         run: |
@@ -52,6 +54,7 @@ jobs:
           path: |
             e2e/out/shots
             e2e/out/themes
+            e2e/out/motion
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

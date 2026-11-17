@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { flushSync } from 'react-dom';
 
 /**
  * A small hash router. Hash paths work the same from a web address, a home-screen
@@ -50,7 +51,16 @@ function sync() {
   current = parse(location.hash);
   listeners.forEach((l) => l());
 }
-window.addEventListener('popstate', sync);
+// Going back (button, gesture or browser) animates the other way. A step back that only
+// closes a sheet leaves the screen as it is, so nothing moves.
+let popDirection: Direction | null = null;
+window.addEventListener('popstate', () => {
+  const dir = popDirection ?? 'back';
+  popDirection = null;
+  if (location.hash === currentHash) return;
+  const leaving = current;
+  withTransition(sync, dir, leaving.name === 'reader' ? leaving.bookId : undefined);
+});
 window.addEventListener('hashchange', sync);
 
 /** How many in-app steps lie behind the current one. */
@@ -67,13 +77,88 @@ if (history.state == null) {
 const reducedMotion = () =>
   document.documentElement.dataset.motion === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function withTransition(change: () => void) {
-  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
-  if (doc.startViewTransition && !reducedMotion()) doc.startViewTransition(change);
-  else change();
+/**
+ * The cover the reader last touched, so that opening the book grows it into the page.
+ * Kept for a moment only: a book opened any other way just slides in.
+ */
+let touched: { el: HTMLElement; at: number } | null = null;
+document.addEventListener(
+  'pointerdown',
+  (e) => {
+    const el = (e.target as Element | null)?.closest?.('.cover');
+    touched = el ? { el: el as HTMLElement, at: Date.now() } : null;
+  },
+  { capture: true, passive: true },
+);
+
+type Direction = 'forward' | 'back' | 'tab';
+
+/** Resolves with the element once it is on screen, or with nothing after a short wait. */
+function appear<T>(find: () => T | null | undefined, within = 320): Promise<T | undefined> {
+  const until = performance.now() + within;
+  return new Promise((resolve) => {
+    const look = () => {
+      const found = find();
+      if (found) resolve(found);
+      else if (performance.now() > until) resolve(undefined);
+      else window.setTimeout(look, 16);
+    };
+    look();
+  });
 }
 
-export function navigate(path: string, opts: { replace?: boolean } = {}) {
+/**
+ * Animates a change of screen. Screens slide the way the reader is going; a book opened
+ * from its cover grows out of the cover, and shrinks back into it on the way out.
+ */
+function withTransition(change: () => void, dir: Direction = 'forward', closingBook?: string) {
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
+  if (!doc.startViewTransition || reducedMotion() || document.visibilityState !== 'visible') {
+    change();
+    return;
+  }
+  const root = document.documentElement;
+  const named: HTMLElement[] = [];
+  const name = (el: HTMLElement | null | undefined) => {
+    if (!el) return;
+    el.style.viewTransitionName = 'book';
+    named.push(el);
+  };
+  const opening = dir === 'forward' && touched && touched.el.isConnected && Date.now() - touched.at < 1500 ? touched.el : null;
+  touched = null;
+  name(opening);
+  if (closingBook) name(document.querySelector<HTMLElement>('.rd'));
+  root.dataset.nav = dir;
+  try {
+    const t = doc.startViewTransition(async () => {
+      named.forEach((el) => (el.style.viewTransitionName = ''));
+      flushSync(change);
+      // The new screen may draw a moment later (its data comes from the database): wait a
+      // little for the element that takes over, so the morph has somewhere to go.
+      if (opening) name(await appear(() => document.querySelector<HTMLElement>('.rd')));
+      if (closingBook) {
+        // The same book's cover on the screen being returned to, if it is in view.
+        name(
+          await appear(() =>
+            [...document.querySelectorAll<HTMLElement>(`.cover[data-book="${CSS.escape(closingBook)}"]`)].find((c) => {
+              const r = c.getBoundingClientRect();
+              return r.width > 0 && r.bottom > 0 && r.top < innerHeight;
+            }),
+          ),
+        );
+      }
+    });
+    void t.finished.finally(() => {
+      named.forEach((el) => (el.style.viewTransitionName = ''));
+      if (root.dataset.nav === dir) delete root.dataset.nav;
+    });
+  } catch {
+    named.forEach((el) => (el.style.viewTransitionName = ''));
+    change();
+  }
+}
+
+export function navigate(path: string, opts: { replace?: boolean; dir?: Direction } = {}) {
   const hash = `#${path}`;
   if (hash === location.hash) return;
   // Leaving from inside a sheet: reuse its history entry so back does not land on a ghost.
@@ -83,7 +168,7 @@ export function navigate(path: string, opts: { replace?: boolean } = {}) {
     if (opts.replace || fromOverlay) history.replaceState({ d: depth() }, '', hash);
     else history.pushState({ d: depth() + 1 }, '', hash);
     sync();
-  });
+  }, opts.dir);
 }
 
 /** Tabs sit side by side rather than stacking up in history: back from any tab is Home. */
@@ -91,11 +176,14 @@ export function switchTab(tab: (typeof TABS)[number]) {
   if (current.name === tab && !(current.name === 'library' && current.folderId)) return;
   const onTabRoot = (TABS as readonly string[]).includes(current.name) && !(current.name === 'library' && current.folderId);
   if (tab === 'home') {
-    if (onTabRoot && depth() === 1) history.back();
-    else navigate('/', { replace: onTabRoot });
+    if (onTabRoot && depth() === 1) {
+      popDirection = 'tab';
+      history.back();
+    }
+    else navigate('/', { replace: onTabRoot, dir: 'tab' });
     return;
   }
-  navigate(`/${tab}`, { replace: onTabRoot && depth() > 0 });
+  navigate(`/${tab}`, { replace: onTabRoot && depth() > 0, dir: 'tab' });
 }
 
 export function goBack(fallback = '/') {
