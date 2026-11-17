@@ -128,6 +128,10 @@ writeFileSync(new URL('0204Shafici.Risala', out), `######OpenITI#
 ~~ قال الشافعي: فجماع ما أبان الله لخلقه في كتابه.
 `);
 
+// ---------- Kindle (MOBI) ----------
+import { execFileSync } from 'node:child_process';
+execFileSync('python3', [decodeURIComponent(new URL('./make-mobi.py', import.meta.url).pathname), decodeURIComponent(new URL('tahara.mobi', out).pathname)]);
+
 // ---------- Not a book ----------
 writeFileSync(new URL('notes.xyz', out), new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]));
 console.log('fixtures written to', out.pathname);

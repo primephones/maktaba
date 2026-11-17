@@ -42,7 +42,8 @@ export function Search() {
     }
     const ctrl = new AbortController();
     const timer = window.setTimeout(async () => {
-      const searchable = ready.filter((b) => b.kind === 'text');
+      // Scanned books are searchable once their text has been recognised.
+      const searchable = ready.filter((b) => b.kind === 'text' || (b.ocr?.done ?? 0) > 0);
       setState({ busy: true, done: 0, total: searchable.length });
       for (let i = 0; i < searchable.length; i++) {
         if (ctrl.signal.aborted) return;
@@ -76,7 +77,7 @@ export function Search() {
   };
 
   const totalHits = [...hits.values()].reduce((n, h) => n + h.length, 0);
-  const scans = ready.filter((b) => b.kind === 'scan').length;
+  const scans = ready.filter((b) => b.kind === 'scan' && !(b.ocr?.done ?? 0)).length;
   const nothing = norm.length >= 2 && !state.busy && !titleMatches.length && !refMatches.length && totalHits === 0;
 
   return (
@@ -188,7 +189,7 @@ export function Search() {
 
           {nothing && (
             <EmptyState icon="search" title="No matches">
-              Nothing in your books matches “{q}”.{scans ? ` ${scans} scanned book${scans === 1 ? ' is' : 's are'} not searchable until text recognition is added.` : ''}
+              Nothing in your books matches “{q}”.{scans ? ` ${scans} scanned book${scans === 1 ? ' is' : 's are'} still waiting for text recognition.` : ''}
             </EmptyState>
           )}
         </>

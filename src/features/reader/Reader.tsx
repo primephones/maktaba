@@ -342,11 +342,19 @@ function ReaderInner({ book }: { book: Book }) {
   const onMark = useCallback((id: string) => setEditMark(id), []);
   const onZoom = useCallback((source: ZoomSource) => setZoom(source), []);
 
+  // Books with page images: show the pages, or the text recognised from them.
+  const hasScans = !!book.ocr;
+  const scanView = book.scanView ?? 'text';
+
   const renderSection = useCallback(
     (sec: Section) => {
       const out: React.ReactNode[] = [];
       let lastPage: string | undefined;
+      const recognised = new Set(sec.blocks.filter((b) => b.ocr).map((b) => b.page));
       sec.blocks.forEach((block, i) => {
+        const isPageImage = block.t === 'img' && (/^page:\d+$/.test(block.src ?? '') || block.src === 'page-1');
+        if (block.ocr && scanView === 'page') return;
+        if (isPageImage && scanView === 'text' && recognised.has(block.page)) return;
         // Mark where the printed page turns, so a passage can be cited by page.
         const pageNo = block.t === 'img' ? undefined : block.printed ?? (block.page ? String(block.page) : undefined);
         if (pageNo && pageNo !== lastPage) {
@@ -372,8 +380,23 @@ function ReaderInner({ book }: { book: Book }) {
       });
       return out;
     },
-    [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom],
+    [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView],
   );
+
+  // Recognised text arrives while the book is open: refresh the chapters on screen.
+  const ocrDone = book.ocr?.done ?? 0;
+  const firstOcr = useRef(true);
+  useEffect(() => {
+    if (firstOcr.current) {
+      firstOcr.current = false;
+      return;
+    }
+    const loaded = [...cache.current.keys()];
+    void db.sections.bulkGet(loaded.map((i) => sectionId(book.id, i))).then((rows) => {
+      rows.forEach((row, k) => row && cache.current.set(loaded[k], row));
+      setVersion((v) => v + 1);
+    });
+  }, [ocrDone, book.id]);
 
   const onTap = useCallback(() => setChrome((c) => !c), []);
   const onUserMove = useCallback(() => setChrome(false), []);
@@ -439,6 +462,16 @@ function ReaderInner({ book }: { book: Book }) {
       <header className="rd-top-bar" inert={!chrome || !!selection}>
         <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back to the library"><Icon name="back" /></button>
         <div className="t" dir="auto" lang={titleLang === 'other' ? undefined : titleLang}>{book.title}</div>
+        {hasScans && (
+          <button
+            className="icon-btn"
+            onClick={() => void db.books.update(book.id, { scanView: scanView === 'text' ? 'page' : 'text' })}
+            aria-label={scanView === 'text' ? 'Show the page images' : 'Show the recognised text'}
+            aria-pressed={scanView === 'page'}
+          >
+            <Icon name="scan" />
+          </button>
+        )}
         <button className="icon-btn" onClick={() => setSheet('search')} aria-label="Search in this book"><Icon name="search" /></button>
         <button className="icon-btn" onClick={() => void toggleBookmark()} aria-label={bookmarkHere ? 'Remove bookmark' : 'Bookmark this place'} aria-pressed={!!bookmarkHere}>
           <Icon name={bookmarkHere ? 'bookmarkOn' : 'bookmark'} />

@@ -18,6 +18,15 @@ export default defineConfig({
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       workbox: {
         globPatterns: ['**/*.{js,mjs,css,html,woff2,png,svg,wasm,json}'],
+        // The text-recognition engine is large: fetched the first time it is needed, then kept.
+        globIgnores: ['tesseract/**'],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.includes('/tesseract/'),
+            handler: 'CacheFirst',
+            options: { cacheName: 'maktaba-ocr', expiration: { maxEntries: 20 } },
+          },
+        ],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: 'index.html',
       },

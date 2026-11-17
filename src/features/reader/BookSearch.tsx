@@ -41,7 +41,7 @@ export function BookSearch({ book, onGo, onClose }: { book: Book; onGo: (hit: Te
         <input autoFocus type="search" enterKeyHint="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Word or phrase" aria-label="Search in this book" dir="auto" />
         {query && <button className="icon-btn" aria-label="Clear" onClick={() => setQuery('')}><Icon name="close" size={20} /></button>}
       </div>
-      {book.kind === 'scan' && <p className="muted small">This is a scanned book. Its pages are images, so there is no text to search yet.</p>}
+      {book.kind === 'scan' && book.ocr?.state !== 'done' && <p className="muted small">This is a scanned book. Pages become searchable as their text is recognised ({book.ocr?.done ?? 0} of {book.ocr?.total ?? '…'} so far).</p>}
       {norm.length >= 2 && (
         <p className="muted small" aria-live="polite">
           {busy ? `Searching… ${hits.length} so far` : hits.length ? `${hits.length}${hits.length >= 200 ? '+' : ''} match${hits.length === 1 ? '' : 'es'}` : 'No matches in this book.'}

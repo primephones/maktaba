@@ -96,7 +96,16 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
   );
 
   return (
-    <Tag className="bk" {...common} data-l={block.level} lang={lang === 'other' ? undefined : lang} dir="auto" data-bookmark={bookmarked || undefined}>
+    <Tag
+      className="bk"
+      {...common}
+      data-l={block.level}
+      lang={lang === 'other' ? undefined : lang}
+      dir="auto"
+      data-bookmark={bookmarked || undefined}
+      data-low={block.ocr && (block.conf ?? 100) < 75 ? true : undefined}
+      title={block.ocr && (block.conf ?? 100) < 75 ? 'Recognised from the page image. It may contain mistakes.' : undefined}
+    >
       {segments.map((seg, i) => {
         let node: React.ReactNode = seg.text;
         if (seg.b) node = <b>{node}</b>;

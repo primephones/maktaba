@@ -99,7 +99,12 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    const find = (s: number, b: number) => el.querySelector<HTMLElement>(`[data-s="${s}"][data-b="${b}"]`);
+    const find = (s: number, b: number) => {
+      const exact = el.querySelector<HTMLElement>(`[data-s="${s}"][data-b="${b}"]`);
+      if (exact) return exact;
+      const shown = Array.from(el.querySelectorAll<HTMLElement>(`[data-s="${s}"][data-b]`));
+      return shown.find((n) => Number(n.dataset.b) >= b) ?? shown[shown.length - 1] ?? null;
+    };
     if (pending.current) {
       const t = pending.current;
       const sec = get(t.section);
@@ -248,7 +253,9 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
     if (want.current === 'last') next = total - 1;
     else {
       const block = want.current ? want.current.block : here.current;
-      const node = c.querySelector(`[data-b="${clamp(block, 0, Math.max(0, section.blocks.length - 1))}"]`);
+      const target = clamp(block, 0, Math.max(0, section.blocks.length - 1));
+      const shown = Array.from(c.querySelectorAll<HTMLElement>('[data-b]'));
+      const node = shown.find((n) => Number(n.dataset.b) >= target) ?? shown[shown.length - 1];
       next = node ? pageOf(node) : 0;
     }
     want.current = null;

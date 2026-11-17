@@ -10,17 +10,19 @@ const EXT: Record<string, BookFormat> = {
   epub: 'epub', pdf: 'pdf', txt: 'txt', text: 'txt', md: 'md', markdown: 'md', mARkdown: 'md',
   docx: 'docx', fb2: 'fb2', html: 'html', htm: 'html', xhtml: 'html',
   jpg: 'image', jpeg: 'image', png: 'image', webp: 'image', gif: 'image', bmp: 'image',
+  mobi: 'mobi', azw: 'mobi', azw3: 'mobi', prc: 'mobi',
 };
-const KINDLE = new Set(['mobi', 'azw', 'azw3', 'kfx', 'prc']);
 
-export const ACCEPT = '.epub,.pdf,.txt,.md,.markdown,.docx,.fb2,.html,.htm,.jpg,.jpeg,.png,.webp,application/epub+zip,application/pdf,text/plain,text/markdown,image/*,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export const ACCEPT = '.epub,.mobi,.azw,.azw3,.prc,.pdf,.txt,.md,.markdown,.docx,.fb2,.html,.htm,.jpg,.jpeg,.png,.webp,application/epub+zip,application/pdf,text/plain,text/markdown,image/*,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 export class UnsupportedFormat extends Error {}
 
 export async function detectFormat(file: File): Promise<BookFormat> {
   const ext = file.name.includes('.') ? file.name.split('.').pop()!.toLowerCase() : '';
-  if (KINDLE.has(ext)) throw new UnsupportedFormat('Kindle files (MOBI/AZW3) are not supported yet. Convert the book to EPUB, or wait for the next update.');
+  if (ext === 'kfx') throw new UnsupportedFormat('KFX is a Kindle-only format. Send the book to yourself as AZW3 or EPUB instead.');
   const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+  const pdb = await file.slice(60, 68).text();
+  if (pdb === 'BOOKMOBI') return 'mobi';
   const magic = String.fromCharCode(...head);
   if (magic.startsWith('%PDF')) return 'pdf';
   if (magic.startsWith('PK')) {
@@ -35,7 +37,7 @@ export async function detectFormat(file: File): Promise<BookFormat> {
   // OpenITI texts have no extension at all.
   const sniff = await file.slice(0, 200).text();
   if (sniff.includes('######OpenITI#')) return 'md';
-  throw new UnsupportedFormat(`"${file.name}" is not a kind of book Maktaba can open. Supported: PDF, EPUB, Word (DOCX), FB2, text, Markdown and images.`);
+  throw new UnsupportedFormat(`"${file.name}" is not a kind of book Maktaba can open. Supported: PDF, EPUB, Kindle (MOBI, AZW3), Word (DOCX), FB2, text, Markdown and images.`);
 }
 
 export interface AddResult {
@@ -102,8 +104,14 @@ export async function addFiles(files: File[], opts: { allowDuplicates?: boolean;
 const cancelled = new Set<string>();
 let running = false;
 
+/** True while books are being imported; text recognition waits for it. */
+export const importBusy = () => running;
+
 /** Stops work on a book that is being removed. */
-export const cancelImport = (bookId: string) => cancelled.add(bookId);
+export const cancelImport = (bookId: string) => {
+  cancelled.add(bookId);
+  void import('../ocr/queue').then((q) => q.stopOcr(bookId));
+};
 
 export async function retryImport(bookId: string): Promise<void> {
   const book = await db.books.get(bookId);
@@ -123,7 +131,7 @@ export async function resumeImports(): Promise<void> {
   await db.books.filter((b) => b.import.state === 'processing').modify((b) => {
     b.import.state = 'queued';
   });
-  void runQueue();
+  await runQueue();
 }
 
 export async function runQueue(): Promise<void> {
@@ -133,12 +141,15 @@ export async function runQueue(): Promise<void> {
     for (;;) {
       const next = (await db.books.orderBy('addedAt').filter((b) => b.import.state === 'queued').first()) ?? null;
       if (!next) break;
-      await workBegan(next.title);
+      await workBegan('import', `Preparing ${next.title}`, 'Opening the file', `“${next.title}” was still being prepared.`);
       await processBook(next);
     }
   } finally {
     running = false;
-    await workEnded();
+    await workEnded('import');
+    // Scanned pages are recognised once the books themselves are in.
+    const { runOcrQueue } = await import('../ocr/queue');
+    void runOcrQueue();
   }
 }
 
@@ -179,7 +190,8 @@ async function processBook(book: Book): Promise<void> {
       book.import = imp;
       await db.books.update(id, { import: imp });
       const waiting = await db.books.filter((b) => b.import.state === 'queued').count();
-      workProgress(book.title, stage, done, total, waiting);
+      const where = total ? `${stage}: ${done} of ${total}` : stage;
+      workProgress('import', `Preparing ${book.title}`, `${where}${waiting ? ` · ${waiting} more waiting` : ''}`, done, total);
     },
     cancelled: isCancelled,
   };
@@ -210,6 +222,10 @@ async function processBook(book: Book): Promise<void> {
     if (!fresh.sectionCount) throw new Error('No readable text was found in this file.');
     const lang = fresh.kind === 'scan' ? guessLangFromTitle(fresh.title) : await sampleLang(id, fresh.sectionCount, fresh.title);
     const vol = parseVolume(fresh.title);
+    if (fresh.format === 'pdf' || fresh.format === 'image') {
+      const { scheduleOcr } = await import('../ocr/queue');
+      await scheduleOcr(id);
+    }
     await db.books.update(id, {
       lang,
       series: vol?.series ?? fresh.series,
@@ -232,6 +248,8 @@ async function parseWhole(format: BookFormat, file: Blob): Promise<ParsedBook> {
       return (await import('./epub')).parseEpub(file);
     case 'docx':
       return (await import('./docx')).parseDocx(file);
+    case 'mobi':
+      return (await import('./mobi')).parseMobi(file);
     case 'fb2':
       return (await import('./fb2')).parseFb2(file);
     case 'md': {

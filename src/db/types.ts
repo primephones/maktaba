@@ -1,7 +1,7 @@
 /** Core data model. Every imported format is normalised into Book → Section → Block. */
 
 export type Lang = 'ar' | 'ur' | 'fa' | 'en' | 'other';
-export type BookFormat = 'epub' | 'pdf' | 'txt' | 'md' | 'docx' | 'fb2' | 'html' | 'image';
+export type BookFormat = 'epub' | 'pdf' | 'txt' | 'md' | 'docx' | 'fb2' | 'html' | 'image' | 'mobi';
 export type ReadStatus = 'want' | 'reading' | 'finished';
 export type CoverStyle = 'bound' | 'raw' | 'designed';
 
@@ -17,6 +17,32 @@ export interface ImportState {
   error?: string;
   /** Pages that could not be processed, for retry. */
   failedPages?: number[];
+}
+
+export type OcrLang = 'ara' | 'urd' | 'fas' | 'eng';
+
+export interface OcrState {
+  state: 'queued' | 'running' | 'done' | 'failed';
+  done: number;
+  total: number;
+  error?: string;
+}
+
+/** The recognised text of one page image. */
+export interface OcrPage {
+  /** `${bookId}:${page}` */
+  id: string;
+  bookId: string;
+  page: number;
+  blocks: Block[];
+  /** Whole-page confidence, 0–100. */
+  conf: number;
+  /** The printed page number found on the page. */
+  printed?: string;
+  /** Corrected by hand: never overwritten by a new recognition run. */
+  edited?: boolean;
+  lang: OcrLang;
+  updatedAt: number;
 }
 
 export interface TocEntry {
@@ -64,6 +90,12 @@ export interface Book {
   imagePages?: number;
   toc: TocEntry[];
   import: ImportState;
+  /** Text recognition for pages that are only images. */
+  ocr?: OcrState;
+  /** Language the pages are recognised in. */
+  ocrLang?: OcrLang;
+  /** For books with page images: show the pages, or the recognised text. */
+  scanView?: 'page' | 'text';
   progress?: Progress;
 }
 
@@ -99,6 +131,10 @@ export interface Block {
   printed?: string;
   /** Override of the book language for this block. */
   lang?: Lang;
+  /** Text recognised from a page image (not part of the file's own text). */
+  ocr?: boolean;
+  /** Recognition confidence for this paragraph, 0–100. */
+  conf?: number;
 }
 
 export interface Section {

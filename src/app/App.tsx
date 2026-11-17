@@ -16,6 +16,7 @@ import { Search } from '../features/search/Search';
 import { Settings } from '../features/settings/Settings';
 
 const Reader = lazy(() => import('../features/reader/Reader').then((m) => ({ default: m.Reader })));
+const ScanReview = lazy(() => import('../features/review/ScanReview').then((m) => ({ default: m.ScanReview })));
 
 export function App() {
   const route = useRoute();
@@ -115,8 +116,8 @@ export function App() {
   }, [route.name, theme]);
 
   const inReader = route.name === 'reader';
-  const barHidden = inReader || route.name === 'search' || route.name === 'settings';
-  const key = route.name === 'reader' ? `reader:${route.bookId}` : route.name;
+  const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'review';
+  const key = route.name === 'reader' ? `reader:${route.bookId}` : route.name === 'review' ? `review:${route.bookId}` : route.name;
 
   let screen;
   switch (route.name) {
@@ -139,6 +140,13 @@ export function App() {
       screen = (
         <Suspense fallback={<div className="screen screen--plain" aria-busy="true" />}>
           <Reader bookId={route.bookId} />
+        </Suspense>
+      );
+      break;
+    case 'review':
+      screen = (
+        <Suspense fallback={<div className="screen screen--plain" aria-busy="true" />}>
+          <ScanReview bookId={route.bookId} page={route.page} />
         </Suspense>
       );
       break;

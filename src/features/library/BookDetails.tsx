@@ -10,11 +10,13 @@ import { Sheet } from '../../ui/Sheet';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
 import { BookCover, useCoverUrl } from './BookCover';
+import { CHECK_BELOW, rerunOcr, runOcrQueue } from '../../ocr/queue';
+import { OCR_LANGS } from '../../ocr/engine';
 
 const STATUS: Array<[ReadStatus, string]> = [['want', 'Want to read'], ['reading', 'Reading'], ['finished', 'Finished']];
 const LANGS: Lang[] = ['ar', 'ur', 'fa', 'en', 'other'];
 const FORMAT: Record<Book['format'], string> = {
-  epub: 'EPUB', pdf: 'PDF', txt: 'Text', md: 'Markdown', docx: 'Word', fb2: 'FB2', html: 'Web page', image: 'Image',
+  epub: 'EPUB', mobi: 'Kindle', pdf: 'PDF', txt: 'Text', md: 'Markdown', docx: 'Word', fb2: 'FB2', html: 'Web page', image: 'Image',
 };
 
 /** Folder names as a path, e.g. "Fiqh › Ḥanafī". */
@@ -27,6 +29,61 @@ export function folderPath(folders: Folder[], id: string | undefined): string {
     cur = folders.find((f) => f.id === cur!.parentId);
   }
   return names.join(' › ');
+}
+
+/** Text recognition for page images: progress, language, and the way to check it. */
+function OcrStatus({ book }: { book: Book }) {
+  const ocr = book.ocr!;
+  const flagged = useLiveQuery(
+    () => db.ocrPages.where('bookId').equals(book.id).filter((p) => !p.edited && p.conf < CHECK_BELOW).count(),
+    [book.id, ocr.done],
+  ) ?? 0;
+  const [choosing, setChoosing] = useState(false);
+  const langLabel = OCR_LANGS.find(([v]) => v === book.ocrLang)?.[1];
+  const pagesText = book.kind === 'scan' ? 'This is a scanned book.' : `${ocr.total} page${ocr.total === 1 ? ' has' : 's have'} no usable text in the file.`;
+  return (
+    <div className="card" style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <Icon name="scan" />
+        <div className="grow" style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600 }}>
+            {ocr.state === 'done' ? 'Text recognised' : ocr.state === 'failed' ? 'Text recognition stopped' : ocr.state === 'running' ? 'Recognising text' : 'Waiting to recognise text'}
+          </div>
+          <div className="muted small">
+            {pagesText} {ocr.state === 'failed' ? ocr.error : `${ocr.done} of ${ocr.total} pages done${langLabel ? `, in ${langLabel}` : ''}.`}
+          </div>
+        </div>
+      </div>
+      {ocr.state !== 'done' && ocr.state !== 'failed' && <span className="meter"><i style={{ width: percent(ocr.total ? ocr.done / ocr.total : 0) }} /></span>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {ocr.done > 0 && (
+          <button className="btn" onClick={() => navigate(`/book/${book.id}/review`)}>
+            {flagged ? `Check ${flagged} page${flagged === 1 ? '' : 's'}` : 'Review the text'}
+          </button>
+        )}
+        {ocr.state === 'failed' && <button className="btn" onClick={() => void db.books.update(book.id, { ocr: { ...ocr, state: 'queued' } }).then(() => runOcrQueue())}>Try again</button>}
+        <button className="btn btn--quiet" onClick={() => setChoosing((c) => !c)}>Language{langLabel ? `: ${langLabel}` : ''}</button>
+      </div>
+      {choosing && (
+        <div className="chips" role="group" aria-label="Recognition language" style={{ margin: 0, padding: 0, flexWrap: 'wrap' }}>
+          {OCR_LANGS.map(([value, label]) => (
+            <button
+              key={value}
+              className="chip"
+              aria-pressed={book.ocrLang === value}
+              onClick={() => {
+                setChoosing(false);
+                if (value !== book.ocrLang) void rerunOcr(book.id, value);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {choosing && <p className="muted small">Choosing another language recognises the pages again. Pages you have corrected yourself are kept.</p>}
+    </div>
+  );
 }
 
 export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () => void }) {
@@ -121,25 +178,7 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
           <span className="grow">{imp.failedPages.length} page{imp.failedPages.length > 1 ? 's' : ''} could not be read: {imp.failedPages.slice(0, 12).join(', ')}{imp.failedPages.length > 12 ? '…' : ''}</span>
         </div>
       )}
-      {ready && book.kind === 'scan' && (
-        <div className="banner">
-          <Icon name="scan" />
-          <span className="grow">
-            {book.format === 'pdf' && book.imagePages && book.pageCount && book.imagePages < book.pageCount
-              ? 'Most of this PDF has no usable text, so it is shown as page images.'
-              : 'This is a scanned book, shown as page images.'}{' '}
-            You can read and zoom it now. Searching and highlighting need text recognition, which is not in this version yet.
-          </span>
-        </div>
-      )}
-      {ready && book.kind === 'text' && !!book.imagePages && (
-        <div className="banner">
-          <Icon name="scan" />
-          <span className="grow">
-            {book.imagePages} of {book.pageCount} pages are shown as images, because the text stored in the PDF for them is missing or has letters missing.
-          </span>
-        </div>
-      )}
+      {ready && book.ocr && <OcrStatus book={book} />}
 
       {ready && (
         <button className="btn btn--primary btn--block" onClick={() => navigate(`/book/${book.id}`)}>

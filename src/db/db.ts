@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type {
-  AssetRecord, Book, CoverRecord, FileRecord, Folder, Mark, Reference, Section, SettingRecord,
+  AssetRecord, Book, CoverRecord, FileRecord, Folder, Mark, OcrPage, Reference, Section, SettingRecord,
 } from './types';
 
 /**
@@ -17,6 +17,7 @@ export class MaktabaDB extends Dexie {
   marks!: Table<Mark, string>;
   refs!: Table<Reference, string>;
   settings!: Table<SettingRecord, string>;
+  ocrPages!: Table<OcrPage, string>;
 
   constructor() {
     super('maktaba');
@@ -30,6 +31,10 @@ export class MaktabaDB extends Dexie {
       marks: 'id, bookId, type, [bookId+section], createdAt',
       refs: 'id, bookId, createdAt',
       settings: 'key',
+    });
+    // Version 2: recognised text of scanned pages.
+    this.version(2).stores({
+      ocrPages: 'id, bookId, [bookId+page]',
     });
   }
 }
@@ -47,8 +52,9 @@ export const sectionId = (bookId: string, idx: number) => `${bookId}:${idx}`;
 export async function deleteBook(bookId: string): Promise<void> {
   await db.transaction(
     'rw',
-    [db.books, db.sections, db.files, db.covers, db.assets, db.marks, db.refs],
+    [db.books, db.sections, db.files, db.covers, db.assets, db.marks, db.refs, db.ocrPages],
     async () => {
+      await db.ocrPages.where('bookId').equals(bookId).delete();
       await db.sections.where('bookId').equals(bookId).delete();
       await db.assets.where('bookId').equals(bookId).delete();
       await db.marks.where('bookId').equals(bookId).delete();

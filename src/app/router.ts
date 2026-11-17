@@ -13,6 +13,7 @@ export type Route =
   | { name: 'search' }
   | { name: 'settings'; page?: string }
   | { name: 'reader'; bookId: string }
+  | { name: 'review'; bookId: string; page?: number }
   | { name: 'notfound' };
 
 export const TABS = ['home', 'library', 'references'] as const;
@@ -32,6 +33,7 @@ function parse(hash: string): Route {
     case 'settings':
       return { name: 'settings', page: parts[1] };
     case 'book':
+      if (parts[1] && parts[2] === 'review') return { name: 'review', bookId: parts[1], page: parts[3] ? Number(parts[3]) : undefined };
       return parts[1] ? { name: 'reader', bookId: parts[1] } : { name: 'notfound' };
     default:
       return { name: 'notfound' };

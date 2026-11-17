@@ -133,15 +133,17 @@ await section('Empty states', async () => {
 let all = [];
 await section('Adding books', async () => {
   await page.goto(server.url);
-  await page.setInputFiles('[data-testid=add-input]', ['usul.epub', 'risala-text.pdf', 'damaged-text-layer.pdf', 'makhtut-scan.pdf', 'urdu-risala.txt', '0204Shafici.Risala', 'Introduction to Usul - Vol 1.pdf', 'Introduction to Usul - Vol 2.pdf', 'notes.xyz'].map(fx));
-  all = await waitImports(8);
+  await page.setInputFiles('[data-testid=add-input]', ['usul.epub', 'risala-text.pdf', 'damaged-text-layer.pdf', 'makhtut-scan.pdf', 'urdu-risala.txt', '0204Shafici.Risala', 'Introduction to Usul - Vol 1.pdf', 'Introduction to Usul - Vol 2.pdf', 'tahara.mobi', 'notes.xyz'].map(fx));
+  all = await waitImports(9);
   const by = (t) => all.find((b) => b.title === t) ?? {};
-  check(all.length === 8 && all.every((b) => b.import.state === 'ready'), `all 8 books imported (${all.map((b) => b.import.state).join(',')})`);
+  check(all.length === 9 && all.every((b) => b.import.state === 'ready'), `all 9 books imported (${all.map((b) => b.import.state).join(',')})`);
   check(await page.getByText('notes.xyz').first().isVisible(), 'the unsupported file is reported, not silently dropped');
   await page.getByRole('button', { name: 'Done' }).click();
   const epub = by('مختصر في أصول الفقه');
   check(epub.author === 'ابن اللحام' && epub.lang === 'ar' && epub.hasCover && epub.toc?.length === 4, 'EPUB: title, author, language, cover and contents read');
   check(by('الرسالة').author === 'الشافعي', 'OpenITI: title and author read from the header');
+  const kindle = by('كتاب الطهارة');
+  check(kindle.format === 'mobi' && kindle.author === 'مؤلف تجريبي' && kindle.sectionCount === 2 && kindle.toc?.length === 2, 'Kindle (MOBI): title, author, chapters and contents read');
   check(by('urdu-risala').lang === 'ur', 'Urdu text detected as Urdu');
   check(by('makhtut-scan').kind === 'scan', 'image-only PDF detected as a scan');
   const text = by('risala-text');
@@ -152,7 +154,7 @@ await section('Adding books', async () => {
 
   await page.setInputFiles('[data-testid=add-input]', [fx('usul.epub')]);
   await page.getByText('Already in your library').waitFor();
-  check((await books()).length === 8, 'adding the same file again is caught as a duplicate');
+  check((await books()).length === 9, 'adding the same file again is caught as a duplicate');
   await page.getByRole('button', { name: 'Done' }).click();
   await pause();
   await shot('02-home');
@@ -357,6 +359,11 @@ await section('Pages mode and themes', async () => {
 
 await section('Scanned and image pages', async () => {
   await openBook('makhtut-scan');
+  // Once its text is recognised the book opens as text; switch to the page images.
+  if (!(await page.locator('.pdfpage').count())) {
+    await showChrome();
+    await page.getByRole('button', { name: 'Show the page images' }).click();
+  }
   await page.waitForSelector('.pdfpage canvas');
   await page.waitForTimeout(2500);
   const inked = await page.evaluate(() => {
@@ -374,6 +381,54 @@ await section('Scanned and image pages', async () => {
   await page.goBack();
   await pause();
   check((await page.locator('.zoom').count()) === 0 && (await page.locator('.rd').count()) === 1, 'back closes the zoom view and stays in the book');
+});
+
+await section('Text recognition for scans', async () => {
+  const t0 = Date.now();
+  let scan;
+  for (;;) {
+    scan = (await books()).find((b) => b.title === 'makhtut-scan');
+    if (scan?.ocr?.state === 'done' || scan?.ocr?.state === 'failed' || Date.now() - t0 > 180000) break;
+    await pause(1000);
+  }
+  check(scan?.ocr?.state === 'done' && scan.ocr.done === 5, `all 5 scanned pages are recognised offline (${JSON.stringify(scan?.ocr)}, ${Math.round((Date.now() - t0) / 1000)} s)`);
+  await openBook('makhtut-scan');
+  if (await page.getByRole('button', { name: 'Show the recognised text' }).count()) {
+    await showChrome();
+    await page.getByRole('button', { name: 'Show the recognised text' }).click();
+  }
+  await page.waitForSelector('.bk[data-t="p"]');
+  const text = await page.locator('.rd-text').textContent();
+  check(/الإمام الشافعي/.test(text) && /صفحة مصورة/.test(text), 'the reader shows the recognised Arabic text');
+  check((await page.locator('.pdfpage').count()) === 0, 'in text view, recognised pages show text instead of images');
+  await shot('16-scan-text');
+  await showChrome();
+  await page.getByRole('button', { name: 'Show the page images' }).click();
+  await pause(800);
+  check((await page.locator('.pdfpage').count()) > 0 && (await page.locator('.bk[data-t="p"]').count()) === 0, 'the page/text switch shows the page images');
+  await showChrome();
+  await page.getByRole('button', { name: 'Show the recognised text' }).click();
+  await pause(500);
+
+  await go('#/search');
+  await page.getByRole('searchbox', { name: 'Search your books' }).fill('مصورة');
+  await page.getByText(/In the text: \d+ match/).waitFor({ timeout: 15000 });
+  check(await page.locator('.hit-book').getByText('makhtut-scan').isVisible(), 'recognised text is searchable across the library');
+
+  // Correct a page by hand.
+  await go(`#/book/${scan.id}/review`);
+  check(await page.getByText(/pages recognised/).isVisible(), 'the review screen lists the recognised pages');
+  await page.getByRole('button', { name: 'All pages · 5' }).click();
+  await page.locator('.row').first().click();
+  await page.waitForSelector('.review-image canvas', { timeout: 15000 });
+  await shot('17-review-page');
+  await page.locator('textarea').fill('# صفحة مصححة\n\nهذا نص صححه القارئ بيده: كلمة زمرد.');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await pause(800);
+  await go(`#/book/${scan.id}`);
+  await page.waitForSelector('.bk');
+  await pause(700);
+  check(/كلمة زمرد/.test(await page.locator('.rd-text').textContent()), 'a page corrected by hand is what the reader then shows');
 });
 
 await section('Other formats', async () => {

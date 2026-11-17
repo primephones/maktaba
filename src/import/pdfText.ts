@@ -9,7 +9,7 @@ export interface TextItem {
   height: number;
 }
 
-interface Line {
+export interface Line {
   y: number;
   size: number;
   left: number;
