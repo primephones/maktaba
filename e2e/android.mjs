@@ -136,6 +136,9 @@ const watch = (p) => {
 };
 watch(page);
 await device.shell(`pm clear ${PKG}`).catch(() => undefined);
+// Answered up front: Android's "Allow notifications?" prompt would otherwise sit over the
+// app the first time background work starts, and nobody is there to answer it.
+await device.shell(`pm grant ${PKG} android.permission.POST_NOTIFICATIONS`).catch(() => undefined);
 page = await launch();
 watch(page);
 
