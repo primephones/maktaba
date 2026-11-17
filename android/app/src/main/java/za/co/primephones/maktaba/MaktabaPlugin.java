@@ -9,7 +9,13 @@ import android.content.pm.ActivityInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.content.ContentValues;
+import android.os.Environment;
+import android.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
 import android.view.WindowManager;
 import androidx.core.content.IntentCompat;
 import com.getcapacitor.JSArray;
@@ -159,6 +165,120 @@ public class MaktabaPlugin extends Plugin {
         Activity a = getActivity();
         a.runOnUiThread(() -> a.setRequestedOrientation(value));
         call.resolve();
+    }
+
+    // ------------------------------------------------------------------ saving files (backups, exports)
+
+    private static class Saving {
+        final Uri uri;
+        final OutputStream out;
+        final String location;
+
+        Saving(Uri uri, OutputStream out, String location) {
+            this.uri = uri;
+            this.out = out;
+            this.location = location;
+        }
+    }
+
+    private final Map<String, Saving> saving = new HashMap<>();
+
+    /**
+     * Starts saving a file to the phone's Downloads folder, where My Files shows it. The
+     * page then sends the contents in pieces, so a large backup never has to fit in memory.
+     */
+    @PluginMethod
+    public void saveFileBegin(PluginCall call) {
+        String name = safeName(call.getString("name", "maktaba"));
+        String mime = call.getString("mime", "application/octet-stream");
+        Context ctx = getContext();
+        try {
+            Uri uri;
+            OutputStream out;
+            String location;
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.MediaColumns.DISPLAY_NAME, name);
+                v.put(MediaStore.MediaColumns.MIME_TYPE, mime);
+                v.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Maktaba");
+                v.put(MediaStore.MediaColumns.IS_PENDING, 1);
+                uri = ctx.getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, v);
+                if (uri == null) throw new IllegalStateException("Could not create the file");
+                out = ctx.getContentResolver().openOutputStream(uri);
+                location = "Downloads/Maktaba/" + name;
+            } else {
+                File dir = new File(ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "Maktaba");
+                dir.mkdirs();
+                File f = new File(dir, name);
+                uri = Uri.fromFile(f);
+                out = new FileOutputStream(f);
+                location = f.getAbsolutePath();
+            }
+            if (out == null) throw new IllegalStateException("Could not open the file");
+            String id = UUID.randomUUID().toString();
+            saving.put(id, new Saving(uri, out, location));
+            JSObject ret = new JSObject();
+            ret.put("id", id);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("The file could not be saved: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void saveFileChunk(PluginCall call) {
+        Saving s = saving.get(call.getString("id", ""));
+        if (s == null) {
+            call.reject("No file is being saved");
+            return;
+        }
+        try {
+            s.out.write(Base64.decode(call.getString("data", ""), Base64.DEFAULT));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Writing the file failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void saveFileEnd(PluginCall call) {
+        Saving s = saving.remove(call.getString("id", ""));
+        if (s == null) {
+            call.reject("No file is being saved");
+            return;
+        }
+        try {
+            s.out.close();
+            if (Build.VERSION.SDK_INT >= 29) {
+                ContentValues v = new ContentValues();
+                v.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                getContext().getContentResolver().update(s.uri, v, null, null);
+            }
+            JSObject ret = new JSObject();
+            ret.put("location", s.location);
+            ret.put("uri", s.uri.toString());
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Finishing the file failed: " + e.getMessage());
+        }
+    }
+
+    /** Opens the share sheet for a saved file, to send it to Drive, WhatsApp or email. */
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        try {
+            Uri uri = Uri.parse(call.getString("uri", ""));
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType(call.getString("mime", "application/octet-stream"));
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, call.getString("title", "Send"));
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Sharing failed: " + e.getMessage());
+        }
     }
 
     // ------------------------------------------------------------------ files from other apps

@@ -31,7 +31,7 @@ const errors = [];
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message));
 
-const shot = (n) => page.screenshot({ path: `${shots}${n}.png` });
+const shot = (n) => page.screenshot({ path: `${shots}${n}.png` }).catch(() => undefined);
 const pause = (ms = 400) => page.waitForTimeout(ms);
 /** Moves to another screen by address, as a link or the back stack would, and lets it settle. */
 const go = async (hash) => {
@@ -521,6 +521,45 @@ await section('Home', async () => {
   check(low.length === 0, `the Continue reading card is readable ${JSON.stringify(low)}`);
   await shot('15-home-lamp');
 });
+await section('Backup and restore', async () => {
+  await go('#/settings/backup');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Back up now' }).click()]);
+  const file = `${shots}../backup-test.maktaba`;
+  await download.saveAs(file);
+  await page.getByText(/^Saved to/).waitFor();
+  check(/Maktaba backup .*\.maktaba$/.test(download.suggestedFilename()), `a one-file backup is made (${download.suggestedFilename()})`);
+  const before = await books();
+  const marksBefore = await page.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const n = await new Promise((r) => (dbh.transaction('marks').objectStore('marks').count().onsuccess = (e) => r(e.target.result)));
+    dbh.close();
+    return n;
+  });
+  // A fresh, empty app restores it.
+  const fresh = await browser.newContext({ ...PHONE, serviceWorkers: 'block' });
+  const p2 = await fresh.newPage();
+  await p2.goto(server.url + '#/settings/backup');
+  await p2.setInputFiles('[data-testid=restore-input]', file);
+  await p2.getByText(/^Restored \d+ book/).waitFor({ timeout: 60000 });
+  const after = await p2.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const get = (t) => new Promise((r) => (dbh.transaction(t).objectStore(t).count().onsuccess = (e) => r(e.target.result)));
+    const out = { books: await get('books'), marks: await get('marks'), files: await get('files'), refs: await get('refs') };
+    dbh.close();
+    return out;
+  });
+  check(after.books === before.length && after.files === before.length, `every book and its file comes back (${after.books} of ${before.length})`);
+  check(after.marks === marksBefore && after.refs > 0, `highlights, notes, bookmarks and references come back (${after.marks} marks)`);
+  await p2.evaluate(() => { location.hash = '#/library'; });
+  await p2.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
+  await p2.waitForSelector('.bk');
+  await p2.waitForTimeout(800);
+  const at = await p2.locator('.rd-bottom-bar .where').textContent();
+  check(/باب القياس/.test(at ?? ''), `a restored book opens at the place reading stopped (${at})`);
+  await fresh.close();
+});
 await ctx.close();
 
 // ------------------------------------------------------------------------------------
@@ -529,7 +568,16 @@ await section('Works offline', async () => {
   const p = await octx.newPage();
   await p.goto(server.url);
   await p.evaluate(() => navigator.serviceWorker.ready);
-  await p.waitForFunction(() => !!navigator.serviceWorker.controller || true);
+  // Wait until the app has saved itself for offline use (the Qur'an text is the largest part).
+  await p.waitForFunction(async () => {
+    for (const name of await caches.keys()) {
+      const c = await caches.open(name);
+      if ((await c.keys()).some((r) => r.url.includes('quran_en.json'))) return true;
+    }
+    return false;
+  }, null, { timeout: 90000, polling: 1000 });
+  await p.reload();
+  await p.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 30000 });
   await p.setInputFiles('[data-testid=add-input]', [fx('usul.epub'), fx('makhtut-scan.pdf')]);
   await p.waitForTimeout(6000);
   await octx.setOffline(true);

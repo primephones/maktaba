@@ -13,6 +13,9 @@ import { BookDetails } from '../library/BookDetails';
 import { BookTile, openBook } from '../library/Library';
 import { fetchStatus, getServer } from '../../ai/client';
 import { AiAllowance } from '../settings/AiAllowance';
+import { backupDue } from '../settings/BackupPage';
+import { useSetting } from '../../app/settings';
+import { timeAgo } from '../../lib/util';
 
 /** Where the reader is, in words: the current chapter from the contents list. */
 function whereIn(book: Book): string {
@@ -146,9 +149,23 @@ export function Home() {
         </>
       )}
 
+      <BackupReminder hasBooks={books.length > 0} />
       <HomeAllowance />
       <InstallHint />
       {details && <BookDetails bookId={details} onClose={() => setDetails(null)} />}
+    </div>
+  );
+}
+
+function BackupReminder({ hasBooks }: { hasBooks: boolean }) {
+  const last = useSetting('lastBackupAt');
+  const reminder = useSetting('backupReminder');
+  if (!backupDue(last, reminder, hasBooks)) return null;
+  return (
+    <div className="banner" style={{ marginTop: 22 }}>
+      <Icon name="download" />
+      <span className="grow">{last ? `Your last backup was ${timeAgo(last)}.` : 'Your library has never been backed up.'} One file keeps everything safe.</span>
+      <button className="btn" onClick={() => navigate('/settings/backup')}>Back up</button>
     </div>
   );
 }

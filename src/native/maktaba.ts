@@ -17,6 +17,10 @@ interface MaktabaNative {
   keepScreenOn(o: { on: boolean }): Promise<void>;
   setOrientation(o: { orientation: 'auto' | 'portrait' | 'landscape' }): Promise<void>;
   releaseSharedFiles(o: { paths: string[] }): Promise<void>;
+  saveFileBegin(o: { name: string; mime: string }): Promise<{ id: string }>;
+  saveFileChunk(o: { id: string; data: string }): Promise<void>;
+  saveFileEnd(o: { id: string }): Promise<{ location: string; uri: string }>;
+  shareFile(o: { uri: string; mime: string; title: string }): Promise<void>;
   addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;
 }
 
@@ -30,7 +34,8 @@ export interface NativeEvents {
 /** True inside the installed Android app (not on the web or iPhone). */
 export const isAndroidApp = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
 
-const plugin = registerPlugin<MaktabaNative>('Maktaba');
+/** The Android side itself (one registration for the whole app). */
+export const plugin = registerPlugin<MaktabaNative>('Maktaba');
 
 /**
  * Android-only abilities. Every call is safe to make anywhere: off Android it does nothing,
