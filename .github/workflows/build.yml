@@ -53,6 +53,8 @@ jobs:
         run: node e2e/myai.mjs
       - name: Two phones in step through the reader's own Drive
         run: node e2e/cloud.mjs
+      - name: The setup guide, as someone new meets it
+        run: node e2e/setup.mjs
       - name: Translate a whole book through the server, in the app
         run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4

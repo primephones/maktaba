@@ -7,7 +7,7 @@ export const SHARE_TEXT =
   `Maktaba: a library for Islamic scholarship, with Arabic, Urdu and Persian books read in English.\n\n` +
   `Open it here: ${PUBLIC_URL}\n` +
   `Android app: ${ANDROID_URL}\n\n` +
-  `Your library is yours alone: you sign in with your own AI and your own cloud.`;
+  `Your library is yours alone. When you open it, Maktaba walks you through connecting your own cloud and your own AI (about five minutes, all free).`;
 
 /** Shares the link through the phone's own share sheet (or copies it where there is none). */
 export async function shareMaktaba() {

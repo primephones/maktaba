@@ -5,6 +5,8 @@ import type { FileSyncState } from '../../sync/cloudSync';
 import { db } from '../../db/db';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
+import { HelpFor } from '../setup/help';
+import { navigate } from '../../app/router';
 
 /**
  * Each person's own cloud: their Google Drive. Their books (the original files) and their
@@ -12,6 +14,24 @@ import { toast } from '../../ui/toast';
  * to a new phone and stays in step between their phones. Maktaba sees only the files it
  * makes in the Maktaba folder.
  */
+/** Signs in to the reader's own Google Drive, makes the Maktaba folder and starts syncing. */
+export async function connectDrive(): Promise<void> {
+  try {
+    await setCloud({ provider: 'gdrive' });
+    await accessToken(true);
+    await ensureFolders();
+    const me = await whoAmI().catch(() => ({}) as { email?: string; name?: string });
+    const now = await getCloud();
+    await setCloud({ ...(now ?? { provider: 'gdrive' }), ...me });
+    toast('Your Google Drive is connected. Your library is being saved there.');
+    const { syncNow } = await import('../../sync/sync');
+    void syncNow();
+  } catch (e) {
+    await setCloud(null);
+    throw e;
+  }
+}
+
 export function CloudPage() {
   const [cfg, setCfg] = useState<CloudConfig | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -28,17 +48,8 @@ export function CloudPage() {
     setError('');
     setBusy(true);
     try {
-      await setCloud({ provider: 'gdrive' });
-      await accessToken(true);
-      await ensureFolders();
-      const me = await whoAmI().catch(() => ({}) as { email?: string; name?: string });
-      const now = await getCloud();
-      await setCloud({ ...(now ?? { provider: 'gdrive' }), ...me });
-      toast('Your Google Drive is connected. Your library is being saved there.');
-      const { syncNow } = await import('../../sync/sync');
-      void syncNow();
+      await connectDrive();
     } catch (e) {
-      await setCloud(null);
       setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -58,7 +69,8 @@ export function CloudPage() {
             there, so they follow you to a new phone and stay in step between your phones.
           </p>
         </div>
-        {error && <div className="banner banner--error" role="alert"><Icon name="warn" /><span className="grow">{error}</span></div>}
+        <button className="btn btn--block" onClick={() => navigate('/setup/cloud')}><Icon name="info" size={18} />Step-by-step guide</button>
+        {error && <HelpFor error={error} />}
         {cloudAvailable() ? (
           <button className="btn btn--primary btn--block" disabled={busy} onClick={() => void connect()}>
             <Icon name="cloud" size={20} />{busy ? 'Connecting…' : 'Connect Google Drive'}

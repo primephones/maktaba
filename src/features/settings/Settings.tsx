@@ -12,6 +12,7 @@ import { ReadingControls } from '../reader/ReadingControls';
 import { AiSettings } from './MyAiSettings';
 import { SharePage } from './SharePage';
 import { CloudPage } from './CloudPage';
+import { HelpPage } from './HelpPage';
 import { BackupPage } from './BackupPage';
 import { VoicePage } from './VoicePage';
 
@@ -24,6 +25,7 @@ const THEMES: Array<[ThemeName, string, string]> = [
 ];
 
 const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string }> = [
+  { id: 'help', title: 'Help & setup', icon: 'info', sub: 'The setup guide, and answers to common questions' },
   { id: 'cloud', title: 'Your cloud', icon: 'cloud', sub: 'Your library in your own Google Drive, on all your phones' },
   { id: 'ai', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account; today’s allowance' },
   { id: 'share', title: 'Share Maktaba', icon: 'share', sub: 'A link anyone can open, with their own login' },
@@ -60,6 +62,7 @@ export function Settings({ page }: { page?: string }) {
             ))}
           </div>
         )}
+        {page === 'help' && <HelpPage />}
         {page === 'cloud' && <CloudPage />}
         {page === 'ai' && <AiSettings />}
         {page === 'share' && <SharePage />}

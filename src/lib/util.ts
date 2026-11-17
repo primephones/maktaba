@@ -20,7 +20,7 @@ export function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return '0 KB';
   if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
   if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB`;
-  return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(1).replace(/\.0$/, "")} GB`;
 }
 
 export const percent = (f: number | undefined) => `${Math.round(Math.min(1, Math.max(0, f ?? 0)) * 100)}%`;

@@ -10,6 +10,7 @@ import { useApp } from '../../app/AppContext';
 import { Sheet } from '../../ui/Sheet';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
+import { HelpFor } from '../setup/help';
 import { mimeOf, openOriginal, saveFile } from '../../lib/saveFile';
 import { BookCover, useCoverUrl } from './BookCover';
 import { CHECK_BELOW, rerunOcr, runOcrQueue } from '../../ocr/queue';
@@ -153,7 +154,7 @@ function TranslationCard({ book }: { book: Book }) {
           <button className="btn btn--quiet btn--danger" onClick={() => void cancelBookTranslation(book)}>Stop</button>
         </div>
       ) : null}
-      {t?.state === 'waiting' && t.note && <p className="muted small">{t.note}</p>}
+      {t?.state === 'waiting' && t.note && (/allowance|connect your ai|private/i.test(t.note) ? <HelpFor error={t.note} compact /> : <p className="muted small">{t.note}</p>)}
     </div>
   );
 }

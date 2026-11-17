@@ -13,6 +13,7 @@ import { Home } from '../features/home/Home';
 import { Library } from '../features/library/Library';
 import { References } from '../features/references/References';
 import { Search } from '../features/search/Search';
+import { Setup } from '../features/setup/Setup';
 import { Settings } from '../features/settings/Settings';
 
 const Reader = lazy(() => import('../features/reader/Reader').then((m) => ({ default: m.Reader })));
@@ -170,7 +171,7 @@ export function App() {
   }, [route.name, theme]);
 
   const inReader = route.name === 'reader';
-  const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'review';
+  const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'setup' || route.name === 'review';
   const key = route.name === 'reader' ? `reader:${route.bookId}` : route.name === 'review' ? `review:${route.bookId}` : route.name;
 
   let screen;
@@ -189,6 +190,9 @@ export function App() {
       break;
     case 'settings':
       screen = <Settings page={route.page} />;
+      break;
+    case 'setup':
+      screen = <Setup step={route.step} />;
       break;
     case 'reader':
       screen = (

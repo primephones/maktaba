@@ -251,3 +251,9 @@ export async function remove(id: string): Promise<void> {
   const res = await api(`/files/${encodeURIComponent(id)}`, { method: 'DELETE', raw: true });
   if (!res.ok && res.status !== 404) throw new CloudError(`Could not remove a file from Google Drive (${res.status}).`, res.status);
 }
+
+/** Space in the reader's Drive (all of it, shared with Gmail and Photos), in bytes. */
+export async function driveSpace(): Promise<{ limit?: number; usage: number }> {
+  const r = await json<{ storageQuota?: { limit?: string; usage?: string } }>(api('/about?fields=storageQuota(limit,usage)'));
+  return { limit: r.storageQuota?.limit ? Number(r.storageQuota.limit) : undefined, usage: Number(r.storageQuota?.usage ?? 0) };
+}

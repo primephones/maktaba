@@ -63,7 +63,12 @@ export function Home() {
         <EmptyState
           epigraph={BEST_COMPANION}
           title="Welcome to your library"
-          action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add your first book</button>}
+          action={
+            <>
+              <button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add your first book</button>
+              <button className="btn" onClick={() => navigate('/setup')}><Icon name="sparkle" size={20} />Set up Maktaba (2 steps)</button>
+            </>
+          }
         >
           Add an Arabic, Urdu, Persian or English book from your phone. It stays on this device and opens without internet.
         </EmptyState>
@@ -269,7 +274,7 @@ function SetupCard() {
       <div className="section-title">Make Maktaba yours</div>
       <div className="list setup-card">
         {!state.cloud && (
-          <button className="row" onClick={() => navigate('/settings/cloud')}>
+          <button className="row" onClick={() => navigate('/setup/cloud')}>
             <Icon name="cloud" />
             <span className="grow">
               <span className="title">Connect your cloud</span>
@@ -279,7 +284,7 @@ function SetupCard() {
           </button>
         )}
         {!state.ai && (
-          <button className="row" onClick={() => navigate('/settings/ai')}>
+          <button className="row" onClick={() => navigate('/setup/ai')}>
             <Icon name="sparkle" />
             <span className="grow">
               <span className="title">Connect your AI</span>

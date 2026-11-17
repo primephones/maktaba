@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { fetchStatus, getServer, type ServerStatus } from '../../ai/client';
 import { getMyAi, hasMyAi, setMyAi, type MyAi } from '../../ai/device';
 import { checkKey, startOpenRouterSignIn, type KeyService } from '../../ai/signin';
+import { readKey } from '../../ai/keys';
 import { isAndroidApp, plugin } from '../../native/maktaba';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
 import { AiAllowance, timeUntil, UNLIMITED } from './AiAllowance';
 import { ServerPanel, TranslateOrder } from './AiSettings';
+import { HelpFor } from '../setup/help';
+import { navigate } from '../../app/router';
 
 /** Opens a page in the phone's browser (keeping Maktaba open behind it). */
 export function openExternal(url: string) {
@@ -72,6 +75,9 @@ export function AiSettings() {
 
   return (
     <>
+      {!connected && (
+        <button className="btn btn--block" onClick={() => navigate('/setup/ai')}><Icon name="info" size={18} />Step-by-step guide</button>
+      )}
       {!connected ? (
         <div className="hero-card">
           <span className="ai-mark" aria-hidden="true">✦</span>
@@ -153,13 +159,19 @@ function KeyCard({ svc, value, onSave }: { svc: (typeof SERVICES)[number]; value
   const add = async () => {
     setBusy(true);
     setMsg(null);
-    const r = await checkKey(svc.id, draft);
+    const read = readKey(draft);
+    if (!read.key || read.problem) {
+      setBusy(false);
+      setMsg({ ok: false, text: read.problem ?? 'Paste the key first.' });
+      return;
+    }
+    const r = await checkKey(svc.id, read.key);
     setBusy(false);
     if (!r.ok) {
       setMsg({ ok: false, text: r.message });
       return;
     }
-    await onSave(draft.trim());
+    await onSave(read.key);
     setDraft('');
     toast(`${svc.name} is connected.`);
   };
@@ -185,7 +197,7 @@ function KeyCard({ svc, value, onSave }: { svc: (typeof SERVICES)[number]; value
               <input value={draft} onChange={(e) => setDraft(e.target.value)} autoCapitalize="off" autoCorrect="off" spellCheck={false} placeholder="Your key" aria-label={`${svc.name} key`} />
             </span>
           </label>
-          {msg && <div className={`banner${msg.ok ? '' : ' banner--error'}`} role="alert"><Icon name="warn" /><span className="grow">{msg.text}</span></div>}
+          {msg && !msg.ok && <HelpFor error={msg.text} />}
           <button className="btn btn--primary btn--block" disabled={busy || !draft.trim()} onClick={() => void add()}>{busy ? 'Checking…' : `Add ${svc.name}`}</button>
         </>
       )}

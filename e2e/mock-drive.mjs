@@ -82,7 +82,7 @@ createServer(async (req, res) => {
   if (req.headers.authorization !== `Bearer ${TOKEN}`) return send(401, { error: { message: 'Invalid Credentials' } });
   stats.requests++;
   try {
-    if (url.pathname === '/drive/v3/about') return send(200, { user: { emailAddress: 'reader@example.com', displayName: 'Test Reader' } });
+    if (url.pathname === '/drive/v3/about') return send(200, { user: { emailAddress: 'reader@example.com', displayName: 'Test Reader' }, storageQuota: { limit: String(15 * 1024 ** 3), usage: String(2.5 * 1024 ** 3) } });
 
     if (url.pathname === '/drive/v3/files' && req.method === 'GET') {
       let list = [...files.values()].filter((f) => matches(f, url.searchParams.get('q')));

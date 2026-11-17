@@ -70,8 +70,12 @@ try {
   await page.route('https://api.groq.com/**', (r) => r.fulfill({ status: 401, body: '{}', headers: { 'access-control-allow-origin': '*' } }));
   await page.getByLabel('Groq key').fill('gsk_wrong');
   await page.getByRole('button', { name: 'Add Groq' }).click();
-  await page.getByText('The service refused this key').waitFor({ timeout: 8000 });
-  check(true, 'a key the service refuses is not saved');
+  await page.getByText(/cut short/).waitFor({ timeout: 8000 });
+  check(true, 'a key cut short is caught before it is sent');
+  await page.getByLabel('Groq key').fill('gsk_' + 'x'.repeat(52));
+  await page.getByRole('button', { name: 'Add Groq' }).click();
+  await page.getByText('The service did not accept the key').waitFor({ timeout: 8000 });
+  check(true, 'a key the service refuses is not saved, and help says what to do');
   await page.getByLabel('Groq key').fill('');
 
   await page.getByText('Another AI service (OpenAI-compatible)').click();

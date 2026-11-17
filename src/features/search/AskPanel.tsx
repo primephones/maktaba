@@ -6,6 +6,7 @@ import { askBooks, type Answer } from '../../ai/study';
 import { langAttr } from '../../lib/arabic';
 import { navigate } from '../../app/router';
 import { Icon } from '../../ui/Icon';
+import { HelpFor } from '../setup/help';
 import { Sheet } from '../../ui/Sheet';
 import { setJump } from '../reader/jump';
 
@@ -77,7 +78,7 @@ export function AskPanel({ question }: { question: string }) {
           {scope === 'all' ? (books.length === 1 ? 'The 1 book' : `All ${books.length} books`) : `${chosen.length} book${chosen.length === 1 ? '' : 's'}`} ▾
         </button>
       </div>
-      {error && <div className="banner banner--error" role="alert"><Icon name="warn" /><span className="grow">{error}</span></div>}
+      {error && <HelpFor error={error} />}
       {answer && (
         <article className="card answer" aria-live="polite">
           {answer.found ? (

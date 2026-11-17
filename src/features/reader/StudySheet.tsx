@@ -6,6 +6,7 @@ import { langAttr } from '../../lib/arabic';
 import { navigate } from '../../app/router';
 import { Sheet } from '../../ui/Sheet';
 import { Icon } from '../../ui/Icon';
+import { HelpFor } from '../setup/help';
 import { toast } from '../../ui/toast';
 
 interface Props {
@@ -54,7 +55,7 @@ export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
       {error === 'setup' ? (
         <button className="btn btn--block" onClick={() => navigate('/settings/ai')}>Connect your AI first</button>
       ) : error ? (
-        <div className="banner banner--error" role="alert"><Icon name="warn" /><span className="grow">{error}</span></div>
+        <HelpFor error={error} />
       ) : !result ? (
         <p className="muted" role="status"><span className="ai-mark" aria-hidden="true">✦</span> Thinking…</p>
       ) : 'explanation' in result ? (

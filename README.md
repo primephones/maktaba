@@ -16,6 +16,11 @@ half-working.
 - **Android (Samsung and others):** the repository's [Releases](../../releases) page; take
   the newest `build-N`, download the `.apk` and open it on the phone.
 - Settings › **Share Maktaba** sends the link from inside the app.
+- **Setting up, for everyone:** a guide in the app (Home › *Set up Maktaba*, or Settings ›
+  *Help & setup*) walks each person through their own cloud and their own AI, step by step:
+  what they will see, what to tap, the right page opened for them. What they paste is
+  checked (a web address instead of a key, a key cut short, a key from another service), and
+  every problem comes with what it means and what to do.
 - One-time setup by the owner (the link, Google Drive sign-in, a signing key for updates):
   [`docs/SETUP.md`](docs/SETUP.md).
 
