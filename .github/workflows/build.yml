@@ -207,14 +207,16 @@ jobs:
             adb install -r apk/*.apk
             timeout 900 node e2e/android.mjs
       # The emulator on shared machines sometimes dies by itself; a second, fresh one decides.
-      # The Android 14 emulator on GitHub's shared machines has gone offline at the moment
-      # the app starts its background-work notification; a different Android decides.
-      - name: Try again on Android 12, if the first emulator failed
+      # The Android 14 emulator has gone offline the moment the app shows its background-work
+      # notification. The retry draws the screen inside the emulator (-gpu guest) instead of
+      # through the host's graphics emulation. (Android 12's image is no use: its 2021
+      # browser engine is too old for the test driver.)
+      - name: Try again with the emulator drawing in software, if the first one failed
         id: phone2
         if: steps.phone1.outcome == 'failure'
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 31
+          api-level: 34
           arch: x86_64
           target: google_apis
           profile: pixel_6
@@ -222,7 +224,7 @@ jobs:
           ram-size: 4096M
           disk-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu guest -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
             mkdir -p e2e/out/phone
             adb logcat -c || true
