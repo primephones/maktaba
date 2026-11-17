@@ -149,7 +149,7 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
       sec ? (
         <section key={i} data-section={i}>
           {renderSection(sec)}
-          {i < last && <div className="rd-section-end" aria-hidden="true" />}
+          {i < last && <div className="rd-section-end" aria-hidden="true">❖</div>}
         </section>
       ) : (
         <div key={i} style={{ minHeight: '70vh' }} aria-busy="true" />

@@ -31,7 +31,7 @@ export function Settings({ page }: { page?: string }) {
   const info = PAGES.find((p) => p.id === page);
   return (
     <div className="screen screen--plain">
-      <div className="screen-head">
+      <div className="screen-head screen-head--sub">
         <button className="icon-btn" onClick={() => goBack(page ? '/settings' : '/')} aria-label="Back"><Icon name="back" /></button>
         <h1>{info?.title ?? 'Settings'}</h1>
       </div>

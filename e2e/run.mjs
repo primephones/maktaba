@@ -440,15 +440,15 @@ await section('Dark theme across the app', async () => {
   const low = (await contrastOf('.sheet h2, .sheet h3, .sheet .title, .sheet .sub, .sheet .muted, .sheet .detail-facts, .sheet .by, .sheet .section-title, .sheet .seg button, .sheet .cover-choice:not([disabled]), .sheet .banner span')).filter((c) => c.ratio < 4.5);
   check(low.length === 0, `dark theme: book details sheet is readable ${JSON.stringify(low)}`);
   await page.getByRole('button', { name: 'Close' }).click();
-  const lowMain = (await contrastOf('.facing h1, .facing .ar, .chip, .tile-title, .tile-sub, .tile-progress, .bar-tab, .search-entry')).filter((c) => c.ratio < 4.5);
+  const lowMain = (await contrastOf('.screen-head h1, .chip, .tile-title, .tile-sub, .tile-progress, .bar-tab, .search-entry')).filter((c) => c.ratio < 4.5);
   check(lowMain.length === 0, `dark theme: library is readable ${JSON.stringify(lowMain)}`);
   await shot('14-library-lamp');
 });
 await section('Home', async () => {
   await go('#/');
   check(await page.getByRole('button', { name: /^Continue reading/ }).isVisible(), 'Home leads with the book being read');
-  const low = (await contrastOf('.desk .label, .desk h2, .desk .where, .desk-progress', '--leather-hi')).filter((c) => c.ratio < 4.5);
-  check(low.length === 0, `text on the leather band is readable ${JSON.stringify(low)}`);
+  const low = (await contrastOf('.continue .eyebrow, .continue h2, .continue .where, .continue .tile-progress')).filter((c) => c.ratio < 4.5);
+  check(low.length === 0, `the Continue reading card is readable ${JSON.stringify(low)}`);
   await shot('15-home-lamp');
 });
 await ctx.close();

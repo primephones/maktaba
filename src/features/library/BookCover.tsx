@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { db } from '../../db/db';
 import type { Book, CoverStyle } from '../../db/types';
-import { isRtl, detectLang } from '../../lib/arabic';
+import { isRtl, detectLang, langAttr } from '../../lib/arabic';
 import { hashString, percent } from '../../lib/util';
 import { useSetting } from '../../app/settings';
 
@@ -69,7 +69,7 @@ function Tooling() {
       {[[5, 5, 1, 1], [95, 5, -1, 1], [5, 145, 1, -1], [95, 145, -1, -1]].map(([x, y, dx, dy], i) => (
         <path key={i} d={`M${x + 13 * dx},${y} Q${x + 13 * dx},${y + 13 * dy} ${x},${y + 13 * dy}`} strokeWidth="0.7" opacity="0.8" vectorEffect="non-scaling-stroke" />
       ))}
-      <g transform="translate(50 110)">
+      <g transform="translate(50 100)">
         <path d="M0,-22 C13,-11 13,11 0,22 C-13,11 -13,-11 0,-22 Z" fill="rgba(0,0,0,0.2)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
         <path d="M0,-15 C8,-7.5 8,7.5 0,15 C-8,7.5 -8,-7.5 0,-15 Z" strokeWidth="0.6" opacity="0.75" vectorEffect="non-scaling-stroke" />
         <path d="M0,-6 L3.5,0 L0,6 L-3.5,0 Z" fill={gold} stroke="none" opacity="0.85" />
@@ -88,7 +88,6 @@ export function BookCover({ book, style, showState = true }: Props) {
   const face: CoverStyle = url ? wanted : 'designed';
   const leather = LEATHERS[hashString(book.series || book.title) % LEATHERS.length];
   const rtl = isRtl(book.lang) || isRtl(detectLang(book.title));
-  const titleLang = detectLang(book.title);
   const imp = book.import;
   const busy = showState && (imp.state === 'queued' || imp.state === 'processing');
   const failed = showState && imp.state === 'failed';
@@ -100,7 +99,8 @@ export function BookCover({ book, style, showState = true }: Props) {
       {face === 'designed' && (
         <span className="cover-face" dir={rtl ? 'rtl' : 'ltr'}>
           <Tooling />
-          <span className="t"><span lang={titleLang === 'other' ? undefined : titleLang}>{book.title}</span></span>
+          <span className="t"><span lang={langAttr(book.title)}>{book.title}</span></span>
+          {book.author && <span className="a"><span lang={langAttr(book.author)}>{book.author}</span></span>}
         </span>
       )}
       {inProgress && <span className="cover-ribbon" aria-hidden="true" />}

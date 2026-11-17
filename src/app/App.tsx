@@ -108,7 +108,7 @@ export function App() {
     default:
       screen = (
         <div className="screen screen--plain">
-          <EmptyState title="Nothing here">
+          <EmptyState icon="info" title="Nothing here">
             This page doesn’t exist.
           </EmptyState>
           <button className="btn btn--primary btn--block" onClick={() => goBack()}>Go to Home</button>

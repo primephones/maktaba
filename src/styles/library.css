@@ -1,4 +1,4 @@
-/* ---------- Book covers: bound in leather, as these books are ---------- */
+/* ---------- Book covers: real bound books ---------- */
 
 .cover {
   --leather: #6b1f1b;
@@ -8,16 +8,15 @@
   display: block;
   width: 100%;
   aspect-ratio: 2 / 3;
-  border-radius: 2px 5px 5px 2px;
+  border-radius: 3px 7px 7px 3px;
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.3' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"),
-    radial-gradient(120% 90% at 30% 10%, rgba(255, 255, 255, 0.12), transparent 60%),
-    radial-gradient(90% 70% at 80% 100%, rgba(0, 0, 0, 0.3), transparent 65%),
+    radial-gradient(120% 90% at 30% 10%, rgba(255, 255, 255, 0.13), transparent 60%),
+    radial-gradient(90% 70% at 80% 100%, rgba(0, 0, 0, 0.28), transparent 65%),
     linear-gradient(160deg, var(--leather-hi), var(--leather) 45%, var(--leather-lo));
   box-shadow:
     0 1px 1px rgba(0, 0, 0, 0.25),
-    0 7px 14px -3px rgba(40, 28, 14, 0.38),
-    /* the page block showing along the fore-edge and tail */
+    0 6px 14px rgba(40, 28, 14, 0.28),
+    /* page block peeking out along the fore-edge and tail */
     2px 0 0 -0.5px #e9e2cf,
     3.5px 1px 0 -0.5px #cfc6ae,
     0 2.5px 0 -0.5px #d9d1bb;
@@ -27,15 +26,15 @@
 }
 /* Arabic-script books open from the other side: the spine is on the right. */
 .cover[data-rtl='true'] {
-  border-radius: 5px 2px 2px 5px;
+  border-radius: 7px 3px 3px 7px;
   box-shadow:
     0 1px 1px rgba(0, 0, 0, 0.25),
-    0 7px 14px -3px rgba(40, 28, 14, 0.38),
+    0 6px 14px rgba(40, 28, 14, 0.28),
     -2px 0 0 -0.5px #e9e2cf,
     -3.5px 1px 0 -0.5px #cfc6ae,
     0 2.5px 0 -0.5px #d9d1bb;
 }
-/* Spine: its curve and the hinge groove. */
+/* Spine: a rounded shadow and the hinge groove. */
 .cover::before {
   content: '';
   position: absolute;
@@ -44,11 +43,11 @@
   pointer-events: none;
   background: linear-gradient(
     90deg,
-    rgba(0, 0, 0, 0.34) 0,
-    rgba(255, 255, 255, 0.15) 2.5%,
-    rgba(0, 0, 0, 0.05) 5%,
+    rgba(0, 0, 0, 0.32) 0,
+    rgba(255, 255, 255, 0.16) 2.5%,
+    rgba(0, 0, 0, 0.06) 5%,
     rgba(0, 0, 0, 0.28) 7.5%,
-    rgba(255, 255, 255, 0.09) 9.5%,
+    rgba(255, 255, 255, 0.1) 9.5%,
     transparent 14%
   );
 }
@@ -69,20 +68,533 @@
   object-fit: cover;
   display: block;
 }
-/* Bound: the book's own cover set into the leather, inside a gold fillet. */
+/* Bound: the real cover set into a leather binding, with a blind-tooled gold rule. */
 .cover[data-style='bound'] img {
   inset: 9% 8% 9% 13%;
   width: 79%;
   height: 82%;
-  border-radius: 1px;
-  box-shadow: 0 0 0 1px rgba(201, 169, 97, 0.8), 0 0 0 3px rgba(0, 0, 0, 0.2), 0 2px 6px rgba(0, 0, 0, 0.45);
+  border-radius: 1.5px;
+  box-shadow: 0 0 0 1px rgba(201, 169, 97, 0.75), 0 0 0 3px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 .cover[data-style='bound'][data-rtl='true'] img {
   inset: 9% 13% 9% 8%;
 }
 
-/* Designed: tooled like an Islamic binding. A ruled frame, the title stamped in gold,
-   and the turanj, the almond medallion pressed into the centre of the board. */
+/* Designed: the title stamped in gold foil. */
+.cover-foil {
+  position: absolute;
+  inset: 6% 6% 6% 12%;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  justify-items: center;
+  align-items: center;
+  gap: 4cqw;
+  padding: 7cqw 5cqw;
+  text-align: center;
+  border: 0.9cqw solid transparent;
+  border-image: linear-gradient(135deg, #8a6a24, #e3cc8a 35%, #a8863c 60%, #edd9a0 85%, #8f7028) 1;
+  outline: 0.4cqw solid rgba(201, 169, 97, 0.5);
+  outline-offset: -2.6cqw;
+}
+.cover[data-rtl='true'] .cover-foil {
+  inset: 6% 12% 6% 6%;
+}
+.cover-foil .t,
+.cover-foil .a {
+  background: linear-gradient(135deg, #a8863c, #f0dfa8 30%, #b7954a 55%, #f3e3b0 78%, #9a7a30);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+}
+.cover-foil .t {
+  font-family: var(--font-read);
+  font-weight: 600;
+  font-size: 10.5cqw;
+  line-height: 1.22;
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
+}
+.cover-foil .t[lang='ar'],
+.cover-foil .t[lang='fa'] {
+  font-family: var(--font-arabic);
+  font-weight: 700;
+  font-size: 14cqw;
+  line-height: 1.5;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+.cover-foil .t[lang='ur'] {
+  font-family: var(--font-urdu);
+  font-weight: 400;
+  font-size: 10.5cqw;
+  line-height: 2.1;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.cover-foil .a {
+  font-family: var(--font-ui);
+  font-size: 6cqw;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  opacity: 0.92;
+}
+.cover-foil .a[lang='ar'],
+.cover-foil .a[lang='fa'],
+.cover-foil .a[lang='ur'] {
+  font-family: var(--font-arabic);
+  font-size: 8cqw;
+  letter-spacing: 0;
+}
+.cover-foil .orn {
+  position: absolute;
+  top: 3cqw;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12cqw;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d9c283, transparent);
+}
+
+/* Ribbon on books in progress. */
+.cover-ribbon {
+  position: absolute;
+  top: 0;
+  inset-inline-end: 14%;
+  z-index: 4;
+  width: 9%;
+  height: 21%;
+  background: linear-gradient(180deg, #c2413a, #a3302a);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+
+/* Import progress and failure shown on the cover itself. */
+.cover-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  padding: 10px 9px;
+  background: linear-gradient(180deg, rgba(15, 13, 10, 0.25), rgba(15, 13, 10, 0.86));
+  color: #f6f1e4;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: start;
+}
+.cover-veil .meter {
+  background: rgba(255, 255, 255, 0.25);
+}
+.cover-veil .meter > i {
+  background: #e7c87a;
+}
+.cover-veil[data-failed='true'] {
+  background: linear-gradient(180deg, rgba(60, 12, 8, 0.45), rgba(40, 8, 6, 0.92));
+}
+
+/* ---------- Library grid ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 22px 16px;
+  margin-top: 16px;
+}
+@media (min-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 28px 22px;
+  }
+}
+.tile {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  text-align: start;
+  min-width: 0;
+}
+.tile-cover {
+  display: block;
+  border-radius: 4px;
+  transition: transform 0.2s var(--ease-out);
+}
+.tile-cover:active {
+  transform: scale(0.97);
+}
+.tile-meta {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.tile-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.tile-title[lang='ar'], .tile-title[lang='fa'] {
+  font-size: 1rem;
+  line-height: 1.5;
+  font-weight: 700;
+}
+.tile-title[lang='ur'] {
+  font-size: 0.86rem;
+  line-height: 2;
+  font-weight: 400;
+}
+.tile-sub {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.tile-progress .meter {
+  flex: 1;
+  height: 3px;
+}
+.tile-row {
+  display: flex;
+  align-items: start;
+  gap: 2px;
+}
+.tile-row .tile-meta {
+  flex: 1;
+}
+.tile-more {
+  width: 30px;
+  height: 34px;
+  margin: -4px -8px 0 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  border-radius: 8px;
+  flex: none;
+}
+
+/* A stack of volumes of one work. */
+.stack {
+  position: relative;
+  display: block;
+}
+.stack .cover {
+  position: relative;
+  z-index: 2;
+}
+.stack::before,
+.stack::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px 7px 7px 3px;
+  background: var(--line-strong);
+  border: 1px solid var(--line);
+}
+.stack::before {
+  transform: translate(5px, -5px);
+  opacity: 0.9;
+  z-index: 1;
+}
+.stack::after {
+  transform: translate(10px, -10px);
+  opacity: 0.55;
+  z-index: 0;
+}
+.stack-count {
+  position: absolute;
+  z-index: 6;
+  bottom: 6px;
+  inset-inline-end: 6px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: rgba(20, 18, 14, 0.82);
+  color: #f3ecdc;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.folders {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: start;
+  min-width: 0;
+}
+.folder svg {
+  color: var(--slate);
+  flex: none;
+}
+.folder .name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folder .count {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+}
+
+.search-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-3);
+  text-align: start;
+  margin-bottom: 12px;
+}
+
+/* ---------- Home ---------- */
+
+.continue {
+  display: grid;
+  grid-template-columns: 104px 1fr;
+  gap: 16px;
+  align-items: center;
+  width: 100%;
+  text-align: start;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+}
+.continue .eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rubric);
+}
+.continue h2 {
+  font-family: var(--font-read);
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 4px 0 2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.continue h2[lang='ar'], .continue h2[lang='fa'] {
+  font-family: var(--font-arabic);
+  font-size: 1.35rem;
+  line-height: 1.55;
+}
+.continue h2[lang='ur'] {
+  font-family: var(--font-urdu);
+  font-size: 1.05rem;
+  line-height: 2.1;
+  font-weight: 400;
+}
+.continue .where {
+  font-size: 0.84rem;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+.shelf {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 104px;
+  gap: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -18px;
+  padding: 6px 18px 12px;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 18px;
+}
+.shelf::-webkit-scrollbar {
+  display: none;
+}
+.shelf > * {
+  scroll-snap-align: start;
+}
+.shortcuts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.shortcut {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  text-align: start;
+}
+.shortcut svg {
+  color: var(--rubric);
+}
+.shortcut b {
+  font-weight: 600;
+}
+.shortcut span {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.update-notice {
+  position: fixed;
+  z-index: var(--z-toast);
+  top: calc(var(--safe-top) + 10px);
+  left: 12px;
+  right: 12px;
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 16px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+  font-size: 0.92rem;
+}
+.update-notice span {
+  flex: 1;
+}
+.update-notice .btn {
+  min-height: 38px;
+  padding: 0 16px;
+}
+
+.detail-head {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+.detail-head h3 {
+  font-family: var(--font-read);
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.detail-head h3[lang='ar'], .detail-head h3[lang='fa'] {
+  font-family: var(--font-arabic);
+  font-size: 1.3rem;
+}
+.detail-head h3[lang='ur'] {
+  font-family: var(--font-urdu);
+  line-height: 2.1;
+  font-weight: 400;
+}
+.cover-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.cover-choice {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  padding: 8px;
+  border-radius: var(--r-md);
+  border: 1.5px solid transparent;
+}
+.cover-choice[aria-pressed='true'] {
+  border-color: var(--rubric);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--rubric) 7%, transparent);
+}
+.cover-choice .cover {
+  width: 72px;
+}
+
+.storage-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--line);
+}
+.storage-bar i {
+  display: block;
+  height: 100%;
+}
+.legend {
+  display: grid;
+  gap: 8px;
+}
+.legend div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+}
+.legend i {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex: none;
+}
+.legend span:last-child {
+  margin-inline-start: auto;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Tooled cover (no cover picture) ----------
+   A ruled gold frame with corner pieces, the title stamped in gold leaf, and the turanj,
+   the almond medallion pressed into the centre of an Islamic binding. */
 .cover-face {
   position: absolute;
   inset: 5% 5% 5% 11.5%;
@@ -98,14 +610,25 @@
   height: 100%;
   overflow: visible;
 }
-.cover-face .t {
+.cover-face .t,
+.cover-face .a {
   position: absolute;
-  inset: 9% 9% 46% 9%;
+  left: 9%;
+  right: 9%;
   display: grid;
   align-content: center;
   text-align: center;
 }
-.cover-face .t span {
+.cover-face .t {
+  top: 8%;
+  bottom: 50%;
+}
+.cover-face .a {
+  top: 83%;
+  bottom: 4%;
+}
+.cover-face .t span,
+.cover-face .a span {
   background: var(--foil);
   -webkit-background-clip: text;
   background-clip: text;
@@ -114,6 +637,8 @@
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-box-orient: vertical;
+}
+.cover-face .t span {
   font-family: var(--font-read);
   font-weight: 600;
   font-size: 10cqw;
@@ -138,501 +663,70 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
-
-/* Ribbon on books in progress. */
-.cover-ribbon {
-  position: absolute;
-  top: 0;
-  inset-inline-end: 15%;
-  z-index: 4;
-  width: 8%;
-  height: 20%;
-  background: linear-gradient(180deg, #c2413a, #a3302a);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
-}
-
-/* Import progress and failure are shown on the cover itself. */
-.cover-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: grid;
-  align-content: end;
-  gap: 6px;
-  padding: 10px 9px;
-  background: linear-gradient(180deg, rgba(15, 13, 10, 0.25), rgba(15, 13, 10, 0.88));
-  color: #f6f1e4;
+.cover-face .a span {
   font-family: var(--font-ui);
-  font-size: 0.72rem;
+  font-size: 5.6cqw;
   font-weight: 500;
+  letter-spacing: 0.03em;
   line-height: 1.3;
-  text-align: start;
-}
-.cover-veil .meter {
-  background: rgba(255, 255, 255, 0.28);
-}
-.cover-veil .meter > i {
-  background: #e7c87a;
-}
-.cover-veil[data-failed='true'] {
-  background: linear-gradient(180deg, rgba(60, 12, 8, 0.45), rgba(40, 8, 6, 0.92));
-}
-
-/* ---------- Shelves ---------- */
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 26px 18px;
-  margin-top: 20px;
-}
-@media (min-width: 600px) {
-  .grid {
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-    gap: 32px 24px;
-  }
-}
-.tile {
-  display: grid;
-  gap: 10px;
-  align-content: start;
-  text-align: start;
-  min-width: 0;
-}
-.tile-cover {
-  display: block;
-  transition: transform 0.2s var(--ease-out);
-}
-.tile-cover:active {
-  transform: scale(0.97);
-}
-.tile-meta {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.tile-title {
-  font-family: var(--font-read);
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-.tile-title[lang='ar'], .tile-title[lang='fa'] {
-  font-family: var(--font-arabic);
-  font-size: 1.05rem;
-  line-height: 1.5;
-  font-weight: 700;
-}
-.tile-title[lang='ur'] {
-  font-family: var(--font-urdu);
-  font-size: 0.88rem;
-  line-height: 2;
-  font-weight: 400;
-}
-/* Authors are set in italic, as in a bibliography. */
-.tile-sub {
-  font-family: var(--font-read);
-  font-style: italic;
-  font-size: 0.8rem;
-  color: var(--ink-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tile-sub[lang='ar'], .tile-sub[lang='fa'], .tile-sub[lang='ur'] {
-  font-family: var(--font-arabic);
-  font-style: normal;
-  font-size: 0.92rem;
-}
-.tile-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 3px;
-  font-size: 0.72rem;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.tile-progress .meter {
-  flex: 1;
-  height: 2px;
-}
-.tile-row {
-  display: flex;
-  align-items: start;
-  gap: 2px;
-}
-.tile-row .tile-meta {
-  flex: 1;
-}
-.tile-more {
-  width: 30px;
-  height: 34px;
-  margin: -5px -9px 0 0;
-  display: grid;
-  place-items: center;
-  color: var(--ink-3);
-  border-radius: 6px;
-  flex: none;
-}
-
-/* A stack of volumes of one work. */
-.stack {
-  position: relative;
-  display: block;
-}
-.stack .cover {
-  position: relative;
-  z-index: 2;
-}
-.stack::before,
-.stack::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 2px 5px 5px 2px;
-  background: linear-gradient(90deg, #cfc6ae, #e9e2cf 30%, #d9d1bb);
-  border: 1px solid rgba(0, 0, 0, 0.18);
-}
-.stack::before {
-  transform: translate(5px, -5px);
-  z-index: 1;
-}
-.stack::after {
-  transform: translate(10px, -10px);
-  opacity: 0.7;
-  z-index: 0;
-}
-.stack-count {
-  position: absolute;
-  z-index: 6;
-  bottom: 6px;
-  inset-inline-end: 6px;
-  padding: 2px 7px;
-  border-radius: 3px;
-  background: rgba(20, 18, 14, 0.84);
-  color: #f3ecdc;
-  font-size: 0.7rem;
-  font-weight: 600;
-}
-
-.folders {
-  margin-top: 16px;
-  border-top: 1px solid var(--line-strong);
-  border-bottom: 1px solid var(--line-strong);
-}
-.folder {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 52px;
-  padding: 8px 2px;
-  border-bottom: 1px solid var(--line);
-  text-align: start;
-  min-width: 0;
-}
-.folder:last-child {
-  border-bottom: 0;
-}
-.folder svg {
-  color: var(--ink-3);
-  flex: none;
-}
-.folder .name {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.folder .count {
-  font-size: 0.86rem;
-  color: var(--ink-3);
-  flex: none;
-}
-
-.search-entry {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 46px;
-  padding: 0 12px;
-  border-radius: var(--r-md);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  color: var(--ink-3);
-  text-align: start;
-  margin-bottom: 6px;
-}
-
-/* ---------- Home: the book you are reading, on the leather of the desk ---------- */
-
-.desk {
-  position: relative;
-  margin: calc(-1 * (var(--safe-top) + 14px)) calc(-1 * (var(--gutter) + var(--safe-right))) 0 calc(-1 * (var(--gutter) + var(--safe-left)));
-  padding: calc(var(--safe-top) + 14px) calc(var(--gutter) + var(--safe-right)) 26px calc(var(--gutter) + var(--safe-left));
-  color: var(--on-leather);
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='3' seed='11'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .2 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
-    radial-gradient(130% 80% at 18% 0%, rgba(255, 255, 255, 0.1), transparent 60%),
-    linear-gradient(170deg, var(--leather-hi), var(--leather) 50%, var(--leather-lo));
-}
-/* A tooled fillet along the bottom edge, where the leather meets the paper. */
-.desk::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 7px;
-  border-top: 1px solid var(--foil-line);
-  border-bottom: 2px solid var(--foil-line);
-  opacity: 0.85;
-}
-.desk-head {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-.desk-head h1,
-.desk-head .ar {
-  background: var(--foil);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.desk-head h1 {
-  font-family: var(--font-read);
-  font-weight: 600;
-  font-size: 1.75rem;
-  line-height: 1.25;
-  letter-spacing: -0.012em;
-}
-.desk-head .ar {
-  flex: 1;
-  font-family: var(--font-arabic);
-  font-weight: 700;
-  font-size: 2rem;
-  line-height: 1.25;
-  direction: rtl;
-  text-align: start;
-}
-.desk-head .icon-btn {
-  align-self: center;
-  color: var(--on-leather-2);
-  margin: -6px -10px -6px 0;
-}
-.desk-head .icon-btn:active {
-  background: rgba(0, 0, 0, 0.25);
-}
-.desk-book {
-  display: grid;
-  grid-template-columns: 112px 1fr;
-  gap: 20px;
-  align-items: end;
-  width: 100%;
-  margin-top: 24px;
-  text-align: start;
-  color: inherit;
-}
-.desk-book .cover {
-  box-shadow:
-    0 2px 2px rgba(0, 0, 0, 0.4),
-    0 14px 22px -6px rgba(0, 0, 0, 0.6),
-    2px 0 0 -0.5px #e9e2cf,
-    3.5px 1px 0 -0.5px #cfc6ae,
-    0 2.5px 0 -0.5px #d9d1bb;
-}
-.desk-book .cover[data-rtl='true'] {
-  box-shadow:
-    0 2px 2px rgba(0, 0, 0, 0.4),
-    0 14px 22px -6px rgba(0, 0, 0, 0.6),
-    -2px 0 0 -0.5px #e9e2cf,
-    -3.5px 1px 0 -0.5px #cfc6ae,
-    0 2.5px 0 -0.5px #d9d1bb;
-}
-.desk-book .label {
-  display: block;
-  font-size: 0.86rem;
-  color: var(--on-leather-2);
-}
-.desk-book h2 {
-  font-family: var(--font-read);
-  font-size: 1.3rem;
-  font-weight: 600;
-  line-height: 1.28;
-  margin: 4px 0 4px;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-.desk-book h2[lang='ar'], .desk-book h2[lang='fa'] {
-  font-family: var(--font-arabic);
-  font-weight: 700;
-  font-size: 1.6rem;
-  line-height: 1.5;
-}
-.desk-book h2[lang='ur'] {
-  font-family: var(--font-urdu);
-  font-size: 1.15rem;
-  line-height: 2.1;
-  font-weight: 400;
-}
-.desk-book .where {
-  font-family: var(--font-read);
-  font-style: italic;
-  font-size: 0.92rem;
-  color: var(--on-leather-2);
-  overflow: hidden;
-  display: -webkit-box;
   -webkit-line-clamp: 1;
   line-clamp: 1;
-  -webkit-box-orient: vertical;
 }
-.desk-book .where[lang='ar'], .desk-book .where[lang='fa'], .desk-book .where[lang='ur'] {
+.cover-face .a span[lang='ar'],
+.cover-face .a span[lang='fa'],
+.cover-face .a span[lang='ur'] {
   font-family: var(--font-arabic);
-  font-style: normal;
-  font-size: 1.05rem;
-}
-.desk-progress {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-  font-size: 0.8rem;
-  color: var(--on-leather-2);
-  font-variant-numeric: tabular-nums;
-}
-.desk-progress .meter {
-  flex: 1;
-  height: 2px;
-  background: rgba(244, 234, 213, 0.25);
-}
-.desk-progress .meter > i {
-  background: var(--foil-line);
-}
-.desk-epigraph {
-  margin-top: 26px;
-}
-.desk-epigraph .line {
-  display: block;
-  font-family: var(--font-arabic);
-  font-weight: 700;
-  font-size: clamp(1.9rem, 9.2vw, 2.9rem);
+  font-size: 7.5cqw;
+  letter-spacing: 0;
   line-height: 1.5;
-  direction: rtl;
-  text-align: right;
-  background: var(--foil);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.desk-epigraph .gloss {
-  display: block;
-  margin-top: 8px;
-  font-family: var(--font-read);
-  font-style: italic;
-  font-size: 1.02rem;
-  color: var(--on-leather);
-}
-.desk-epigraph .by {
-  display: block;
-  margin-top: 2px;
-  font-size: 0.86rem;
-  color: var(--on-leather-2);
 }
 
-.after-desk > .section-title:first-child {
-  border-top: 0;
-  margin-top: 12px;
+/* Leather grain, so the binding reads as material rather than a flat colour. */
+.cover {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.3' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .2 0'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(120% 90% at 30% 10%, rgba(255, 255, 255, 0.13), transparent 60%),
+    radial-gradient(90% 70% at 80% 100%, rgba(0, 0, 0, 0.28), transparent 65%),
+    linear-gradient(160deg, var(--leather-hi), var(--leather) 45%, var(--leather-lo));
 }
 
-.shelf {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 104px;
-  gap: 18px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 calc(-1 * var(--gutter));
-  padding: 8px var(--gutter) 12px;
-  scroll-snap-type: x proximity;
-  scroll-padding-inline: var(--gutter);
+/* ---------- Continue reading: a gold fillet along the top, as on a fine binding ---------- */
+.continue {
+  position: relative;
+  overflow: hidden;
 }
-.shelf::-webkit-scrollbar {
-  display: none;
+.continue::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 22px;
+  right: 22px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold-soft) 20%, #e6cf8e 50%, var(--gold-soft) 80%, transparent);
+  opacity: 0.85;
 }
-.shelf > * {
-  scroll-snap-align: start;
+.continue h2,
+.continue .where {
+  text-align: start;
 }
-
-.update-notice {
-  position: fixed;
-  z-index: var(--z-toast);
-  top: calc(var(--safe-top) + 10px);
-  left: 12px;
-  right: 12px;
-  max-width: 520px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 10px 10px 14px;
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--ink);
-  border: 1px solid var(--ink);
-  box-shadow: var(--shadow);
-  font-size: 0.92rem;
-}
-.update-notice span {
-  flex: 1;
-}
-.update-notice .btn {
-  min-height: 38px;
-  padding: 0 16px;
-}
-
-.detail-head {
-  display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 18px;
-  align-items: center;
-}
-.detail-head h3 {
-  font-family: var(--font-read);
-  font-size: 1.15rem;
-  font-weight: 600;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.detail-head h3[lang='ar'], .detail-head h3[lang='fa'] {
+.continue .where[lang='ar'], .continue .where[lang='fa'] {
   font-family: var(--font-arabic);
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 1rem;
 }
-.detail-head h3[lang='ur'] {
+.continue .where[lang='ur'] {
   font-family: var(--font-urdu);
-  line-height: 2.1;
-  font-weight: 400;
+  font-size: 0.9rem;
+  line-height: 2;
 }
+
+/* ---------- Book details ---------- */
 .detail-head .by {
-  font-family: var(--font-read);
-  font-style: italic;
   color: var(--ink-2);
+  margin-top: 2px;
+}
+.detail-head .by[lang='ar'], .detail-head .by[lang='fa'], .detail-head .by[lang='ur'] {
+  font-family: var(--font-arabic);
+  font-size: 1.05rem;
 }
 .detail-facts {
   margin-top: 8px;
@@ -640,57 +734,9 @@
   color: var(--ink-3);
   line-height: 1.6;
 }
-.cover-choices {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.cover-choice {
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-  font-size: 0.84rem;
-  font-weight: 500;
-  color: var(--ink-3);
-  padding: 10px 6px 8px;
-  border-radius: var(--r-md);
-  border: 1px solid transparent;
-}
-.cover-choice[aria-pressed='true'] {
-  border-color: var(--ink);
-  color: var(--ink);
-  font-weight: 600;
-}
-.cover-choice .cover {
-  width: 72px;
-}
 
-.storage-bar {
-  display: flex;
-  height: 10px;
-  background: var(--line);
-}
-.storage-bar i {
-  display: block;
-  height: 100%;
-}
-.legend {
-  display: grid;
-  gap: 8px;
-}
-.legend div {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.92rem;
-}
-.legend i {
-  width: 10px;
-  height: 10px;
-  flex: none;
-}
-.legend span:last-child {
-  margin-inline-start: auto;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
+/* Author lines on tiles get their own script's typeface. */
+.tile-sub[lang='ar'], .tile-sub[lang='fa'], .tile-sub[lang='ur'] {
+  font-family: var(--font-arabic);
+  font-size: 0.86rem;
 }

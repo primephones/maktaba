@@ -43,6 +43,7 @@ export class ErrorBoundary extends Component<Props, { error: Error | null }> {
     return (
       <div className="screen screen--plain" role="alert">
         <div className="empty">
+          <div className="mark"><Icon name="warn" size={34} /></div>
           <h2>Something went wrong</h2>
           <p>Maktaba couldn’t show {this.props.what}. Your books and notes are safe.</p>
           <button className="btn btn--primary" onClick={() => this.setState({ error: null })}>Try again</button>

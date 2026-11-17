@@ -31,11 +31,11 @@ export function Reader({ bookId }: { bookId: string }) {
   if (book === null || book.import.state !== 'ready' || !book.sectionCount) {
     return (
       <div className="screen screen--plain">
-        <div className="screen-head">
+        <div className="screen-head screen-head--sub">
           <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>
           <h1>{book?.title ?? 'Book'}</h1>
         </div>
-        <EmptyState title={book ? 'This book isn’t ready yet' : 'This book is no longer here'} action={<button className="btn btn--primary" onClick={() => navigate('/library', { replace: true })}>Go to the Library</button>}>
+        <EmptyState icon="book" title={book ? 'This book isn’t ready yet' : 'This book is no longer here'} action={<button className="btn btn--primary" onClick={() => navigate('/library', { replace: true })}>Go to the Library</button>}>
           {book ? (book.import.state === 'failed' ? book.import.error ?? 'It could not be read.' : 'It is still being prepared. You can follow its progress in the Library.') : 'It may have been removed from this device.'}
         </EmptyState>
       </div>

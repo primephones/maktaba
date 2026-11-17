@@ -47,7 +47,7 @@ input, select, textarea {
 }
 
 a {
-  color: var(--slate);
+  color: var(--rubric);
 }
 
 img {
@@ -57,7 +57,7 @@ img {
 :focus-visible {
   outline: 2px solid var(--slate);
   outline-offset: 2px;
-  border-radius: 3px;
+  border-radius: 6px;
 }
 
 [lang='ar'], [lang='fa'] {
@@ -76,12 +76,11 @@ img {
   white-space: nowrap;
 }
 
-/* ---------- Screens: a leaf with margins ---------- */
+/* ---------- Screens ---------- */
 
 .screen {
-  --gutter: 20px;
   min-height: 100dvh;
-  padding: calc(var(--safe-top) + 14px) calc(var(--safe-right) + var(--gutter)) var(--bar-clear) calc(var(--safe-left) + var(--gutter));
+  padding: calc(var(--safe-top) + 12px) calc(var(--safe-right) + 18px) var(--bar-clear) calc(var(--safe-left) + 18px);
   max-width: 880px;
   margin: 0 auto;
 }
@@ -89,76 +88,48 @@ img {
   padding-bottom: calc(var(--safe-bottom) + 28px);
 }
 
-/* Facing titles: English and Arabic meet across the page, as text and translation do.
-   The rule beneath is a jadwal, the ruled frame of a manuscript: an ink line and a red one. */
-.facing {
-  position: relative;
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding-bottom: 10px;
-  margin-bottom: 18px;
-  border-bottom: 1.5px solid var(--ink);
-}
-.facing::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -5px;
-  height: 1px;
-  background: var(--rubric);
-}
-.facing h1 {
-  font-family: var(--font-read);
-  font-weight: 600;
-  font-size: 1.75rem;
-  line-height: 1.2;
-  letter-spacing: -0.012em;
-}
-.facing .ar {
-  flex: 1;
-  font-family: var(--font-arabic);
-  font-weight: 700;
-  font-size: 1.9rem;
-  line-height: 1.2;
-  direction: rtl;
-  text-align: start;
-}
-.facing .icon-btn {
-  align-self: center;
-  margin: -6px -10px -6px 0;
-}
-
 .screen-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 48px;
-  margin: 0 -10px 16px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--line-strong);
+  gap: 10px;
+  min-height: 52px;
+  margin-bottom: 8px;
 }
 .screen-head h1 {
   font-family: var(--font-read);
   font-weight: 600;
-  font-size: 1.3rem;
+  font-size: 1.6rem;
+  letter-spacing: -0.01em;
   flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
+}
+.screen-head h1 .ar {
+  font-family: var(--font-arabic);
+  font-weight: 400;
+  color: var(--rubric);
+  margin-inline-start: 8px;
+  font-size: 1.45rem;
+}
+.screen-head--sub h1 {
+  font-size: 1.25rem;
 }
 
 .section-title {
-  font-family: var(--font-read);
-  font-size: 1.0625rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  color: var(--ink);
-  margin: 30px 0 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line-strong);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 26px 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.section-title:first-child {
-  margin-top: 0;
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
 
 /* ---------- Controls ---------- */
@@ -168,7 +139,7 @@ img {
   height: 44px;
   display: inline-grid;
   place-items: center;
-  border-radius: var(--r-md);
+  border-radius: var(--r-pill);
   color: var(--ink-2);
   flex: none;
   transition: background 0.15s;
@@ -180,7 +151,6 @@ img {
   color: var(--rubric);
 }
 
-/* Buttons are ink on paper. Red is kept for rubrics and for removing things. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -188,79 +158,67 @@ img {
   gap: 8px;
   min-height: 46px;
   padding: 0 20px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-pill);
   font-weight: 600;
   font-size: 0.95rem;
-  background: transparent;
+  background: var(--surface-2);
   color: var(--ink);
-  border: 1px solid var(--ink);
+  border: 1px solid var(--line);
   transition: transform 0.12s var(--ease-out), background 0.15s;
 }
 .btn:active {
-  transform: scale(0.98);
-  background: var(--surface-2);
+  transform: scale(0.97);
 }
 .btn--primary {
-  background: var(--ink);
-  color: var(--bg);
-}
-.btn--primary:active {
-  background: var(--ink-2);
+  background: var(--rubric);
+  color: var(--on-rubric);
+  border-color: transparent;
 }
 .btn--quiet {
+  background: transparent;
   border-color: transparent;
   color: var(--slate);
-  padding: 0 10px;
 }
 .btn--danger {
   color: var(--rubric);
-  border-color: color-mix(in srgb, var(--rubric) 55%, transparent);
-}
-.btn--quiet.btn--danger {
-  border-color: transparent;
 }
 .btn--block {
   width: 100%;
 }
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
 }
 
-/* Filters are index tabs: words, with the chosen one underlined in red. */
-.chips {
-  display: flex;
-  gap: 22px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 calc(-1 * var(--gutter, 20px));
-  padding: 0 var(--gutter, 20px);
-}
-.chips::-webkit-scrollbar {
-  display: none;
-}
 .chip {
-  position: relative;
-  min-height: 40px;
-  padding: 0;
-  color: var(--ink-3);
-  font-size: 0.94rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  color: var(--ink-2);
+  font-size: 0.86rem;
   font-weight: 500;
   white-space: nowrap;
+  background: transparent;
 }
 .chip[aria-pressed='true'],
 .chip[aria-selected='true'] {
-  color: var(--ink);
-  font-weight: 600;
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
 }
-.chip[aria-pressed='true']::after,
-.chip[aria-selected='true']::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 5px;
-  height: 2px;
-  background: var(--rubric);
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -18px;
+  padding: 2px 18px;
+}
+.chips::-webkit-scrollbar {
+  display: none;
 }
 
 .field {
@@ -268,14 +226,14 @@ img {
   align-items: center;
   gap: 8px;
   min-height: 48px;
-  padding: 0 12px;
+  padding: 0 14px;
   background: var(--surface);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
 }
 .field:focus-within {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink);
+  border-color: var(--slate);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--slate) 18%, transparent);
 }
 .field input,
 .field textarea {
@@ -304,35 +262,36 @@ input[type='search']::-webkit-search-decoration {
 .field .icon-btn {
   width: 36px;
   height: 36px;
-  margin-inline-end: -6px;
+  margin-inline-end: -8px;
 }
 label.stack {
   display: grid;
   gap: 6px;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--ink-2);
 }
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
   padding: 16px;
 }
 
-/* Lists are ruled like a ledger, not boxed. */
 .list {
-  border-top: 1px solid var(--line-strong);
-  border-bottom: 1px solid var(--line-strong);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
 }
 .row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  min-height: 58px;
-  padding: 11px 2px;
+  min-height: 56px;
+  padding: 10px 16px;
   text-align: start;
   border-bottom: 1px solid var(--line);
 }
@@ -343,7 +302,7 @@ button.row:active {
   background: var(--surface-2);
 }
 .row > svg {
-  color: var(--ink-3);
+  color: var(--slate);
   flex: none;
 }
 .row .grow {
@@ -355,7 +314,7 @@ button.row:active {
   overflow-wrap: anywhere;
 }
 .row .sub {
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   color: var(--ink-3);
   overflow-wrap: anywhere;
 }
@@ -363,9 +322,6 @@ button.row:active {
   color: var(--ink-3);
   font-size: 0.9rem;
   flex: none;
-}
-.row.btn--danger {
-  border-color: var(--line);
 }
 
 .switch {
@@ -390,11 +346,10 @@ button.row:active {
   transition: transform 0.22s var(--ease-spring);
 }
 .switch[aria-checked='true'] {
-  background: var(--ink);
+  background: var(--rubric);
 }
 .switch[aria-checked='true']::after {
   transform: translateX(20px);
-  background: var(--bg);
 }
 [dir='rtl'] .switch[aria-checked='true']::after {
   transform: translateX(-20px);
@@ -404,29 +359,28 @@ button.row:active {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  border: 1px solid var(--ink);
+  background: var(--surface-2);
   border-radius: var(--r-md);
-  overflow: hidden;
+  padding: 3px;
+  gap: 2px;
 }
 .seg button {
-  min-height: 42px;
-  font-size: 0.9rem;
+  min-height: 40px;
+  border-radius: 11px;
+  font-size: 0.88rem;
   font-weight: 500;
   color: var(--ink-2);
   padding: 0 8px;
-  border-inline-start: 1px solid var(--ink);
-}
-.seg button:first-child {
-  border-inline-start: 0;
 }
 .seg button[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 
 input[type='range'] {
   width: 100%;
-  accent-color: var(--ink);
+  accent-color: var(--rubric);
   height: 32px;
 }
 
@@ -434,64 +388,43 @@ input[type='range'] {
   color: var(--ink-3);
 }
 .small {
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
-/* ---------- Empty states: a note on the page, with something to do ---------- */
+/* ---------- Empty state ---------- */
 
 .empty {
   display: grid;
+  justify-items: center;
+  text-align: center;
   gap: 10px;
-  padding: 26px 0 10px;
+  padding: 44px 18px;
   color: var(--ink-2);
-  justify-items: start;
+}
+.empty .mark {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--rubric);
+  margin-bottom: 6px;
 }
 .empty h2 {
   font-family: var(--font-read);
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  line-height: 1.25;
   color: var(--ink);
 }
 .empty p {
-  max-width: 38ch;
-  line-height: 1.55;
+  max-width: 34ch;
 }
 .empty .btn {
-  margin-top: 12px;
-}
-.epigraph {
-  width: 100%;
-  margin: 8px 0 22px;
-  padding: 0 0 20px;
-  border-bottom: 1px solid var(--line-strong);
-}
-.epigraph .line {
-  display: block;
-  font-family: var(--font-arabic);
-  font-weight: 700;
-  font-size: clamp(1.9rem, 9.2vw, 2.9rem);
-  line-height: 1.5;
-  direction: rtl;
-  text-align: right;
-  color: var(--ink);
-}
-.epigraph .gloss {
-  display: block;
-  margin-top: 8px;
-  font-family: var(--font-read);
-  font-style: italic;
-  font-size: 1.02rem;
-  color: var(--ink-2);
-}
-.epigraph .by {
-  display: block;
-  margin-top: 2px;
-  font-size: 0.86rem;
-  color: var(--ink-3);
+  margin-top: 10px;
 }
 
-/* ---------- Bottom bar: glass, with a ribbon marking the place ---------- */
+/* ---------- Bottom bar ---------- */
 
 .bar {
   position: fixed;
@@ -503,12 +436,12 @@ input[type='range'] {
   height: var(--bar-h);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 7px 0 4px;
-  border-radius: var(--r-bar);
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--r-pill);
   background: var(--glass);
-  -webkit-backdrop-filter: blur(22px) saturate(1.4);
-  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
   border: 1px solid var(--glass-line);
   box-shadow: var(--shadow);
   transition: transform 0.32s var(--ease-out), opacity 0.2s;
@@ -525,55 +458,45 @@ input[type='range'] {
   grid-template-columns: repeat(3, 1fr);
   height: 100%;
 }
-/* The ribbon hangs from the top edge over the open tab and slides between them. */
 .bar-ind {
   position: absolute;
-  top: -1px;
+  top: 0;
+  bottom: 0;
   left: 0;
   width: calc(100% / 3);
-  height: 9px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--rubric) 13%, transparent);
   transition: transform 0.38s var(--ease-spring);
   pointer-events: none;
-}
-.bar-ind::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 16px;
-  height: 9px;
-  margin-left: -8px;
-  background: var(--rubric);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 62%, 0 100%);
 }
 .bar-tab {
   position: relative;
   display: grid;
   justify-items: center;
   align-content: center;
-  gap: 3px;
-  padding-top: 5px;
-  font-size: 0.7rem;
-  font-weight: 500;
+  gap: 2px;
+  font-size: 0.68rem;
+  font-weight: 600;
   color: var(--ink-3);
+  border-radius: var(--r-pill);
   min-width: 0;
 }
 .bar-tab[aria-current='page'] {
-  color: var(--ink);
-  font-weight: 600;
+  color: var(--rubric);
 }
 .bar-sep {
   width: 1px;
-  height: 30px;
+  height: 28px;
   background: var(--glass-line);
+  margin: 0 2px;
 }
 .bar-act {
-  width: 48px;
-  height: 48px;
+  width: 50px;
+  height: 50px;
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 50%;
   color: var(--ink);
 }
 .bar-act:active {
@@ -582,6 +505,7 @@ input[type='range'] {
 .bar-act--add {
   background: var(--rubric);
   color: var(--on-rubric);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--rubric) 40%, transparent);
 }
 .bar-act--add:active {
   background: var(--rubric);
@@ -605,7 +529,6 @@ input[type='range'] {
   animation: fade-in 0.2s both;
 }
 .sheet {
-  --gutter: 20px;
   position: relative;
   width: min(100vw, 640px);
   max-height: calc(100dvh - var(--safe-top) - 28px);
@@ -613,9 +536,10 @@ input[type='range'] {
   flex-direction: column;
   background: var(--surface);
   color: var(--ink);
-  border-radius: 14px 14px 0 0;
-  border-top: 1.5px solid var(--ink);
-  box-shadow: 0 -14px 44px rgba(0, 0, 0, 0.28);
+  border-radius: 26px 26px 0 0;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.25);
   animation: sheet-up 0.42s var(--ease-spring) both;
 }
 .sheet-root[data-closing='true'] .sheet {
@@ -625,8 +549,8 @@ input[type='range'] {
   animation: fade-out 0.2s both;
 }
 .sheet-grab {
-  width: 36px;
-  height: 3px;
+  width: 40px;
+  height: 4px;
   border-radius: 2px;
   background: var(--line-strong);
   margin: 9px auto 0;
@@ -636,26 +560,28 @@ input[type='range'] {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px 6px 20px;
+  padding: 8px 10px 8px 20px;
   flex: none;
 }
 .sheet-head h2 {
   flex: 1;
   min-width: 0;
   font-family: var(--font-read);
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   font-weight: 600;
   color: var(--ink);
-  overflow-wrap: anywhere;
 }
 .sheet-body {
   overflow-y: auto;
   overscroll-behavior: contain;
   /* The sheet sits above the bar, so its last item only needs to clear the screen edge. */
-  padding: 6px 20px calc(var(--safe-bottom) + 28px);
+  padding: 4px 20px calc(var(--safe-bottom) + 28px);
   display: grid;
-  gap: 16px;
+  gap: 14px;
   align-content: start;
+}
+.sheet-body > .list {
+  background: var(--bg);
 }
 
 @keyframes sheet-up {
@@ -672,7 +598,7 @@ input[type='range'] {
   to { opacity: 0; }
 }
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
 }
 
 /* ---------- Toast ---------- */
@@ -689,25 +615,22 @@ input[type='range'] {
   pointer-events: none;
   padding: 0 16px;
 }
-.toasts[data-place='edge'] {
+.toasts[data-raised='false'] {
   bottom: calc(var(--safe-bottom) + 24px);
-}
-.toasts[data-place='reader'] {
-  bottom: calc(var(--safe-bottom) + 104px);
 }
 .toast {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   max-width: 100%;
-  padding: 12px 16px;
+  padding: 12px 18px;
   border-radius: var(--r-md);
   background: var(--ink);
   color: var(--bg);
   font-size: 0.92rem;
   box-shadow: var(--shadow);
-  animation: rise 0.26s var(--ease-out) both;
+  animation: rise 0.3s var(--ease-spring) both;
 }
 .toast button {
   color: inherit;
@@ -717,50 +640,43 @@ input[type='range'] {
   flex: none;
 }
 
-/* ---------- Notices & progress ---------- */
+/* ---------- Banners & progress ---------- */
 
 .banner {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px 12px 12px;
-  border-radius: var(--r-sm);
+  padding: 12px 14px;
+  border-radius: var(--r-md);
   background: var(--surface-2);
   color: var(--ink);
-  border-inline-start: 3px solid var(--slate);
+  border: 1px solid var(--line);
   font-size: 0.92rem;
-  line-height: 1.5;
-}
-.banner > svg {
-  color: var(--slate);
-  flex: none;
 }
 .banner .grow {
   flex: 1;
   min-width: 0;
 }
 .banner--error {
-  border-inline-start-color: var(--rubric);
-}
-.banner--error > svg {
-  color: var(--rubric);
-}
-.banner .btn {
-  min-height: 38px;
-  padding: 0 14px;
-  flex: none;
+  border-color: color-mix(in srgb, var(--rubric) 45%, var(--line));
 }
 
 .meter {
-  height: 3px;
-  background: var(--line-strong);
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
   overflow: hidden;
 }
 .meter > i {
   display: block;
   height: 100%;
-  background: var(--ink);
+  border-radius: 3px;
+  background: var(--rubric);
   transition: width 0.3s;
+}
+
+.fade-in {
+  animation: rise 0.34s var(--ease-out) both;
 }
 
 /* Reduced motion: the phone setting, or the in-app switch, turns movement off. */
@@ -780,8 +696,79 @@ input[type='range'] {
   scroll-behavior: auto !important;
 }
 
-/* A list straight under a screen title shares the title's rule instead of doubling it. */
-.screen-head + .list {
-  border-top: 0;
-  margin-top: -16px;
+/* ---------- Additions to the first design ---------- */
+
+/* Touch targets: every control is at least 40–44px tall. */
+.chip {
+  min-height: 40px;
+}
+.tile-more {
+  width: 40px !important;
+  height: 44px !important;
+  margin: -8px -12px 0 -4px !important;
+}
+.bar-tab {
+  font-size: 0.7rem;
+}
+
+/* One clear button in a search field: ours. The browser's own is hidden. */
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+/* Toasts keep clear of whatever sits at the bottom of the screen. */
+.toasts[data-place='edge'] {
+  bottom: calc(var(--safe-bottom) + 24px);
+}
+.toasts[data-place='reader'] {
+  bottom: calc(var(--safe-bottom) + 104px);
+}
+
+.banner > svg {
+  color: var(--slate);
+  flex: none;
+}
+.banner--error > svg {
+  color: var(--rubric);
+}
+
+/* The welcome line: al-Mutanabbī on books, set large in naskh. */
+.epigraph {
+  margin: 0 0 14px;
+  max-width: 100%;
+}
+.epigraph .line {
+  display: block;
+  font-family: var(--font-arabic);
+  font-weight: 700;
+  font-size: clamp(1.8rem, 8.6vw, 2.7rem);
+  line-height: 1.55;
+  direction: rtl;
+  color: var(--ink);
+}
+.epigraph .gloss {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-read);
+  font-style: italic;
+  font-size: 1.02rem;
+  color: var(--ink-2);
+}
+.epigraph .by {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.84rem;
+  color: var(--ink-3);
+}
+/* A gold rule under the line, the one ornament on the page. */
+.epigraph::after {
+  content: '';
+  display: block;
+  width: 64px;
+  height: 1px;
+  margin: 18px auto 0;
+  background: linear-gradient(90deg, transparent, var(--gold-soft), transparent);
 }

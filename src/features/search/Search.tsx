@@ -81,13 +81,13 @@ export function Search() {
 
   return (
     <div className="screen screen--plain">
-      <div className="screen-head">
+      <div className="screen-head screen-head--sub">
         <button className="icon-btn" onClick={() => goBack()} aria-label="Back"><Icon name="back" /></button>
         <h1>Search</h1>
       </div>
 
       {books !== undefined && books.length === 0 ? (
-        <EmptyState title="Add a book first" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
+        <EmptyState icon="search" title="Add a book first" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
           Search looks through the books in your library. Add one and it will be searchable here.
         </EmptyState>
       ) : (
@@ -187,7 +187,7 @@ export function Search() {
           })}
 
           {nothing && (
-            <EmptyState title="No matches">
+            <EmptyState icon="search" title="No matches">
               Nothing in your books matches “{q}”.{scans ? ` ${scans} scanned book${scans === 1 ? ' is' : 's are'} not searchable until text recognition is added.` : ''}
             </EmptyState>
           )}

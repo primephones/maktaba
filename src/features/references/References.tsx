@@ -38,13 +38,13 @@ export function References() {
 
   return (
     <div className="screen">
-      <header className="facing">
-        <h1>References</h1>
-        <span className="ar" lang="ar">المراجع</span>
-      </header>
+      <div className="screen-head">
+        <h1>References<span className="ar" lang="ar">مراجع</span></h1>
+      </div>
 
       {refs !== undefined && refs.length === 0 ? (
         <EmptyState
+          icon="references"
           title="No saved references yet"
           action={<button className="btn btn--primary" onClick={() => switchTab('library')}>{bookCount ? 'Open a book' : 'Go to the Library'}</button>}
         >
@@ -64,7 +64,7 @@ export function References() {
             {shown.map((r) => {
               const lang = detectLang(r.original);
               return (
-                <article className="ref" key={r.id}>
+                <article className="card ref" key={r.id}>
                   <button
                     className="ref-quote"
                     lang={lang === 'other' ? undefined : lang}

@@ -93,7 +93,7 @@
 
 .bk[data-t='quote'] {
   padding-inline-start: 1em;
-  border-inline-start: 2px solid var(--rubric);
+  border-inline-start: 3px solid var(--gold-soft);
   color: var(--ink-2);
 }
 .bk[data-t='li'] {
@@ -159,7 +159,7 @@
   text-align: center;
   color: var(--rubric);
   background: color-mix(in srgb, var(--rubric) 11%, transparent);
-  border-radius: 3px;
+  border-radius: var(--r-pill);
   -webkit-user-select: none;
   user-select: none;
   cursor: pointer;
@@ -222,15 +222,25 @@ mark.flash {
   font-variant-numeric: tabular-nums;
 }
 
-/* Between chapters: three red points, the scribe's divider. */
+/* Between chapters: a gold fleuron between two hairlines. */
 .rd-section-end {
-  height: 16px;
-  margin: 2.6em auto;
-  width: 30px;
-  background:
-    radial-gradient(circle 2.6px at 15px 3px, var(--rubric) 98%, transparent),
-    radial-gradient(circle 2.6px at 4px 13px, var(--rubric) 98%, transparent),
-    radial-gradient(circle 2.6px at 26px 13px, var(--rubric) 98%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 2.6em 18%;
+  color: var(--gold-soft);
+  font-size: 1rem;
+  line-height: 1;
+}
+.rd-section-end::before,
+.rd-section-end::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-soft));
+}
+.rd-section-end::after {
+  background: linear-gradient(90deg, var(--gold-soft), transparent);
 }
 
 /* Where the printed page turns: its number, set apart from the text and never copied. */
@@ -485,7 +495,7 @@ mark.flash {
   max-width: calc(100vw - 16px);
   border-radius: var(--r-lg);
   background: var(--surface);
-  border: 1px solid var(--ink);
+  border: 1px solid var(--line-strong);
   box-shadow: var(--shadow);
   animation: rise 0.22s var(--ease-out) both;
 }
@@ -524,8 +534,8 @@ mark.flash {
   min-width: 52px;
   min-height: 44px;
   padding: 3px 6px;
-  border-radius: 6px;
-  font-size: 0.66rem;
+  border-radius: 12px;
+  font-size: 0.68rem;
   font-weight: 600;
   color: var(--ink-2);
 }
@@ -564,13 +574,8 @@ mark.flash {
 .toc-row[data-level='3'] { padding-inline-start: 36px; font-size: 0.92rem; color: var(--ink-2); }
 .toc-row[data-level='4'] { padding-inline-start: 50px; font-size: 0.9rem; color: var(--ink-2); }
 .toc-row[aria-current='true'] {
-  color: var(--ink);
-  font-weight: 700;
-  box-shadow: inset 3px 0 0 var(--rubric);
-  padding-inline-start: 14px;
-}
-[dir='rtl'] .toc-row[aria-current='true'] {
-  box-shadow: inset -3px 0 0 var(--rubric);
+  color: var(--rubric);
+  font-weight: 600;
 }
 .toc-row .grow {
   flex: 1;
@@ -609,14 +614,13 @@ mark.flash {
   gap: 5px;
   padding: 10px 4px;
   border-radius: var(--r-md);
-  border: 1px solid var(--line-strong);
+  border: 1.5px solid var(--line);
   font-size: 0.8rem;
   font-weight: 500;
   color: var(--ink-2);
 }
 .theme-chip[aria-pressed='true'] {
-  border-color: var(--ink);
-  box-shadow: 0 0 0 1px var(--ink);
+  border-color: var(--rubric);
   color: var(--ink);
   font-weight: 600;
 }
@@ -647,13 +651,13 @@ mark.flash {
 
 /* Saved references: the passage, then its citation set like a footnote. */
 .refs {
-  margin-top: 6px;
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
 }
 .ref {
   display: grid;
-  gap: 8px;
-  padding: 20px 0 14px;
-  border-bottom: 1px solid var(--line-strong);
+  gap: 10px;
 }
 .ref-quote {
   font-family: var(--font-read);
@@ -661,7 +665,7 @@ mark.flash {
   line-height: 1.7;
   text-align: start;
   overflow-wrap: anywhere;
-  border-inline-start: 2px solid var(--rubric);
+  border-inline-start: 3px solid var(--rubric);
   padding-inline-start: 14px;
   display: -webkit-box;
   -webkit-line-clamp: 8;
@@ -706,10 +710,11 @@ mark.flash {
 }
 .ref-actions {
   display: flex;
-  gap: 6px;
-  margin-inline-start: -10px;
+  gap: 4px;
+  margin: 0 -12px -8px;
 }
 .ref-actions .btn {
-  min-height: 40px;
+  min-height: 44px;
+  padding: 0 12px;
   font-size: 0.88rem;
 }

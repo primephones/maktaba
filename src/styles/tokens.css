@@ -9,11 +9,9 @@
   --font-arabic-sans: 'IBM Plex Sans Arabic', 'Amiri', sans-serif;
   --font-urdu: 'Noto Nastaliq Urdu', 'Amiri', serif;
 
-  /* Paper and leather have crisp corners: radii stay small. */
-  --r-sm: 3px;
-  --r-md: 6px;
-  --r-lg: 10px;
-  --r-bar: 18px;
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
   --r-pill: 999px;
 
   /* Gold leaf, for tooling on leather. */

@@ -7,7 +7,7 @@ import { percent } from '../../lib/util';
 import { goBack, navigate } from '../../app/router';
 import { useApp } from '../../app/AppContext';
 import { setSetting, useSetting, type Settings } from '../../app/settings';
-import { BEST_COMPANION, EmptyState } from '../../ui/EmptyState';
+import { EmptyState } from '../../ui/EmptyState';
 import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
@@ -151,11 +151,11 @@ export function Library({ folderId }: { folderId?: string }) {
   if (folderId && books && foldersLoaded && !folder) {
     return (
       <div className="screen">
-        <div className="screen-head">
+        <div className="screen-head screen-head--sub">
           <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>
           <h1>Folder</h1>
         </div>
-        <EmptyState title="This folder was removed">Its books are back in the Library.</EmptyState>
+        <EmptyState icon="folder" title="This folder was removed">Its books are back in the Library.</EmptyState>
       </div>
     );
   }
@@ -165,19 +165,11 @@ export function Library({ folderId }: { folderId?: string }) {
 
   return (
     <div className="screen">
-      {folderId ? (
-        <div className="screen-head">
-          <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>
-          <h1 dir="auto">{folder?.name ?? ''}</h1>
-          <button className="icon-btn" onClick={() => setMenu('menu')} aria-label="Library options"><Icon name="more" /></button>
-        </div>
-      ) : (
-        <header className="facing">
-          <h1>Library</h1>
-          <span className="ar" lang="ar">المكتبة</span>
-          <button className="icon-btn" onClick={() => setMenu('menu')} aria-label="Library options"><Icon name="more" /></button>
-        </header>
-      )}
+      <div className={`screen-head${folderId ? ' screen-head--sub' : ''}`}>
+        {folderId && <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>}
+        <h1 dir={folderId ? 'auto' : undefined}>{folderId ? folder?.name ?? '' : <>Library<span className="ar" lang="ar">مكتبة</span></>}</h1>
+        <button className="icon-btn" onClick={() => setMenu('menu')} aria-label="Library options"><Icon name="more" /></button>
+      </div>
 
       {!folderId && !nothingAtAll && (
         <button className="search-entry" onClick={() => navigate('/search')}>
@@ -187,7 +179,7 @@ export function Library({ folderId }: { folderId?: string }) {
       )}
 
       {nothingAtAll ? (
-        <EmptyState epigraph={BEST_COMPANION} title="Your library is empty" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
+        <EmptyState icon="library" title="Your library is empty" action={<button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add a book</button>}>
           Add a PDF, EPUB, Word or text file from your phone. Maktaba prepares it and keeps it for offline reading.
         </EmptyState>
       ) : (
@@ -208,9 +200,10 @@ export function Library({ folderId }: { folderId?: string }) {
               {subfolders.map((f) => (
                 <button key={f.id} className="folder" onClick={() => navigate(`/library/folder/${f.id}`)}>
                   <Icon name="folder" />
-                  <span className="name" dir="auto">{f.name}</span>
-                  <span className="count">{countIn(f)} book{countIn(f) === 1 ? '' : 's'}</span>
-                  <Icon name="forward" size={18} />
+                  <span style={{ minWidth: 0 }}>
+                    <span className="name" style={{ display: 'block' }} dir="auto">{f.name}</span>
+                    <span className="count">{countIn(f)} book{countIn(f) === 1 ? '' : 's'}</span>
+                  </span>
                 </button>
               ))}
             </div>
@@ -223,11 +216,11 @@ export function Library({ folderId }: { folderId?: string }) {
               ))}
             </div>
           ) : !loading && here.length === 0 ? (
-            <EmptyState title={folderId ? 'No books in this folder' : 'No books here yet'} action={<button className="btn btn--primary" onClick={() => addBooks(folderId)}><Icon name="plus" size={20} />Add a book{folderId ? ' here' : ''}</button>}>
+            <EmptyState icon="book" title={folderId ? 'No books in this folder' : 'No books here yet'} action={<button className="btn btn--primary" onClick={() => addBooks(folderId)}><Icon name="plus" size={20} />Add a book{folderId ? ' here' : ''}</button>}>
               {folderId ? 'Add a book straight into this folder, or move one here from its details.' : 'Your books are inside the folders above.'}
             </EmptyState>
           ) : !loading ? (
-            <EmptyState title="Nothing matches" action={<button className="btn" onClick={() => setFilter('all')}>Show all books</button>}>
+            <EmptyState icon="search" title="Nothing matches" action={<button className="btn" onClick={() => setFilter('all')}>Show all books</button>}>
               No books here fit that filter.
             </EmptyState>
           ) : null}
