@@ -58,6 +58,16 @@ export async function addFiles(files: File[], opts: { allowDuplicates?: boolean;
     try {
       const format = await detectFormat(file);
       const hash = await sha256(file);
+      // A book synced from another phone, waiting for its file: this is it.
+      const waiting = await db.books.where('hash').equals(hash).filter((b) => b.import.state === 'missing').first();
+      if (waiting) {
+        await db.transaction('rw', db.books, db.files, async () => {
+          await db.files.put({ bookId: waiting.id, blob: file });
+          await db.books.update(waiting.id, { import: { state: 'queued', done: 0, total: 0 }, size: file.size, fileName: file.name, format });
+        });
+        results.push({ fileName: file.name, bookId: waiting.id });
+        continue;
+      }
       if (!opts.allowDuplicates) {
         const existing = await db.books.where('hash').equals(hash).first();
         if (existing) {

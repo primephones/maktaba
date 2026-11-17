@@ -91,6 +91,7 @@ export function BookCover({ book, style, showState = true }: Props) {
   const imp = book.import;
   const busy = showState && (imp.state === 'queued' || imp.state === 'processing');
   const failed = showState && imp.state === 'failed';
+  const missing = showState && imp.state === 'missing';
   const inProgress = showState && book.status === 'reading' && !busy && !failed;
 
   return (
@@ -113,6 +114,11 @@ export function BookCover({ book, style, showState = true }: Props) {
       {failed && (
         <span className="cover-veil" data-failed="true">
           <span>Couldn’t be read. Tap for details.</span>
+        </span>
+      )}
+      {missing && (
+        <span className="cover-veil">
+          <span>On your other phone. Add its file here to read.</span>
         </span>
       )}
     </span>

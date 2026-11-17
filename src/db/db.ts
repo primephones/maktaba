@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type {
-  AssetRecord, Book, CoverRecord, FileRecord, Folder, Mark, OcrPage, Reference, Section, SettingRecord, Translation,
+  AssetRecord, Book, CoverRecord, FileRecord, Folder, Mark, OcrPage, OutboxEntry, Reference, Section, SettingRecord, Translation,
 } from './types';
 
 /**
@@ -19,6 +19,7 @@ export class MaktabaDB extends Dexie {
   settings!: Table<SettingRecord, string>;
   ocrPages!: Table<OcrPage, string>;
   translations!: Table<Translation, string>;
+  outbox!: Table<OutboxEntry, string>;
 
   constructor() {
     super('maktaba');
@@ -40,6 +41,10 @@ export class MaktabaDB extends Dexie {
     // Version 3: English translations, paragraph by paragraph.
     this.version(3).stores({
       translations: 'id, bookId, [bookId+section]',
+    });
+    // Version 4: changes waiting to sync to the user's other phones.
+    this.version(4).stores({
+      outbox: 'k, at',
     });
   }
 }

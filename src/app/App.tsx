@@ -27,6 +27,25 @@ export function App() {
     void resumeImports();
   }, []);
 
+  // Sync with the reader's other phones, once the server is set up.
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let alive = true;
+    const begin = async () => {
+      const { getServer } = await import('../ai/client');
+      if (!alive || stop || !(await getServer())) return;
+      const { startAutoSync } = await import('../sync/sync');
+      if (alive && !stop) stop = startAutoSync();
+    };
+    void begin();
+    window.addEventListener('maktaba:connected', begin);
+    return () => {
+      alive = false;
+      stop?.();
+      window.removeEventListener('maktaba:connected', begin);
+    };
+  }, []);
+
   // Finished translations are collected from the server every minute and a half while the
   // app is open, and whenever it comes back to the front.
   useEffect(() => {

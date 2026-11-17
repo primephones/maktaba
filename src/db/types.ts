@@ -9,7 +9,8 @@ export type CoverStyle = 'bound' | 'raw' | 'designed';
 export type BookKind = 'text' | 'scan';
 
 export interface ImportState {
-  state: 'queued' | 'processing' | 'ready' | 'failed';
+  /** 'missing': known from another phone through sync, but its file is not on this one. */
+  state: 'queued' | 'processing' | 'ready' | 'failed' | 'missing';
   /** Human label of the current stage, e.g. "Reading pages". */
   stage?: string;
   done: number;
@@ -257,6 +258,15 @@ export interface AssetRecord {
   id: string;
   bookId: string;
   blob: Blob;
+}
+
+/** A change waiting to be sent to the user's other phones. */
+export interface OutboxEntry {
+  /** `${tbl}\u0000${key}`: one entry per item, however often it changes. */
+  k: string;
+  tbl: string;
+  key: string;
+  at: number;
 }
 
 export interface SettingRecord {

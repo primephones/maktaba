@@ -4,6 +4,7 @@ import { setSetting, useSetting } from '../../app/settings';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
 import { AiAllowance, timeUntil } from './AiAllowance';
+import type { SyncState } from '../../sync/sync';
 
 const TRAINS: Record<string, string> = {
   true: 'May use what it is sent to improve its models: never gets private books.',
@@ -60,6 +61,8 @@ export function AiSettings() {
         </>
       )}
 
+      <SyncStatus />
+
       <div className="section-title">This phone</div>
       <div className="card" style={{ display: 'grid', gap: 10 }}>
         <div className="small muted">Server</div>
@@ -72,6 +75,32 @@ export function AiSettings() {
           <button className="btn btn--quiet btn--danger" onClick={async () => { await setServer(null); setCfg(null); }}>Disconnect</button>
         </div>
       </div>
+    </>
+  );
+}
+
+function SyncStatus() {
+  const [s, setS] = useState<SyncState | null>(null);
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    void import('../../sync/sync').then((m) => {
+      off = m.onSyncState(setS);
+    });
+    return () => off?.();
+  }, []);
+  if (!s) return null;
+  return (
+    <>
+      <div className="section-title">Sync</div>
+      <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <Icon name={s.error ? 'warn' : s.pending ? 'retry' : 'check'} />
+        <span className="grow" style={{ flex: 1 }}>
+          {s.syncing ? 'Syncing…' : s.error ? `Not synced: ${s.error}` : s.pending ? `${s.pending} change${s.pending === 1 ? '' : 's'} waiting to sync` : 'Up to date with your other phones.'}
+          {s.lastSyncAt && <div className="muted small">Last synced {new Date(s.lastSyncAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</div>}
+        </span>
+        <button className="btn" disabled={s.syncing} onClick={() => void import('../../sync/sync').then((m) => m.syncNow())}>Sync now</button>
+      </div>
+      <p className="muted small">Reading places, highlights, notes, bookmarks, references, folders, translations and settings sync. Book files do not: add the same file on each phone and its notes appear with it.</p>
     </>
   );
 }
@@ -156,6 +185,7 @@ function Connect({ onDone }: { onDone: (c: ServerConfig) => void }) {
       }
       await setServer(cfg);
       toast('Connected.');
+      window.dispatchEvent(new Event('maktaba:connected'));
       onDone(cfg);
     } catch (e) {
       setError((e as Error).message);

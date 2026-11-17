@@ -234,7 +234,7 @@ function AboutPage() {
       <div className="section-title">In this version</div>
       <div className="card small" style={{ display: 'grid', gap: 8 }}>
         <p><b>Working now:</b> adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; offline text recognition for scans; English translation through your own server; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books; saved references and copy with citation.</p>
-        <p><b>Not built yet:</b> AI questions, the dictionary, read-aloud and sync. They are left out rather than shown half-finished.</p>
+        <p><b>Not built yet:</b> AI questions, the dictionary and read-aloud. They are left out rather than shown half-finished.</p>
       </div>
 
       <div className="section-title">Sources</div>

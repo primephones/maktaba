@@ -6,6 +6,7 @@ import { cancelImport, retryImport } from '../../import';
 import { langAttr, langName, parseVolume } from '../../lib/arabic';
 import { formatBytes, percent } from '../../lib/util';
 import { navigate } from '../../app/router';
+import { useApp } from '../../app/AppContext';
 import { Sheet } from '../../ui/Sheet';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
@@ -157,6 +158,7 @@ function TranslationCard({ book }: { book: Book }) {
 }
 
 export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () => void }) {
+  const { addBooks } = useApp();
   const book = useLiveQuery(() => db.books.get(bookId), [bookId]);
   const folders = useLiveQuery(() => db.folders.toArray(), []) ?? [];
   const [view, setView] = useState<'main' | 'edit' | 'move' | 'delete'>('main');
@@ -227,6 +229,13 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
         </div>
       </div>
 
+      {imp.state === 'missing' && (
+        <div className="banner" role="status">
+          <Icon name="book" />
+          <span className="grow">This book is in your library on another phone. Add the same file here to read it; your notes, highlights and place come with it.</span>
+          <button className="btn" onClick={() => addBooks()}>Add the file</button>
+        </div>
+      )}
       {imp.state === 'failed' && (
         <div className="banner banner--error" role="alert">
           <Icon name="warn" />

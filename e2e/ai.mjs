@@ -46,6 +46,7 @@ const go = async (h) => {
   await page.evaluate((x) => { location.hash = x; }, h);
   await wait(700);
 };
+let key = '';
 try {
   await page.goto(app.url);
   await page.setInputFiles('[data-testid=add-input]', [fx('usul.epub')]);
@@ -57,7 +58,7 @@ try {
   await page.getByLabel(/Setup code/).fill('test-setup');
   await page.getByRole('button', { name: 'Connect' }).click();
   await page.getByText('requests left today').waitFor({ timeout: 15000 });
-  const key = await page.locator('.sync-key').first().textContent();
+  key = await page.locator('.sync-key').first().textContent();
   check(/^HSY(-[A-Z2-9]{4}){5}$/.test(key ?? ''), `the phone makes a private sync key (${key})`);
   check(await page.getByText('Groq', { exact: true }).first().isVisible(), 'the AI services are listed with their privacy notes');
   await shot('20-ai-settings');
@@ -119,6 +120,117 @@ try {
   await wait(500);
   check((await page.locator('.bk-pair').count()) > 5, '“Both” shows the English under the original');
   await shot('24-reader-both');
+
+  console.log('Sync between two phones');
+  // Phone A highlights a passage and makes a folder, through the app.
+  await go('#/library');
+  const bookId = await page.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const books = await new Promise((r) => (dbh.transaction('books').objectStore('books').getAll().onsuccess = (e) => r(e.target.result)));
+    dbh.close();
+    return books[0].id;
+  });
+  await page.getByRole('button', { name: 'Library options' }).click();
+  await page.getByRole('button', { name: 'New folder', exact: true }).click();
+  await page.getByPlaceholder('e.g. Uṣūl al-fiqh').fill('أصول');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await wait(500);
+  await page.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
+  await page.waitForSelector('.bk');
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.mouse.click(200, 40);
+  await page.getByRole('button', { name: 'Text and theme' }).click();
+  await page.getByRole('button', { name: 'Original', exact: true }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(500);
+  await page.evaluate(() => {
+    const p = document.querySelectorAll('.bk[data-t="p"]')[0];
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await wait(400);
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
+  await page.getByPlaceholder('Write a note about this passage').fill('Written on phone A');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await wait(600);
+  await wait(1000);
+  await go('#/settings/ai');
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await page.getByText('Up to date with your other phones.').waitFor({ timeout: 20000 });
+  check(true, 'phone A syncs its library');
+
+  const ctxB = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  const phoneB = await ctxB.newPage();
+  phoneB.on('pageerror', (e) => errors.push('B: ' + e.message));
+  await phoneB.goto(app.url + '#/settings/ai');
+  await phoneB.getByRole('button', { name: 'My other phone' }).click();
+  await phoneB.getByLabel('Server address').fill('http://127.0.0.1:8788');
+  await phoneB.getByLabel(/Your sync key/).fill(key.toLowerCase().replace(/-/g, ' '));
+  await phoneB.getByRole('button', { name: 'Connect' }).click();
+  await phoneB.getByText('requests left today').waitFor({ timeout: 15000 });
+  check(true, 'phone B joins with the key typed in any style');
+  await phoneB.getByRole('button', { name: 'Sync now' }).click();
+  await phoneB.getByText('Up to date with your other phones.').waitFor({ timeout: 20000 });
+  const seen = await phoneB.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const get = (t) => new Promise((r) => (dbh.transaction(t).objectStore(t).getAll().onsuccess = (e) => r(e.target.result)));
+    const out = { books: await get('books'), marks: await get('marks'), folders: await get('folders'), translations: (await get('translations')).length };
+    dbh.close();
+    return out;
+  });
+  check(seen.books.length === 1 && seen.books[0].import.state === 'missing', 'phone B shows the book, waiting for its file');
+  check(seen.marks.some((m) => m.note === 'Written on phone A') && seen.folders.some((f) => f.name === 'أصول'), 'the note and the folder arrive on phone B');
+  check(seen.translations > 0, `the translation arrives on phone B (${seen.translations} paragraphs)`);
+  await phoneB.evaluate(() => { location.hash = '#/library'; });
+  await wait(700);
+  await phoneB.screenshot({ path: `${shots}25-phone-b-waiting.png` });
+  await phoneB.setInputFiles('[data-testid=add-input]', [fx('usul.epub')]);
+  for (let i = 0; i < 20; i++) {
+    const st = await phoneB.evaluate(async () => {
+      const req = indexedDB.open('maktaba');
+      const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+      const books = await new Promise((r) => (dbh.transaction('books').objectStore('books').getAll().onsuccess = (e) => r(e.target.result)));
+      dbh.close();
+      return books.map((x) => [x.id, x.import.state]);
+    });
+    if (st.length === 1 && st[0][1] === 'ready') {
+      check(st[0][0] === bookId, 'adding the same file on phone B attaches it to the synced book');
+      break;
+    }
+    await wait(500);
+  }
+  await phoneB.evaluate(() => { location.hash = '#/library'; });
+  await phoneB.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
+  await phoneB.waitForSelector('.bk');
+  await wait(600);
+  check((await phoneB.locator('.hl[data-note]').count()) > 0, 'phone B opens the book with phone A’s note on the passage');
+  check((await phoneB.locator('.bk--en').count()) === 0, 'and in Original, as phone A last chose');
+  // A folder made on B reaches A.
+  await phoneB.evaluate(() => { location.hash = '#/library'; });
+  await wait(500);
+  await phoneB.getByRole('button', { name: 'Library options' }).click();
+  await phoneB.getByRole('button', { name: 'New folder', exact: true }).click();
+  await phoneB.getByPlaceholder('e.g. Uṣūl al-fiqh').fill('Written on phone B');
+  await phoneB.getByRole('button', { name: 'Save' }).click();
+  await wait(600);
+  await phoneB.evaluate(() => { location.hash = '#/settings/ai'; });
+  await wait(600);
+  await phoneB.getByRole('button', { name: 'Sync now' }).click();
+  await phoneB.getByText('Up to date with your other phones.').waitFor({ timeout: 20000 });
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await wait(2500);
+  const onA = await page.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const folders = await new Promise((r) => (dbh.transaction('folders').objectStore('folders').getAll().onsuccess = (e) => r(e.target.result)));
+    dbh.close();
+    return folders.map((f) => f.name);
+  });
+  check(onA.includes('Written on phone B'), 'a folder made on phone B reaches phone A');
+  await ctxB.close();
 } catch (e) {
   console.log('TEST ERROR', e.message);
   failures.push(e.message);

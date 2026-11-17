@@ -44,7 +44,7 @@ export function Home() {
       current: cur,
       upNext: [...opened.slice(1), ...ready.filter((b) => !b.openedAt && b.status === 'want').sort((a, b) => a.addedAt - b.addedAt)].slice(0, 12),
       recent: [...all].sort((a, b) => b.addedAt - a.addedAt).filter((b) => b.id !== cur?.id).slice(0, 12),
-      working: all.filter((b) => b.import.state !== 'ready'),
+      working: all.filter((b) => b.import.state !== 'ready' && b.import.state !== 'missing'),
     };
   }, [books]);
 

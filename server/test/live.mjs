@@ -89,6 +89,18 @@ try {
   const res = (await call(`/v1/jobs/${job.data.id}/results?since=0`)).data;
   check(res.items.length === 60 && res.items.every((i) => /^English of paragraph/.test(i.en)), 'every paragraph comes back, matched to its id');
 
+  console.log('Sync between two phones');
+  const a = await call('/v1/sync', { method: 'POST', body: { device: 'phone-a', since: 0, changes: [{ tbl: 'marks', key: 'm1', data: { id: 'm1', note: 'first' } }, { tbl: 'folders', key: 'f1', data: { id: 'f1', name: 'Fiqh' } }] } });
+  check(a.status === 200 && a.data.changes.length === 0, 'phone A sends its changes');
+  const b = await call('/v1/sync', { method: 'POST', body: { device: 'phone-b', since: 0, changes: [] } });
+  check(b.data.changes.length === 2 && b.data.changes.some((c) => c.data?.note === 'first'), 'phone B receives them');
+  await call('/v1/sync', { method: 'POST', body: { device: 'phone-b', since: b.data.cursor, changes: [{ tbl: 'marks', key: 'm1', data: { id: 'm1', note: 'edited on B' } }, { tbl: 'folders', key: 'f1', data: null }] } });
+  const a2 = await call('/v1/sync', { method: 'POST', body: { device: 'phone-a', since: a.data.cursor, changes: [] } });
+  check(a2.data.changes.length === 2 && a2.data.changes.find((c) => c.key === 'm1')?.data.note === 'edited on B' && a2.data.changes.find((c) => c.key === 'f1')?.data === null, 'an edit and a deletion on B reach A');
+  const b2 = await call('/v1/sync', { method: 'POST', body: { device: 'phone-b', since: b.data.cursor + 2, changes: [] } });
+  check(b2.data.changes.length === 0, 'a phone is not sent its own changes back');
+  check((await call('/v1/sync', { method: 'POST', body: { device: 'x', since: 0, changes: [] }, as: other })).status === 401, 'nobody else can read the library');
+
   console.log('Sharing');
   const inv = await call('/v1/invites', { method: 'POST', body: { name: 'Brother', dailyShare: 50 } });
   check(/^INV-/.test(inv.data.code ?? ''), 'the owner makes an invitation');

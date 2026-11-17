@@ -45,6 +45,8 @@ async function sha256(text: string): Promise<string> {
 }
 
 const KEY_FORMAT = /^HSY(-[A-Z2-9]{4}){5}$/;
+/** What syncs between phones. Book files and their text do not: each phone has its own. */
+const SYNC_TABLES = new Set(['books', 'folders', 'marks', 'refs', 'settings', 'translations', 'ocrPages']);
 const day = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
 
 function providersFor(env: Env): Provider[] {
@@ -333,6 +335,37 @@ async function handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Re
       return json({ items: rows.results.map((r) => ({ ...r, uncertain: JSON.parse(r.uncertain || '[]') })), job });
     }
     return json({ job });
+  }
+
+  // Sync: each phone sends what changed on it, and asks for what changed elsewhere.
+  if (path === '/v1/sync' && req.method === 'POST') {
+    const device = String(body.device ?? '').slice(0, 64);
+    const changes = (body.changes as Array<{ tbl: string; key: string; data: unknown }>) ?? [];
+    if (!device) return fail(400, 'Missing device.');
+    if (changes.length > 500) return fail(413, 'Send fewer changes at once.');
+    const now = Date.now();
+    for (let i = 0; i < changes.length; i += 45) {
+      const stmts: D1PreparedStatement[] = [];
+      for (const c of changes.slice(i, i + 45)) {
+        if (!SYNC_TABLES.has(c.tbl) || !c.key) continue;
+        const data = c.data === null || c.data === undefined ? null : JSON.stringify(c.data);
+        if (data && data.length > 200_000) continue;
+        // Replace the item's row so it gets a new sequence number.
+        stmts.push(env.DB.prepare('DELETE FROM sync_log WHERE owner = ? AND tbl = ? AND key = ?').bind(member.key_hash, c.tbl, String(c.key)));
+        stmts.push(env.DB.prepare('INSERT INTO sync_log (owner, tbl, key, data, device, at) VALUES (?, ?, ?, ?, ?, ?)').bind(member.key_hash, c.tbl, String(c.key), data, device, now));
+      }
+      if (stmts.length) await env.DB.batch(stmts);
+    }
+    const since = Number(body.since ?? 0);
+    const rows = await env.DB.prepare('SELECT seq, tbl, key, data FROM sync_log WHERE owner = ? AND seq > ? AND device != ? ORDER BY seq LIMIT 1000')
+      .bind(member.key_hash, since, device).all<{ seq: number; tbl: string; key: string; data: string | null }>();
+    const top = await env.DB.prepare('SELECT MAX(seq) AS s FROM sync_log WHERE owner = ?').bind(member.key_hash).first<{ s: number | null }>();
+    const last = rows.results.length ? rows.results[rows.results.length - 1].seq : Math.max(since, top?.s ?? 0);
+    return json({
+      changes: rows.results.map((r) => ({ tbl: r.tbl, key: r.key, data: r.data === null ? null : JSON.parse(r.data) })),
+      cursor: rows.results.length === 1000 ? last : Math.max(last, top?.s ?? 0),
+      more: rows.results.length === 1000,
+    });
   }
 
   if (path === '/v1/invites' && req.method === 'POST') {
