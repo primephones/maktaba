@@ -46,13 +46,14 @@ export function App() {
     };
   }, []);
 
-  // Sync with the reader's other phones, once the server is set up.
+  // Sync with the reader's other phones, once their cloud (or a server) is connected.
   useEffect(() => {
     let stop: (() => void) | undefined;
     let alive = true;
     const begin = async () => {
       const { getServer } = await import('../ai/client');
-      if (!alive || stop || !(await getServer())) return;
+      const { getCloud } = await import('../cloud/drive');
+      if (!alive || stop || !((await getCloud()) || (await getServer()))) return;
       const { startAutoSync } = await import('../sync/sync');
       if (alive && !stop) stop = startAutoSync();
     };

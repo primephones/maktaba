@@ -9,15 +9,21 @@ half-working.
 
 ## Getting the app
 
-- **Android (Samsung and others):** open the repository's
-  [Releases](../../releases) page, take the newest `build-N`, download the `.apk` and open
-  it on the phone (allow "Install unknown apps" for your browser or Files app when asked).
-  Each release says whether it passed the test on an Android phone.
-- **iPhone or any browser:** the same app runs as a web page and can be put on the home
-  screen (Share › Add to Home Screen). It works offline once opened.
-- **AI and sync** need your own small free server: see [`server/README.md`](server/README.md)
-  (about 15 minutes, free Cloudflare account and free AI keys). Everything else works
-  without it.
+- **The link to share:** <https://primephones.github.io/maktaba/>. Whoever opens it gets
+  their own empty library, and signs in with **their own cloud** (Google Drive) and **their
+  own AI** (OpenRouter sign-in, or a free Gemini or Groq key). Nothing of anyone else's is
+  shared or used. On an iPhone, put it on the home screen (Share › Add to Home Screen).
+- **Android (Samsung and others):** the repository's [Releases](../../releases) page; take
+  the newest `build-N`, download the `.apk` and open it on the phone.
+- Settings › **Share Maktaba** sends the link from inside the app.
+
+## Each person's own logins
+
+| | What it is | Where it lives |
+|---|---|---|
+| **Your cloud** | Google Drive. Maktaba asks only for the files it makes, in a folder called Maktaba: the original books (Maktaba/Books) and notes, places, highlights and translations (Maktaba/Sync). A new phone gets the whole library from there. | The reader's own Drive. |
+| **Your AI** | Sign in with OpenRouter, or a free Google Gemini or Groq key, or any OpenAI-compatible service. The phone talks to it directly. Whole books are translated on the phone, paced to the free allowance. | The key stays on the phone: never synced, never in a backup. |
+| Advanced: own server | The optional private Maktaba server (`server/`), for someone who wants books translated while the phone is off. | A free Cloudflare account. |
 
 ## What works today
 
@@ -43,9 +49,12 @@ half-working.
   saved references with citations.
 - **Listening:** read aloud in English, the original, or both, with the phone's voices;
   Arabic terms in English said by an Arabic voice; speed and sleep timer.
-- **Two phones:** reading places, highlights, notes, references, translations and
-  settings sync through your server, with an HSY sync key (no Google or email sign-in).
+- **Your phones in step:** reading places, highlights, notes, references, translations,
+  settings and the books themselves, through your own Google Drive (the later change wins).
 - **Backup:** one file holds the whole library; restore it on any phone.
+- **The original:** every book's file is kept exactly as added. In the reader, Original
+  shows the printed PDF page being read (or opens any other file in its own app); in Book
+  details, Open or Save a copy.
 - **Offline:** everything except AI features works with no internet.
 
 ## Not built yet

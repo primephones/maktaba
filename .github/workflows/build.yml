@@ -26,6 +26,10 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        env:
+          # The app's Google sign-in ID for the web (a repository variable, not a secret:
+          # it is public by design). Without it the web app offers no Google Drive sign-in.
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
       - name: Install the test browser
         run: |
           npm install --no-save playwright
@@ -47,6 +51,8 @@ jobs:
           WRANGLER_SEND_METRICS=false node test/live.mjs
       - name: Use the reader's own AI, with no server
         run: node e2e/myai.mjs
+      - name: Two phones in step through the reader's own Drive
+        run: node e2e/cloud.mjs
       - name: Translate a whole book through the server, in the app
         run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4
@@ -66,6 +72,34 @@ jobs:
         with:
           name: test-books
           path: e2e/out/fixtures
+
+  pages:
+    name: Publish the web app (the link to share)
+    needs: web
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # Until GitHub Pages is switched on for the repository this step cannot publish; that
+    # must not mark the whole build as failed.
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deploy
+        uses: actions/deploy-pages@v4
 
   apk:
     name: Android APK

@@ -124,6 +124,8 @@ export interface Book {
   /** Characters per section, for whole-book progress. */
   sectionChars: number[];
   pageCount?: number;
+  /** The original file in the reader's own Google Drive, once it is uploaded there. */
+  cloudFileId?: string;
   /** Pages of a PDF kept as images because they have no usable text layer. */
   imagePages?: number;
   toc: TocEntry[];

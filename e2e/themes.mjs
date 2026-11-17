@@ -216,7 +216,7 @@ for (const theme of THEMES) {
   await page.waitForTimeout(1200);
   await look('scan-review-page');
 
-  for (const p of ['', '/ai', '/backup', '/voice', '/theme', '/reading', '/covers', '/switches', '/storage', '/about']) {
+  for (const p of ['', '/ai', '/cloud', '/share', '/backup', '/voice', '/theme', '/reading', '/covers', '/switches', '/storage', '/about']) {
     await go(`#/settings${p}`);
     await page.waitForTimeout(400);
     await look(`settings${p.replace('/', '-') || ''}`);

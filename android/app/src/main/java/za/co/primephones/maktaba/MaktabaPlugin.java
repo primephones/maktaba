@@ -9,6 +9,14 @@ import android.content.pm.ActivityInfo;
 import android.database.Cursor;
 import android.net.Uri;
 import androidx.core.content.FileProvider;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.IntentSenderRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
+import com.google.android.gms.auth.api.identity.AuthorizationRequest;
+import com.google.android.gms.auth.api.identity.AuthorizationResult;
+import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.Scope;
 import android.os.Build;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
@@ -66,6 +74,70 @@ public class MaktabaPlugin extends Plugin {
     public void load() {
         instance = this;
         Notifications.ensureChannels(getContext());
+        // Google's consent screen, shown when the reader first connects their Drive.
+        authLauncher = getActivity().registerForActivityResult(new ActivityResultContracts.StartIntentSenderForResult(), result -> {
+            PluginCall call = pendingAuth;
+            pendingAuth = null;
+            if (call == null) return;
+            if (result.getResultCode() != Activity.RESULT_OK) {
+                call.reject("CANCELLED");
+                return;
+            }
+            try {
+                AuthorizationResult r = Identity.getAuthorizationClient(getActivity()).getAuthorizationResultFromIntent(result.getData());
+                resolveAuth(call, r);
+            } catch (ApiException e) {
+                call.reject("Google sign-in failed: " + e.getMessage());
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------ the reader's own Google Drive
+
+    private ActivityResultLauncher<IntentSenderRequest> authLauncher;
+    private PluginCall pendingAuth;
+
+    /**
+     * An access token for the reader's own Google Drive, limited to the files Maktaba itself
+     * makes there. The first time, Google asks the reader to choose an account and agree;
+     * after that a fresh token comes back without asking (interactive: false never asks).
+     */
+    @PluginMethod
+    public void googleAuthorize(PluginCall call) {
+        boolean interactive = Boolean.TRUE.equals(call.getBoolean("interactive", true));
+        List<Scope> scopes = new ArrayList<>();
+        try {
+            JSArray list = call.getArray("scopes", new JSArray());
+            for (int i = 0; i < list.length(); i++) scopes.add(new Scope(list.getString(i)));
+        } catch (Exception e) {
+            call.reject("Bad scopes");
+            return;
+        }
+        AuthorizationRequest req = AuthorizationRequest.builder().setRequestedScopes(scopes).build();
+        Identity.getAuthorizationClient(getActivity()).authorize(req)
+            .addOnSuccessListener(r -> {
+                if (r.hasResolution()) {
+                    if (!interactive || r.getPendingIntent() == null) {
+                        call.reject("NEEDS_CONSENT");
+                        return;
+                    }
+                    pendingAuth = call;
+                    authLauncher.launch(new IntentSenderRequest.Builder(r.getPendingIntent().getIntentSender()).build());
+                } else {
+                    resolveAuth(call, r);
+                }
+            })
+            .addOnFailureListener(e -> call.reject("Google sign-in failed: " + e.getMessage()));
+    }
+
+    private void resolveAuth(PluginCall call, AuthorizationResult r) {
+        if (r.getAccessToken() == null) {
+            call.reject("Google gave no access");
+            return;
+        }
+        JSObject o = new JSObject();
+        o.put("accessToken", r.getAccessToken());
+        call.resolve(o);
     }
 
     @Override
@@ -406,6 +478,23 @@ public class MaktabaPlugin extends Plugin {
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("Finishing the file failed: " + e.getMessage());
+        }
+    }
+
+    /** Shares a piece of text (the link to Maktaba) through WhatsApp, email, messages... */
+    @PluginMethod
+    public void shareText(PluginCall call) {
+        try {
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("text/plain");
+            send.putExtra(Intent.EXTRA_TEXT, call.getString("text", ""));
+            send.putExtra(Intent.EXTRA_SUBJECT, call.getString("title", "Maktaba"));
+            Intent chooser = Intent.createChooser(send, call.getString("title", "Share"));
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(chooser);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Sharing failed: " + e.getMessage());
         }
     }
 

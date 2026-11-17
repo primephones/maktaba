@@ -149,6 +149,7 @@ export function Home() {
         </>
       )}
 
+      <SetupCard />
       <BackupReminder hasBooks={books.length > 0} />
       <HomeAllowance />
       <InstallHint />
@@ -238,5 +239,59 @@ function InstallHint() {
       {prompt && <button className="btn btn--primary" onClick={() => { void prompt.prompt(); setPrompt(null); }}>Install</button>}
       <button className="icon-btn" onClick={dismiss} aria-label="Dismiss"><Icon name="close" size={20} /></button>
     </div>
+  );
+}
+
+/**
+ * For someone new (often someone who was sent the link): their own cloud and their own AI,
+ * each one tap away. Gone once both are connected, or when dismissed.
+ */
+function SetupCard() {
+  const [state, setState] = useState<{ cloud: boolean; ai: boolean } | null>(null);
+  const hidden = useLiveQuery(async () => (await db.settings.get('setupCardHidden'))?.value === true, []);
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      const [{ getCloud }, { getMyAi, hasMyAi }, { getServer }] = await Promise.all([import('../../cloud/drive'), import('../../ai/device'), import('../../ai/client')]);
+      const [cloud, ai, server] = await Promise.all([getCloud(), getMyAi(), getServer()]);
+      if (alive) setState({ cloud: !!cloud || !!server, ai: hasMyAi(ai) || !!server });
+    };
+    void check();
+    window.addEventListener('maktaba:connected', check);
+    return () => {
+      alive = false;
+      window.removeEventListener('maktaba:connected', check);
+    };
+  }, []);
+  if (!state || hidden || (state.cloud && state.ai)) return null;
+  return (
+    <>
+      <div className="section-title">Make Maktaba yours</div>
+      <div className="list setup-card">
+        {!state.cloud && (
+          <button className="row" onClick={() => navigate('/settings/cloud')}>
+            <Icon name="cloud" />
+            <span className="grow">
+              <span className="title">Connect your cloud</span>
+              <div className="sub">Keep your library in your own Google Drive, on all your phones.</div>
+            </span>
+            <Icon name="forward" size={18} />
+          </button>
+        )}
+        {!state.ai && (
+          <button className="row" onClick={() => navigate('/settings/ai')}>
+            <Icon name="sparkle" />
+            <span className="grow">
+              <span className="title">Connect your AI</span>
+              <div className="sub">Translation into English, Ask your books and Explain, with your own free AI account.</div>
+            </span>
+            <Icon name="forward" size={18} />
+          </button>
+        )}
+        <button className="row" onClick={() => void db.settings.put({ key: 'setupCardHidden', value: true })}>
+          <span className="grow sub">Not now</span>
+        </button>
+      </div>
+    </>
   );
 }

@@ -10,6 +10,8 @@ import { Icon, type IconName } from '../../ui/Icon';
 import { BookCover } from '../library/BookCover';
 import { ReadingControls } from '../reader/ReadingControls';
 import { AiSettings } from './MyAiSettings';
+import { SharePage } from './SharePage';
+import { CloudPage } from './CloudPage';
 import { BackupPage } from './BackupPage';
 import { VoicePage } from './VoicePage';
 
@@ -22,7 +24,9 @@ const THEMES: Array<[ThemeName, string, string]> = [
 ];
 
 const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string }> = [
+  { id: 'cloud', title: 'Your cloud', icon: 'cloud', sub: 'Your library in your own Google Drive, on all your phones' },
   { id: 'ai', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account; today’s allowance' },
+  { id: 'share', title: 'Share Maktaba', icon: 'share', sub: 'A link anyone can open, with their own login' },
   { id: 'voice', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
   { id: 'backup', title: 'Backup', icon: 'download', sub: 'One file with everything, and a reminder' },
   { id: 'theme', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },
@@ -56,7 +60,9 @@ export function Settings({ page }: { page?: string }) {
             ))}
           </div>
         )}
+        {page === 'cloud' && <CloudPage />}
         {page === 'ai' && <AiSettings />}
+        {page === 'share' && <SharePage />}
         {page === 'backup' && <BackupPage />}
         {page === 'voice' && <VoicePage />}
         {page === 'theme' && <ThemePage />}

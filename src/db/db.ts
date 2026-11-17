@@ -22,6 +22,7 @@ export class MaktabaDB extends Dexie {
   outbox!: Table<OutboxEntry, string>;
   aiJobs!: Table<AiJob, string>;
   aiJobItems!: Table<AiJobItem, [string, number]>;
+  syncStamps!: Table<{ k: string; at: number }, string>;
 
   constructor() {
     super('maktaba');
@@ -52,6 +53,10 @@ export class MaktabaDB extends Dexie {
     this.version(5).stores({
       aiJobs: 'id, state',
       aiJobItems: '[jobId+seq], jobId, [jobId+status], [jobId+doneAt]',
+    });
+    // Version 6: when each synced item last changed, so the newest change always wins.
+    this.version(6).stores({
+      syncStamps: 'k',
     });
   }
 }
