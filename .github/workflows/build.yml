@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   web:
@@ -155,3 +155,28 @@ jobs:
           name: phone-screenshots
           path: e2e/out/phone
           if-no-files-found: ignore
+
+  release:
+    name: Publish the APK
+    needs: [apk, phone]
+    if: always() && needs.apk.result == 'success' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: maktaba-apk
+          path: apk
+      - name: Publish as a test build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHONE: ${{ needs.phone.result }}
+        run: |
+          APK=$(ls apk/*.apk)
+          if [ "$PHONE" = "success" ]; then TESTED="Passed the automated test on an Android emulator."; else TESTED="Browser tests passed; the automated Android emulator test did not pass for this build ($PHONE)."; fi
+          printf '%s\n\n%s\n' "$TESTED" "Install: open this page on your phone, tap the .apk below, then Install. On a Samsung phone, first switch off Settings > Security and privacy > Auto Blocker; you can switch it back on afterwards." > notes.md
+          gh release create "build-${{ github.run_number }}" "$APK" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --prerelease \
+            --title "Maktaba test build ${{ github.run_number }}" \
+            --notes-file notes.md
