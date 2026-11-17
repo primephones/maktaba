@@ -590,10 +590,14 @@ await section('Works offline', async () => {
   check(true, 'with no internet, a book opens');
   await p.goto(server.url + '#/library');
   await p.getByRole('button', { name: 'Open makhtut-scan', exact: true }).click();
-  await p.waitForSelector('.pdfpage canvas', { timeout: 15000 });
+  // Its pages show as images until their text is recognised (which also works offline).
+  await p.waitForSelector('.pdfpage canvas, .bk[data-t="p"]', { timeout: 15000 });
   await p.waitForTimeout(2500);
-  const drawn = await p.evaluate(() => document.querySelector('.pdfpage canvas').width > 0);
-  check(drawn, 'with no internet, scanned PDF pages still draw');
+  const shown = await p.evaluate(() => {
+    const c = document.querySelector('.pdfpage canvas');
+    return { drawn: !!c && c.width > 0, text: document.querySelectorAll('.bk[data-t="p"]').length };
+  });
+  check(shown.drawn || shown.text > 0, `with no internet, a scanned book still opens (${JSON.stringify(shown)})`);
   await octx.close();
 });
 
