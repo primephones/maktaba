@@ -16,6 +16,8 @@ half-working.
 - **Android (Samsung and others):** the repository's [Releases](../../releases) page; take
   the newest `build-N`, download the `.apk` and open it on the phone.
 - Settings › **Share Maktaba** sends the link from inside the app.
+- One-time setup by the owner (the link, Google Drive sign-in, a signing key for updates):
+  [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Each person's own logins
 
