@@ -99,7 +99,7 @@ export function useSetting<K extends keyof Settings>(key: K): Settings[K] {
 }
 
 const THEME_COLOR: Record<Exclude<ThemeName, 'auto'>, string> = {
-  paper: '#f6f4ef', sepia: '#f1e7d0', lamp: '#14130f', black: '#000000',
+  paper: '#f6f4ef', sepia: '#f1e7d0', lamp: '#1d1914', black: '#000000',
 };
 
 export function resolveTheme(theme: ThemeName): Exclude<ThemeName, 'auto'> {

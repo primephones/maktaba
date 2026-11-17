@@ -610,9 +610,9 @@ mark.flash {
 }
 .swatch[data-swatch='paper'] { background: #f6f4ef; }
 .swatch[data-swatch='sepia'] { background: #f1e7d0; }
-.swatch[data-swatch='lamp'] { background: #14130f; }
+.swatch[data-swatch='lamp'] { background: #1d1914; }
 .swatch[data-swatch='black'] { background: #000; }
-.swatch[data-swatch='auto'] { background: linear-gradient(135deg, #f6f4ef 50%, #14130f 50%); }
+.swatch[data-swatch='auto'] { background: linear-gradient(135deg, #f6f4ef 50%, #1d1914 50%); }
 .theme-chips {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -640,7 +640,10 @@ mark.flash {
 }
 .ctl > .lbl {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 2px 12px;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--ink-2);

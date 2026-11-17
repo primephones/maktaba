@@ -105,33 +105,33 @@
 /* Lamp — reading by lamplight. Every text colour here is checked against the surfaces. */
 :root[data-theme='lamp'] {
   color-scheme: dark;
-  --bg: #14130f;
-  --surface: #1e1c17;
-  --surface-2: #29261f;
-  --ink: #e9e2d4;
-  --ink-2: #c9c1b0;
-  --ink-3: #a39b8a;
-  --line: #36322a;
-  --line-strong: #4c463a;
-  --rubric: #e0796d;
+  --bg: #1d1914;
+  --surface: #27221b;
+  --surface-2: #322b22;
+  --ink: #efe3cb;
+  --ink-2: #d4c5a8;
+  --ink-3: #ae9f83;
+  --line: #3c3428;
+  --line-strong: #56493a;
+  --rubric: #eb8a79;
   --on-rubric: #1d0f0c;
-  --slate: #9bb6c2;
-  --gold: #d0b06a;
-  --gold-soft: #a88e55;
-  --glass: rgba(34, 31, 25, 0.8);
-  --glass-line: rgba(233, 226, 212, 0.13);
-  --scrim: rgba(0, 0, 0, 0.6);
-  --shadow: 0 12px 34px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
-  --hl-gold: rgba(208, 176, 106, 0.34);
-  --hl-rubric: rgba(224, 121, 109, 0.32);
-  --hl-slate: rgba(120, 165, 190, 0.34);
-  --hl-rose: rgba(215, 140, 160, 0.32);
-  --hl-ink: rgba(233, 226, 212, 0.2);
-  --leather: #3a1411;
-  --leather-hi: #4f1c18;
-  --leather-lo: #230b09;
-  --on-leather: #efe3cb;
-  --on-leather-2: #c9b695;
+  --slate: #a6bfc8;
+  --gold: #dab874;
+  --gold-soft: #b0935a;
+  --glass: rgba(43, 37, 29, 0.82);
+  --glass-line: rgba(239, 227, 203, 0.13);
+  --scrim: rgba(10, 7, 4, 0.6);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35);
+  --hl-gold: rgba(218, 184, 116, 0.34);
+  --hl-rubric: rgba(235, 138, 121, 0.32);
+  --hl-slate: rgba(130, 170, 192, 0.34);
+  --hl-rose: rgba(220, 145, 165, 0.32);
+  --hl-ink: rgba(239, 227, 203, 0.2);
+  --leather: #4a1914;
+  --leather-hi: #63231c;
+  --leather-lo: #2c0d0a;
+  --on-leather: #f2e6cd;
+  --on-leather-2: #cfbb98;
 }
 
 :root[data-theme='black'] {

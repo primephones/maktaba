@@ -79,7 +79,7 @@ export function BookTile({ book, onDetails, volumes, onStack }: { book: Book; on
         aria-label={volumes ? `${title}, ${volumes.length} volumes` : `Open ${book.title}`}
       >
         {volumes ? (
-          <span className="stack">
+          <span className="vol-stack">
             <BookCover book={book} />
             <span className="stack-count">{volumes.length} vols</span>
           </span>

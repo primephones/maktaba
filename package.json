@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "node e2e/run.mjs",
+    "e2e:themes": "node e2e/themes.mjs",
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease",
     "prepare": "node scripts/copy-assets.mjs",

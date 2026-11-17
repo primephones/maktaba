@@ -162,7 +162,7 @@ await section('Adding books', async () => {
 
 await section('Library', async () => {
   await go('#/library');
-  check((await page.locator('.stack').count()) === 1, 'two volumes of one work are shelved as one stack');
+  check((await page.locator('.vol-stack').count()) === 1, 'two volumes of one work are shelved as one stack');
   await shot('03-library');
   await page.getByRole('button', { name: 'Introduction to Usul, 2 volumes' }).click();
   check(await page.getByText('Volume 2').isVisible(), 'the stack opens to show its volumes');

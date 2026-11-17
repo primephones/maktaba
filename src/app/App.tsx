@@ -139,7 +139,7 @@ export function App() {
     const resolved = resolveTheme(theme);
     const dark = resolved === 'lamp' || resolved === 'black';
     const onLeather = route.name === 'home';
-    const color = onLeather ? (dark ? '#4f1c18' : '#7c2822') : { paper: '#f6f4ef', sepia: '#f1e7d0', lamp: '#14130f', black: '#000000' }[resolved];
+    const color = onLeather ? (dark ? '#4f1c18' : '#7c2822') : { paper: '#f6f4ef', sepia: '#f1e7d0', lamp: '#1d1914', black: '#000000' }[resolved];
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
     void (async () => {
       const { Capacitor } = await import('@capacitor/core');
