@@ -1,0 +1,61 @@
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
+
+export interface SharedFile {
+  path: string;
+  name: string;
+  mime?: string;
+  size: number;
+}
+
+interface MaktabaNative {
+  startWork(o: { title: string; text: string; done: number; total: number }): Promise<{ started: boolean }>;
+  updateWork(o: { title: string; text: string; done: number; total: number }): Promise<void>;
+  stopWork(): Promise<void>;
+  setPendingWork(o: { text: string }): Promise<void>;
+  requestNotifications(): Promise<{ granted: boolean }>;
+  setVolumeKeys(o: { enabled: boolean }): Promise<void>;
+  keepScreenOn(o: { on: boolean }): Promise<void>;
+  setOrientation(o: { orientation: 'auto' | 'portrait' | 'landscape' }): Promise<void>;
+  releaseSharedFiles(o: { paths: string[] }): Promise<void>;
+  addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;
+}
+
+/** What each event from the Android side carries. */
+export interface NativeEvents {
+  volumeKey: { direction: 1 | -1 };
+  sharedFiles: { files: SharedFile[]; failed: string[] };
+  sharedText: { text: string };
+}
+
+/** True inside the installed Android app (not on the web or iPhone). */
+export const isAndroidApp = () => Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android';
+
+const plugin = registerPlugin<MaktabaNative>('Maktaba');
+
+/**
+ * Android-only abilities. Every call is safe to make anywhere: off Android it does nothing,
+ * and a failure on Android never breaks the page that asked.
+ */
+export const native = {
+  async call<K extends keyof Omit<MaktabaNative, 'addListener'>>(name: K, ...args: Parameters<MaktabaNative[K]>): Promise<Awaited<ReturnType<MaktabaNative[K]>> | undefined> {
+    if (!isAndroidApp()) return undefined;
+    try {
+      return (await (plugin[name] as (...a: unknown[]) => Promise<unknown>)(...args)) as Awaited<ReturnType<MaktabaNative[K]>>;
+    } catch (e) {
+      console.warn(`Maktaba native ${name} failed`, e);
+      return undefined;
+    }
+  },
+  async on<E extends keyof NativeEvents>(event: E, fn: (e: NativeEvents[E]) => void): Promise<() => void> {
+    if (!isAndroidApp()) return () => undefined;
+    const handle = await plugin.addListener(event, fn as (e: unknown) => void);
+    return () => void handle.remove();
+  },
+  /** Reads a file the Android side saved, as a File the importers can use. */
+  async readShared(f: SharedFile): Promise<File> {
+    const res = await fetch(Capacitor.convertFileSrc(f.path));
+    if (!res.ok) throw new Error(`Could not read ${f.name}`);
+    const blob = await res.blob();
+    return new File([blob], f.name, { type: f.mime || blob.type || '' });
+  },
+};

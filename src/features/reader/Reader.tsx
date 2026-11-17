@@ -6,6 +6,7 @@ import { detectLang, hasArabicScript, stripTashkilWithMap } from '../../lib/arab
 import { clamp, percent } from '../../lib/util';
 import { closePdf } from '../../lib/pdfjs';
 import { formatCitation } from '../../lib/citation';
+import { native } from '../../native/maktaba';
 import { goBack, navigate } from '../../app/router';
 import { useSetting } from '../../app/settings';
 import { EmptyState } from '../../ui/EmptyState';
@@ -161,6 +162,34 @@ function ReaderInner({ book }: { book: Book }) {
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(persist, 900);
   }, [persist]);
+
+  // ----- Android reading aids: volume keys, screen on, orientation -----
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let alive = true;
+    void native.call('setVolumeKeys', { enabled: prefs.volumeKeys });
+    if (prefs.volumeKeys) {
+      void native.on('volumeKey', (e) => {
+        window.dispatchEvent(new CustomEvent('maktaba:turn', { detail: e.direction }));
+      }).then((stop) => {
+        if (alive) off = stop;
+        else stop();
+      });
+    }
+    return () => {
+      alive = false;
+      off?.();
+      void native.call('setVolumeKeys', { enabled: false });
+    };
+  }, [prefs.volumeKeys]);
+  useEffect(() => {
+    void native.call('keepScreenOn', { on: prefs.keepAwake });
+    return () => void native.call('keepScreenOn', { on: false });
+  }, [prefs.keepAwake]);
+  useEffect(() => {
+    void native.call('setOrientation', { orientation: prefs.orientation });
+    return () => void native.call('setOrientation', { orientation: 'auto' });
+  }, [prefs.orientation]);
 
   // ----- Selection -----
   useEffect(() => {

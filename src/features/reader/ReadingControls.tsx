@@ -1,4 +1,5 @@
 import { setSetting, useSetting, type ReaderPrefs, type ThemeName } from '../../app/settings';
+import { isAndroidApp } from '../../native/maktaba';
 
 const THEMES: Array<[Exclude<ThemeName, 'auto'>, string]> = [['paper', 'Paper'], ['sepia', 'Sepia'], ['lamp', 'Lamp'], ['black', 'Black']];
 
@@ -76,6 +77,30 @@ export function ReadingControls({ showTheme, showScriptOptions, lang }: Props) {
           </span>
           <button className="switch" role="switch" aria-checked={prefs.tashkil} aria-labelledby="ctl-tashkil" onClick={() => set({ tashkil: !prefs.tashkil })} />
         </div>
+      )}
+
+      {isAndroidApp() && (
+        <>
+          <div className="ctl-row">
+            <span className="grow" id="ctl-vol">
+              Turn pages with the volume keys
+              <div className="muted small">Volume down goes forward, volume up goes back</div>
+            </span>
+            <button className="switch" role="switch" aria-checked={prefs.volumeKeys} aria-labelledby="ctl-vol" onClick={() => set({ volumeKeys: !prefs.volumeKeys })} />
+          </div>
+          <div className="ctl-row">
+            <span className="grow" id="ctl-awake">Keep the screen on while reading</span>
+            <button className="switch" role="switch" aria-checked={prefs.keepAwake} aria-labelledby="ctl-awake" onClick={() => set({ keepAwake: !prefs.keepAwake })} />
+          </div>
+          <div className="ctl">
+            <div className="lbl"><span>Screen orientation while reading</span></div>
+            <div className="seg" role="group" aria-label="Screen orientation while reading">
+              <button aria-pressed={prefs.orientation === 'auto'} onClick={() => set({ orientation: 'auto' })}>Turns freely</button>
+              <button aria-pressed={prefs.orientation === 'portrait'} onClick={() => set({ orientation: 'portrait' })}>Upright</button>
+              <button aria-pressed={prefs.orientation === 'landscape'} onClick={() => set({ orientation: 'landscape' })}>Sideways</button>
+            </div>
+          </div>
+        </>
       )}
 
       {latin && (

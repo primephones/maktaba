@@ -76,6 +76,11 @@ await page.setContent(pdfHtml(4, para));
 await page.evaluate(() => document.fonts.ready);
 writeFileSync(new URL('damaged-text-layer.pdf', out), await page.pdf({ preferCSSPageSize: true }));
 
+// ---------- A long text PDF, for background-work tests ----------
+await page.setContent(pdfHtml(220));
+await page.evaluate(() => document.fonts.ready);
+writeFileSync(new URL('long-book.pdf', out), await page.pdf({ preferCSSPageSize: true }));
+
 // ---------- English text PDF ----------
 await page.setContent(`<html><head><style>@page{size:A5;margin:18mm}body{font-family:Georgia,serif;font-size:12pt;line-height:1.6}h1{font-size:18pt}.pg{page-break-after:always}</style></head><body>
 ${Array.from({ length: 6 }, (_, p) => `<div class="pg"><h1>Chapter ${p + 1}</h1>${Array.from({ length: 5 }, (_, i) => `<p>Consensus (ijmāʿ) is the agreement of the qualified jurists of a generation on a legal ruling. Paragraph ${i + 1} of chapter ${p + 1} explains why the scholars treated it as a decisive proof, and how analogy follows it in rank.</p>`).join('')}</div>`).join('')}</body></html>`);

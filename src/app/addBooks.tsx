@@ -76,5 +76,6 @@ export function useAddBooks(): { pick: (folderId?: string) => void; addDropped: 
     </>
   );
 
-  return { pick, addDropped: (files) => void add(files), element };
+  const addDropped = useCallback((files: File[]) => void add(files), [add]);
+  return { pick, addDropped, element };
 }

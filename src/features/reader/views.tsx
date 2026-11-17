@@ -142,6 +142,19 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
   };
   useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
+  // Volume keys (and other page-turn requests) move by most of a screen.
+  useEffect(() => {
+    const onTurn = (e: Event) => {
+      const el = scroller.current;
+      if (!el) return;
+      const dir = (e as CustomEvent<number>).detail;
+      el.scrollBy({ top: dir * el.clientHeight * 0.86, behavior: 'smooth' });
+      onUserMove();
+    };
+    window.addEventListener('maktaba:turn', onTurn);
+    return () => window.removeEventListener('maktaba:turn', onTurn);
+  }, [onUserMove]);
+
   const sections: ReactNode[] = [];
   for (let i = range[0]; i <= range[1]; i++) {
     const sec = get(i);
@@ -293,8 +306,13 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
       else if (e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); turn(1); }
       else if (e.key === 'PageUp') { e.preventDefault(); turn(-1); }
     };
+    const onTurn = (e: Event) => turn((e as CustomEvent<number>).detail > 0 ? 1 : -1);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('maktaba:turn', onTurn);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('maktaba:turn', onTurn);
+    };
   }, [turn, rtl]);
 
   const drag = useRef<{ x: number; y: number; dx: number; active: boolean } | null>(null);

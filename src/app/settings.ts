@@ -18,6 +18,12 @@ export interface ReaderPrefs {
   urduFont: 'nastaliq' | 'amiri';
   /** Show vowel marks (tashkīl) in Arabic-script text. */
   tashkil: boolean;
+  /** Android: the volume keys turn pages while a book is open. */
+  volumeKeys: boolean;
+  /** Android: the screen stays on while a book is open. */
+  keepAwake: boolean;
+  /** Android: lock the screen's orientation while reading. */
+  orientation: 'auto' | 'portrait' | 'landscape';
 }
 
 /**
@@ -51,6 +57,9 @@ export const DEFAULTS: Settings = {
     arabicFont: 'amiri',
     urduFont: 'nastaliq',
     tashkil: true,
+    volumeKeys: false,
+    keepAwake: false,
+    orientation: 'auto',
   },
   coverStyle: 'bound',
   flags: { pageCurl: false, reduceMotion: false },

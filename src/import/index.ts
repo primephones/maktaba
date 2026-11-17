@@ -4,6 +4,7 @@ import { detectLang, parseVolume } from '../lib/arabic';
 import { sha256, titleFromFileName } from '../lib/util';
 import type { DraftSection, ImportContext, ParsedBook } from './types';
 import { sectionChars, splitLargeSections } from './sections';
+import { workBegan, workEnded, workProgress } from '../native/work';
 
 const EXT: Record<string, BookFormat> = {
   epub: 'epub', pdf: 'pdf', txt: 'txt', text: 'txt', md: 'md', markdown: 'md', mARkdown: 'md',
@@ -132,10 +133,12 @@ export async function runQueue(): Promise<void> {
     for (;;) {
       const next = (await db.books.orderBy('addedAt').filter((b) => b.import.state === 'queued').first()) ?? null;
       if (!next) break;
+      await workBegan(next.title);
       await processBook(next);
     }
   } finally {
     running = false;
+    await workEnded();
   }
 }
 
@@ -175,6 +178,8 @@ async function processBook(book: Book): Promise<void> {
       const imp = { ...book.import, state: 'processing' as const, stage, done, total };
       book.import = imp;
       await db.books.update(id, { import: imp });
+      const waiting = await db.books.filter((b) => b.import.state === 'queued').count();
+      workProgress(book.title, stage, done, total, waiting);
     },
     cancelled: isCancelled,
   };

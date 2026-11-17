@@ -216,12 +216,58 @@ await back();
 await wait(700);
 check((await page.locator('.sheet').count()) === 0 && (await page.evaluate(() => location.hash === '#/library')), 'back closes the sheet and stays on the library');
 
+console.log('Sharing a book to Maktaba, then leaving the app');
+const ownDir = `/sdcard/Android/data/${PKG}/files`;
+const fxPath = (n) => decodeURIComponent(new URL(`./out/fixtures/${n}`, import.meta.url).pathname);
+await device.shell(`mkdir -p ${ownDir}`);
+execFileSync('adb', ['push', fxPath('long-book.pdf'), `${ownDir}/long-book.pdf`]);
+await page.evaluate(() => { location.hash = '#/'; });
+await device.shell(`am start -a android.intent.action.SEND -t application/pdf --eu android.intent.extra.STREAM file://${ownDir}/long-book.pdf -n ${PKG}/.MainActivity`);
+let shared;
+for (let i = 0; i < 60; i++) {
+  shared = (await books(page)).find((b) => b.title === 'long-book');
+  if (shared && shared.state === 'processing') break;
+  await wait(500);
+}
+check(!!shared, `a book shared from another app is added (${JSON.stringify(shared)})`);
+const progressNow = () => page.evaluate(async () => {
+  const req = indexedDB.open('maktaba');
+  const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+  const all = await new Promise((r) => (dbh.transaction('books').objectStore('books').getAll().onsuccess = (e) => r(e.target.result)));
+  dbh.close();
+  const b = all.find((x) => x.title === 'long-book');
+  return b ? { state: b.import.state, done: b.import.done, total: b.import.total } : null;
+});
+await device.shell('input keyevent 3');
+await wait(1500);
+const atLeave = await progressNow();
+const notes = (await device.shell('dumpsys notification --noredact')).toString();
+const ours = notes.split('NotificationRecord').filter((r) => r.includes(PKG));
+check(ours.some((r) => /Preparing/.test(r)), 'while preparing a book, Maktaba shows a progress notification');
+await shot('08-notification-shade-home', true);
+await wait(15000);
+const later = await progressNow();
+console.log('   progress when leaving:', JSON.stringify(atLeave), '15 s later:', JSON.stringify(later));
+check(!!later && (later.state === 'ready' || later.done > (atLeave?.done ?? 0)), 'the import keeps going while Maktaba is in the background');
+for (let i = 0; i < 240; i++) {
+  const p = await progressNow();
+  if (p && (p.state === 'ready' || p.state === 'failed')) break;
+  await wait(1000);
+}
+const final = await progressNow();
+check(final?.state === 'ready', `the shared book finishes (${JSON.stringify(final)})`);
+await wait(2000);
+const notesAfter = (await device.shell('dumpsys notification --noredact')).toString();
+check(!notesAfter.split('NotificationRecord').some((r) => r.includes(PKG) && /Preparing/.test(r)), 'the progress notification goes away when the work is done');
+await device.shell(`am start -n ${PKG}/.MainActivity`);
+await wait(1500);
+
 console.log('Restarting the app');
 page = await launch();
 watch(page);
 await wait(1500);
 list = await books(page);
-check(list.length === 3, 'the library is still there after the app is closed and reopened');
+check(list.length === 4, `the library is still there after the app is closed and reopened (${list.length} books)`);
 check(await page.getByRole('button', { name: /^Continue reading/ }).isVisible().catch(() => false), 'Home offers to continue the book that was open');
 await shot('07-after-restart');
 

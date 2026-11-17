@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useMemo } from 'react';
-import { useRoute, goBack, canGoBack } from './router';
+import { useRoute, goBack, canGoBack, navigate } from './router';
 import { AppContext } from './AppContext';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useAddBooks } from './addBooks';
 import { UpdateNotice } from './UpdateNotice';
 import { resolveTheme, useSetting } from './settings';
 import { BottomBar } from '../ui/BottomBar';
-import { Toasts } from '../ui/toast';
+import { Toasts, toast } from '../ui/toast';
 import { EmptyState } from '../ui/EmptyState';
 import { resumeImports } from '../import';
 import { Home } from '../features/home/Home';
@@ -41,6 +41,43 @@ export function App() {
     })();
     return () => remove?.();
   }, []);
+
+  // Books shared to Maktaba, or opened with it, from another Android app.
+  useEffect(() => {
+    const stops: Array<() => void> = [];
+    let alive = true;
+    void (async () => {
+      const { native } = await import('../native/maktaba');
+      const offFiles = await native.on('sharedFiles', async (e) => {
+        const files: File[] = [];
+        for (const f of e.files) {
+          try {
+            files.push(await native.readShared(f));
+          } catch {
+            e.failed.push(f.name);
+          }
+        }
+        if (files.length) {
+          navigate('/library');
+          addDropped(files);
+        }
+        if (e.failed.length) toast(`Couldn’t receive ${e.failed.join(', ')}. Try sharing it again.`);
+        void native.call('releaseSharedFiles', { paths: e.files.map((f) => f.path) });
+      });
+      const offText = await native.on('sharedText', () => {
+        toast('Adding a book from a link isn’t in this version yet. Download the file, then share the file to Maktaba.');
+      });
+      if (alive) stops.push(offFiles, offText);
+      else {
+        offFiles();
+        offText();
+      }
+    })();
+    return () => {
+      alive = false;
+      stops.forEach((s) => s());
+    };
+  }, [addDropped]);
 
   // Files dropped onto the window (desktop web) are added like any other.
   useEffect(() => {
