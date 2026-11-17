@@ -76,6 +76,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+          cache: gradle
       - run: npm ci
       - uses: actions/download-artifact@v4
         with:
@@ -99,7 +100,13 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           cd android
-          ./gradlew assembleRelease --no-daemon -PbuildNumber=${{ github.run_number }} -PappVersion=$VERSION
+          # Downloads can be refused for a while when a package server is busy: try again.
+          for attempt in 1 2 3; do
+            ./gradlew assembleRelease --no-daemon -PbuildNumber=${{ github.run_number }} -PappVersion=$VERSION && break
+            [ $attempt = 3 ] && exit 1
+            echo "Build attempt $attempt failed; retrying in $((attempt * 60)) seconds"
+            sleep $((attempt * 60))
+          done
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/Maktaba-$VERSION-build${{ github.run_number }}.apk"
       - uses: actions/upload-artifact@v4
         with:
