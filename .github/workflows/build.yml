@@ -59,6 +59,8 @@ jobs:
         run: node e2e/look-urdu.mjs
       - name: New books into folders
         run: node e2e/shelving.mjs
+      - name: Scanned pages read by your own AI, and sign-in without the website
+        run: node e2e/scan-ai.mjs
       - name: Translate a whole book through the server, in the app
         run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4

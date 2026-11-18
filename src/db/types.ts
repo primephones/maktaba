@@ -1,6 +1,6 @@
 /** Core data model. Every imported format is normalised into Book → Section → Block. */
 
-export type Lang = 'ar' | 'ur' | 'fa' | 'en' | 'other';
+export type Lang = 'ar' | 'ur' | 'fa' | 'ps' | 'ms' | 'en' | 'other';
 export type BookFormat = 'epub' | 'pdf' | 'txt' | 'md' | 'docx' | 'fb2' | 'html' | 'image' | 'mobi';
 export type ReadStatus = 'want' | 'reading' | 'finished';
 export type CoverStyle = 'bound' | 'raw' | 'designed';
@@ -20,7 +20,7 @@ export interface ImportState {
   failedPages?: number[];
 }
 
-export type OcrLang = 'ara' | 'urd' | 'fas' | 'eng';
+export type OcrLang = 'ara' | 'urd' | 'fas' | 'pus' | 'msa' | 'eng';
 
 export interface OcrState {
   state: 'queued' | 'running' | 'done' | 'failed';
@@ -43,6 +43,8 @@ export interface OcrPage {
   /** Corrected by hand: never overwritten by a new recognition run. */
   edited?: boolean;
   lang: OcrLang;
+  /** Read by the reader's AI, or by the engine on the phone (which can be redone with AI). */
+  by?: 'ai' | 'phone';
   updatedAt: number;
 }
 
@@ -282,7 +284,7 @@ export interface SettingRecord {
 export interface AiJob {
   id: string;
   title: string;
-  lang: 'ar' | 'ur' | 'fa';
+  lang: 'ar' | 'ur' | 'fa' | 'ps' | 'ms';
   private: boolean;
   glossary: Array<{ ar: string; forms?: string[]; tr: string; en: string }>;
   prefer: string[];

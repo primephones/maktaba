@@ -1,6 +1,6 @@
 import { db, sectionId } from '../db/db';
 import type { Book, Translation } from '../db/types';
-import { hasArabicScript, isRtl } from '../lib/arabic';
+import { detectLang, hasArabicScript } from '../lib/arabic';
 import { getSetting } from '../app/settings';
 import { request, ServerError, type JobStatus } from './client';
 
@@ -20,11 +20,23 @@ export interface SourceParagraph {
   chapter?: string;
 }
 
-const lang = (b: Book) => (b.lang === 'ur' ? 'ur' : b.lang === 'fa' ? 'fa' : 'ar');
+type SrcLang = 'ar' | 'ur' | 'fa' | 'ps' | 'ms';
+const SRC = new Set<string>(['ar', 'ur', 'fa', 'ps', 'ms']);
+/** The language to translate from: the book's own, or (when unknown) read from the text. */
+const lang = (b: Book, sample?: string): SrcLang => {
+  if (SRC.has(b.lang)) return b.lang as SrcLang;
+  const seen = sample ? detectLang(sample) : 'ar';
+  return SRC.has(seen) ? (seen as SrcLang) : 'ar';
+};
 
-export const translatable = (b: Pick<Book, 'lang'>) => isRtl(b.lang);
+/** Every book not already in English can be translated (Malay in Latin letters included). */
+export const translatable = (b: Pick<Book, 'lang'>) => b.lang !== 'en';
 
-/** Every paragraph of the book that has Arabic-script text to translate. */
+/** Whether a paragraph has text worth sending, in the book's script. */
+const worthTranslating = (b: Pick<Book, 'lang'>, text: string) =>
+  b.lang === 'ms' || b.lang === 'other' ? hasArabicScript(text) || /\p{L}{3}/u.test(text) : hasArabicScript(text);
+
+/** Every paragraph of the book that has text to translate. */
 export async function sourceParagraphs(book: Book, from?: { section: number; block: number }): Promise<SourceParagraph[]> {
   const out: SourceParagraph[] = [];
   let chapter = '';
@@ -34,7 +46,7 @@ export async function sourceParagraphs(book: Book, from?: { section: number; blo
     sec.blocks.forEach((b, i) => {
       if (b.t === 'h') chapter = b.text;
       if (from && s === from.section && i < from.block) return;
-      if (b.t === 'img' || b.t === 'hr' || b.t === 'pre' || b.text.trim().length < 2 || !hasArabicScript(b.text)) return;
+      if (b.t === 'img' || b.t === 'hr' || b.t === 'pre' || b.text.trim().length < 2 || !worthTranslating(book, b.text)) return;
       out.push({ id: `${s}:${i}`, section: s, block: i, text: b.text, kind: b.t === 'h' ? 'h' : b.t === 'quote' ? 'quote' : 'p', chapter: chapter || sec.title });
     });
   }
@@ -51,7 +63,7 @@ async function preferredOrder(): Promise<string[]> {
 
 export async function startBookTranslation(book: Book): Promise<void> {
   const paragraphs = await sourceParagraphs(book);
-  if (!paragraphs.length) throw new Error('This book has no Arabic, Urdu or Persian text to translate yet.');
+  if (!paragraphs.length) throw new Error(book.ocr && book.ocr.state !== 'done' ? 'This book’s pages are still being read. Translation can start once some pages are done.' : 'This book has no text to translate yet.');
   // Paragraphs already translated (for instance by reading ahead) are not sent again.
   const have = new Set((await db.translations.where('bookId').equals(book.id).primaryKeys()).map((k) => k.split(':').slice(1).join(':')));
   const todo = paragraphs.filter((p) => !have.has(p.id));
@@ -63,7 +75,7 @@ export async function startBookTranslation(book: Book): Promise<void> {
     body: {
       bookKey: book.hash,
       title: book.title,
-      lang: lang(book),
+      lang: lang(book, todo.slice(0, 30).map((p) => p.text).join(' ')),
       private: !!book.private,
       prefer: await preferredOrder(),
       paragraphs: todo.map((p) => ({ id: p.id, text: p.text, kind: p.kind, chapter: p.chapter })),
@@ -150,7 +162,7 @@ export async function translateNow(book: Book, paras: SourceParagraph[], opts: {
     if (!batch.length) return;
     const prev = await db.translations.get(`${book.id}:${batch[0].section}:${batch[0].block - 1}`);
     const res = await request<{ results: Array<{ id: string; en: string; uncertain: Translation['uncertain']; provider: string; model: string }> }>('/v1/translate', {
-      body: { lang: lang(book), private: !!book.private, prefer, fresh: opts.fresh, bookTitle: book.title, chapter: batch[0].chapter, previous: prev?.en, paragraphs: batch.map((p) => ({ id: p.id, text: p.text, kind: p.kind })) },
+      body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, bookTitle: book.title, chapter: batch[0].chapter, previous: prev?.en, paragraphs: batch.map((p) => ({ id: p.id, text: p.text, kind: p.kind })) },
       timeoutMs: 120_000,
     });
     await db.translations.bulkPut(res.results.map((r) => {

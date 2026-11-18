@@ -11,7 +11,7 @@ import { db } from '../db/db';
 
 export interface Piece {
   text: string;
-  lang: 'en' | 'ar' | 'ur' | 'fa';
+  lang: 'en' | 'ar' | 'ur' | 'fa' | 'ps' | 'ms';
 }
 
 /** A pronunciation set by the reader with "Fix a word". */
@@ -79,7 +79,7 @@ export function onSpeech(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 
-const LOCALE: Record<Piece['lang'], string> = { en: 'en-GB', ar: 'ar-SA', ur: 'ur-PK', fa: 'fa-IR' };
+const LOCALE: Record<Piece['lang'], string> = { en: 'en-GB', ar: 'ar-SA', ur: 'ur-PK', fa: 'fa-IR', ps: 'ps-AF', ms: 'ms-MY' };
 
 /** Says one piece; the "done" event carries the id. */
 export async function speakPiece(p: Piece, id: string, rate: number, flush = false): Promise<void> {

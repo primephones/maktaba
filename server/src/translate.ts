@@ -6,7 +6,7 @@ import { termsIn, type Term } from './glossary';
  * was unsure of is marked with † and a reason, never smoothed over.
  */
 
-export type SourceLang = 'ar' | 'ur' | 'fa';
+export type SourceLang = 'ar' | 'ur' | 'fa' | 'ps' | 'ms';
 
 export interface Paragraph {
   id: string;
@@ -38,7 +38,7 @@ export interface TranslateRequest {
   previous?: string;
 }
 
-const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urdu', fa: 'Persian (Fārsī)' };
+const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urdu', fa: 'Persian (Fārsī)', ps: 'Pashto', ms: 'Malay (in Latin script or Jawi)' };
 
 export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | 'user'; content: string }> {
   const all = req.paragraphs.map((p) => p.text).join('\n');

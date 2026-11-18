@@ -30,3 +30,16 @@ describe('reading a pasted key', () => {
     expect(readKey(`Your key is ${groq}`).key).toBe(groq);
   });
 });
+
+describe('finishing a sign-in by hand', async () => {
+  const { codeFromPasted } = await import('./signin');
+  it('takes the code from the whole address the browser ended on', () => {
+    expect(codeFromPasted('https://primephones.github.io/maktaba/auth.html?app=1&code=abc123DEF456ghi789')).toBe('abc123DEF456ghi789');
+    expect(codeFromPasted('http://localhost:3000/?code=XYZ_987-654321abcdef')).toBe('XYZ_987-654321abcdef');
+  });
+  it('takes a bare code, but not a key or random words', () => {
+    expect(codeFromPasted('  abc123DEF456ghi789  ')).toBe('abc123DEF456ghi789');
+    expect(codeFromPasted('sk-or-v1-aaaaaaaaaaaaaaaaaaaaaaaa')).toBeNull();
+    expect(codeFromPasted('it did not work')).toBeNull();
+  });
+});

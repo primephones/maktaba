@@ -1,0 +1,151 @@
+// Scanned books read by the reader's own Gemini AI (a stand-in here), falling back to the
+// phone's engine when the day's allowance is used up; translation offered for scans and for
+// books whose language was not known; and finishing an OpenRouter sign-in by pasting the
+// address the browser ended on.
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { startServer } from './server.mjs';
+const { chromium } = createRequire(import.meta.url)('playwright');
+
+const fx = (n) => decodeURIComponent(new URL(`./out/fixtures/${n}`, import.meta.url).pathname);
+const failures = [];
+let passed = 0;
+const check = (ok, what) => {
+  console.log(ok ? '  ok ' : '  FAILED', what);
+  if (ok) passed++;
+  else failures.push(what);
+};
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const server = await startServer();
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+await ctx.addInitScript(() => {
+  globalThis.__maktabaAiSpacing = 30;
+});
+const page = await ctx.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(e.message));
+const cors = { 'access-control-allow-origin': '*', 'content-type': 'application/json' };
+
+// The stand-in Gemini: reads each page as Urdu paragraphs, or says the day's allowance is gone.
+let geminiCalls = 0;
+let allowanceGone = false;
+await ctx.route('https://generativelanguage.googleapis.com/**', async (route) => {
+  const req = route.request();
+  if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...cors, 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, GET' } });
+  if (!req.url().includes(':generateContent')) return route.fulfill({ status: 200, headers: cors, body: '{"models":[]}' });
+  geminiCalls++;
+  if (allowanceGone) return route.fulfill({ status: 429, headers: cors, body: JSON.stringify({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 250, GenerateRequestsPerDayPerProjectPerModel-FreeTier' } }) });
+  const body = JSON.parse(req.postData() ?? '{}');
+  const hasImage = !!body.contents?.[0]?.parts?.some((p) => p.inline_data?.data?.length > 1000);
+  const answer = {
+    printed: String(geminiCalls),
+    blocks: [
+      { t: 'h', text: 'باب اول', box: [60, 100, 110, 900] },
+      { t: 'p', text: `یہ صفحہ مصنوعی ذہانت نے پڑھا ہے ${hasImage ? 'تصویر سے' : 'بغیر تصویر'}۔ نماز دین کا ستون ہے۔`, box: [140, 80, 400, 920] },
+    ],
+  };
+  return route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] }, finishReason: 'STOP' }] }) });
+});
+
+const add = (names) => page.evaluate((list) => {
+  const dt = new DataTransfer();
+  for (const [name, b64] of list) dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], name));
+  const input = document.querySelector('[data-testid=add-input]');
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+}, names.map((n) => [n, readFileSync(fx(n)).toString('base64')]));
+const read = (store) => page.evaluate(async (s) => {
+  const req = indexedDB.open('maktaba');
+  const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+  const all = await new Promise((r) => (dbh.transaction(s).objectStore(s).getAll().onsuccess = (e) => r(e.target.result)));
+  dbh.close();
+  return all;
+}, store);
+const book = async (title) => (await read('books')).find((b) => b.title === title);
+const until = async (fn, ms = 60000) => {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (await fn()) return true;
+    await wait(500);
+  }
+  return false;
+};
+
+try {
+  await page.goto(server.url);
+  console.log('Connecting Gemini');
+  await page.evaluate(() => { location.hash = '#/settings/ai'; });
+  await page.getByLabel('Google Gemini key').fill('AIza' + 'x'.repeat(35));
+  await page.getByRole('button', { name: 'Add Google Gemini' }).click();
+  await page.getByText(/Key added/).first().waitFor({ timeout: 10000 });
+  check(true, 'a Gemini key is added');
+
+  console.log('A scanned book read by the AI');
+  await page.evaluate(() => { location.hash = '#/'; });
+  await add(['makhtut-scan.pdf']);
+  check(await until(async () => (await book('makhtut-scan'))?.ocr?.state === 'done'), 'the scanned pages are read');
+  const scanId = (await book('makhtut-scan')).id;
+  const pages = (await read('ocrPages')).filter((p) => p.bookId === scanId);
+  check(pages.length > 0 && pages.every((p) => p.by === 'ai'), `every page was read by the AI (${pages.map((p) => p.by).join(',')})`);
+  check(pages.every((p) => p.blocks.some((b) => b.text.includes('تصویر سے'))), 'the AI was sent the page image');
+  check(pages.every((p) => p.blocks.some((b) => b.box && b.box[1] > 0.1 && b.box[3] < 0.5)), 'each paragraph keeps its place on the page (for highlighting)');
+  check(pages.every((p) => p.blocks[0]?.t === 'h'), 'headings stay headings');
+  const scanned = await book('makhtut-scan');
+  check(scanned.lang === 'ur', `the book’s language is found from the page (${scanned.lang})`);
+
+  console.log('Its details');
+  await page.evaluate(() => { location.hash = '#/library'; });
+  await page.getByRole('button', { name: 'Details for makhtut-scan' }).click();
+  await page.getByText(/Your Gemini AI reads the pages/).waitFor({ timeout: 8000 });
+  check(true, 'the details say the AI reads the pages');
+  await page.getByRole('button', { name: /Translate the whole book/ }).waitFor({ timeout: 8000 });
+  check(true, 'and translation is offered for the scanned book');
+
+  console.log('When the day’s allowance is used up');
+  allowanceGone = true;
+  const before = geminiCalls;
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => { location.hash = '#/'; });
+  await add(['damaged-text-layer.pdf']);
+  check(await until(async () => ['done', 'failed'].includes((await book('damaged-text-layer'))?.ocr?.state ?? 'done') && !!(await book('damaged-text-layer'))?.ocr, 120000), 'pages still get read');
+  const dmg = await book('damaged-text-layer');
+  const dmgPages = (await read('ocrPages')).filter((p) => p.bookId === dmg?.id);
+  check(dmg?.ocr?.state === 'done' && dmgPages.length > 0 && dmgPages.every((p) => p.by === 'phone'), `by the phone instead (${dmg?.ocr?.state}, ${dmgPages.map((p) => p.by).join(',')})`);
+  check(geminiCalls - before <= 3, `and Gemini is not asked again and again (${geminiCalls - before} tries)`);
+  const paused = (await read('settings')).find((x) => x.key === 'aiOcrPausedUntil');
+  check(paused?.value > Date.now(), 'Gemini rests until its allowance renews');
+
+  console.log('Finishing a sign-in by hand');
+  await page.route('https://openrouter.ai/api/v1/auth/keys', (r) =>
+    r.fulfill({ status: 200, headers: cors, body: JSON.stringify({ key: 'sk-or-v1-' + 'a'.repeat(40) }) }),
+  );
+  await page.evaluate(() => {
+    localStorage.setItem('maktaba.openrouterVerifier', 'v'.repeat(43));
+    location.hash = '#/settings/ai';
+  });
+  await page.getByText('Didn’t come back to Maktaba?').click();
+  await page.getByLabel('The address the browser ended on').fill('https://primephones.github.io/maktaba/auth.html?app=1&code=c0de1234567890abcdef');
+  await page.getByRole('button', { name: 'Finish signing in' }).click();
+  await page.getByText('Signed in to OpenRouter. Your AI is ready.').waitFor({ timeout: 8000 });
+  check(true, 'pasting the address the browser ended on finishes the sign-in');
+  await page.getByRole('button', { name: 'Sign out of OpenRouter' }).waitFor({ timeout: 5000 });
+  check(true, 'and OpenRouter shows as signed in');
+
+  console.log('Sharing while the web version is not switched on');
+  await page.route('https://primephones.github.io/**', (r) => r.fulfill({ status: 404, body: 'There isn’t a GitHub Pages site here.' }));
+  await page.evaluate(() => { location.hash = '#/settings/share'; });
+  await page.getByText(/web version is not switched on yet/).waitFor({ timeout: 8000 });
+  check((await page.locator('.share-link').textContent())?.includes('/releases'), 'the Android download is shared instead of a link that does not work');
+  check(errors.length === 0, `no errors in the page ${JSON.stringify(errors.slice(0, 2))}`);
+} catch (e) {
+  check(false, `stopped: ${e.message.split('\n')[0]}`);
+  await page.screenshot({ path: decodeURIComponent(new URL('./out/shots/FAILED-scan-ai.png', import.meta.url).pathname) }).catch(() => undefined);
+} finally {
+  await browser.close();
+  server.stop();
+}
+console.log(`\n${passed} checks passed, ${failures.length} failed`);
+for (const f of failures) console.log(' - ' + f);
+process.exit(failures.length ? 1 : 0);

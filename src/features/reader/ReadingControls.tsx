@@ -17,7 +17,7 @@ export function ReadingControls({ showTheme, showScriptOptions, lang }: Props) {
   const prefs = useSetting('reader');
   const theme = useSetting('theme');
   const set = (patch: Partial<ReaderPrefs>) => void setSetting('reader', { ...prefs, ...patch });
-  const arabic = showScriptOptions || lang === 'ar' || lang === 'fa';
+  const arabic = showScriptOptions || lang === 'ar' || lang === 'fa' || lang === 'ps';
   const urdu = showScriptOptions || lang === 'ur';
   const latin = showScriptOptions || !(arabic || urdu) || lang === 'en';
 

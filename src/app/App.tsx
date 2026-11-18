@@ -37,7 +37,11 @@ export function App() {
         if (ok) window.dispatchEvent(new Event('maktaba:connected'));
       }),
     );
-    const resume = () => void import('../ai/device').then(async (d) => d.hasMyAi(await d.getMyAi()) && d.runJobs());
+    const resume = () => {
+      void import('../ai/device').then(async (d) => d.hasMyAi(await d.getMyAi()) && d.runJobs());
+      // Scanned pages waiting to be read start (or carry on) as soon as there is a way to read them.
+      void import('../ocr/queue').then((q) => q.runOcrQueue());
+    };
     resume();
     window.addEventListener('maktaba:connected', resume);
     document.addEventListener('visibilitychange', resume);

@@ -19,7 +19,7 @@ const SLEEP = [0, 15, 30, 60] as const;
 async function buildFrom(book: Book, section: number, block: number, source: Source, translations: Map<string, Translation>): Promise<Item[]> {
   const fixes = await getFixes();
   const items: Item[] = [];
-  const lang = (book.lang === 'ur' || book.lang === 'fa' || book.lang === 'ar' ? book.lang : 'en') as Piece['lang'];
+  const lang = (['ur', 'fa', 'ar', 'ps', 'ms'].includes(book.lang) ? book.lang : 'en') as Piece['lang'];
   for (let s = section; s < Math.min(book.sectionCount, section + 2); s++) {
     const sec = await db.sections.get(sectionId(book.id, s));
     if (!sec) continue;

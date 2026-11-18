@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchStatus, getServer, type ServerStatus } from '../../ai/client';
 import { getMyAi, hasMyAi, setMyAi, type MyAi } from '../../ai/device';
-import { checkKey, startOpenRouterSignIn, type KeyService } from '../../ai/signin';
+import { checkKey, codeFromPasted, finishOpenRouterSignIn, startOpenRouterSignIn, type KeyService } from '../../ai/signin';
 import { readKey } from '../../ai/keys';
 import { isAndroidApp, plugin } from '../../native/maktaba';
 import { Icon } from '../../ui/Icon';
@@ -33,6 +33,54 @@ const SERVICES: Array<{ id: KeyService; name: string; getKey: string; blurb: str
     private: 'Does not keep or learn from what it is sent: used for private books.',
   },
 ];
+
+/**
+ * If the browser does not come back to Maktaba after signing in (it ended on an error page,
+ * or the phone closed Maktaba meanwhile), the address it ended on still holds the sign-in:
+ * pasting it here finishes the job. A pasted OpenRouter key works too.
+ */
+function FinishByHand({ onKey }: { onKey: (key: string) => Promise<void> | void }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const finish = async () => {
+    const t = text.trim();
+    setBusy(true);
+    try {
+      if (/^sk-or-/.test(t)) {
+        const r = await checkKey('openrouter', t);
+        if (!r.ok) return toast(r.message);
+        await onKey(t);
+        toast('OpenRouter key added. Your AI is ready.');
+      } else {
+        const code = codeFromPasted(t);
+        if (!code) return toast('That does not look like the sign-in address. Copy the whole address from the browser’s address bar.');
+        await finishOpenRouterSignIn(code);
+        toast('Signed in to OpenRouter. Your AI is ready.');
+        window.dispatchEvent(new Event('maktaba:connected'));
+      }
+      setText('');
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <details className="finish-by-hand">
+      <summary>Didn’t come back to Maktaba?</summary>
+      <p className="muted small">
+        After you tap <b>Authorize</b>, the browser should send you back here. If it shows an error page or a blank page instead, copy the address
+        from the browser’s address bar, paste it below, and tap Finish. (The address holds a one-time code that only works on this phone.)
+      </p>
+      <label className="field">
+        <textarea rows={2} dir="ltr" value={text} placeholder="Paste the address here" aria-label="The address the browser ended on" onChange={(e) => setText(e.target.value)} />
+      </label>
+      <button className="btn btn--block" disabled={!text.trim() || busy} onClick={() => void finish()}>
+        {busy ? 'Finishing…' : 'Finish signing in'}
+      </button>
+    </details>
+  );
+}
 
 /**
  * Each person's own AI. Whoever opens Maktaba connects their own account, with its own
@@ -107,9 +155,12 @@ export function AiSettings() {
         {ai.openrouter ? (
           <button className="btn btn--quiet btn--danger" onClick={() => void save({ ...ai, openrouter: undefined, openrouterSignedIn: undefined })}>Sign out of OpenRouter</button>
         ) : (
-          <button className="btn btn--primary btn--block" onClick={() => void startOpenRouterSignIn().catch((e) => toast((e as Error).message))}>
-            Sign in with OpenRouter
-          </button>
+          <>
+            <button className="btn btn--primary btn--block" onClick={() => void startOpenRouterSignIn().catch((e) => toast((e as Error).message))}>
+              Sign in with OpenRouter
+            </button>
+            <FinishByHand onKey={(k) => save({ ...ai, openrouter: k })} />
+          </>
         )}
         <p className="muted small">Free models may learn from what they are sent, so private books are never sent there.</p>
       </div>

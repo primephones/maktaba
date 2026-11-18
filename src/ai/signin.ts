@@ -10,7 +10,10 @@ import { getMyAi, setMyAi } from './device';
  * (OAuth with PKCE: no secret is needed, and the key is made for this phone alone). On the
  * web the page goes to OpenRouter and comes back. In the Android app the sign-in happens in
  * the phone's browser (Google's sign-in, which OpenRouter offers, refuses to work inside
- * apps), and the browser hands back to the app through maktaba://auth.
+ * apps). The app itself waits for the answer at http://localhost:3000, an address
+ * OpenRouter allows for apps, so no website is needed; the page there hands back to the app
+ * through maktaba://auth. If anything goes wrong in between, the reader can paste the
+ * address the browser ended on, and the sign-in finishes from that.
  */
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -22,9 +25,24 @@ async function challenge(verifier: string) {
 const VERIFIER = 'maktaba.openrouterVerifier';
 
 /** Where OpenRouter sends the reader back to after signing in. */
-function callbackUrl(): string {
-  if (isAndroidApp()) return `${PUBLIC_URL}auth.html?app=1`;
+async function callbackUrl(): Promise<string> {
+  if (isAndroidApp()) {
+    try {
+      return (await plugin.listenForSignIn()).url;
+    } catch {
+      // Something else holds the address: the website hands back instead.
+      return `${PUBLIC_URL}auth.html?app=1`;
+    }
+  }
   return location.origin + location.pathname;
+}
+
+/** The sign-in code in what the reader pasted: the whole address, or the code alone. */
+export function codeFromPasted(text: string): string | null {
+  const t = text.trim();
+  const m = t.match(/[?&#]code=([^&#\s]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  return /^[\w-]{16,}$/.test(t) && !/^sk-/.test(t) ? t : null;
 }
 
 export async function startOpenRouterSignIn(): Promise<void> {
@@ -35,7 +53,7 @@ export async function startOpenRouterSignIn(): Promise<void> {
     /* private mode: the sign-in still works if the page is not reloaded */
   }
   (window as unknown as { __orVerifier?: string }).__orVerifier = verifier;
-  const url = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(callbackUrl())}&code_challenge=${await challenge(verifier)}&code_challenge_method=S256`;
+  const url = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(await callbackUrl())}&code_challenge=${await challenge(verifier)}&code_challenge_method=S256`;
   if (isAndroidApp()) await plugin.openUrl({ url });
   else location.href = url;
 }

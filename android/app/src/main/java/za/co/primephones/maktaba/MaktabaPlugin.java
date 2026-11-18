@@ -142,6 +142,7 @@ public class MaktabaPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        stopSignInListener();
         if (instance == this) instance = null;
         volumeKeysEnabled = false;
         if (tts != null) tts.shutdown();
@@ -496,6 +497,83 @@ public class MaktabaPlugin extends Plugin {
         } catch (Exception e) {
             call.reject("Sharing failed: " + e.getMessage());
         }
+    }
+
+    /** The listener catching a sign-in coming back from the browser, while one is open. */
+    private java.net.ServerSocket signInSocket;
+
+    /**
+     * Waits for a sign-in to come back from the phone's browser at http://localhost:3000
+     * (an address OpenRouter allows for apps), for up to ten minutes. This needs no website
+     * of Maktaba's own: the code goes straight to the app, and the browser shows a page with
+     * a button back. Resolves with the address to give the sign-in.
+     */
+    @PluginMethod
+    public void listenForSignIn(PluginCall call) {
+        stopSignInListener();
+        final java.net.ServerSocket server;
+        try {
+            server = new java.net.ServerSocket();
+            server.setReuseAddress(true);
+            server.bind(new java.net.InetSocketAddress(java.net.InetAddress.getByName("127.0.0.1"), 3000));
+            server.setSoTimeout(10 * 60 * 1000);
+        } catch (Exception e) {
+            call.reject("Could not wait for the sign-in: " + e.getMessage());
+            return;
+        }
+        signInSocket = server;
+        JSObject ok = new JSObject();
+        ok.put("url", "http://localhost:3000/");
+        call.resolve(ok);
+        new Thread(() -> {
+            try {
+                while (!server.isClosed()) {
+                    try (java.net.Socket s = server.accept()) {
+                        s.setSoTimeout(10000);
+                        java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(s.getInputStream(), "UTF-8"));
+                        String line = in.readLine();
+                        if (line == null) continue;
+                        String[] parts = line.split(" ");
+                        String path = parts.length > 1 ? parts[1] : "/";
+                        Uri asked = Uri.parse("http://localhost" + path);
+                        String code = asked.getQueryParameter("code");
+                        String back = code != null ? "maktaba://auth?code=" + Uri.encode(code) : "maktaba://auth";
+                        String html = "<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+                            + "<title>Maktaba</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:17px/1.5 system-ui,sans-serif;"
+                            + "background:#f6f4ef;color:#1d1c1a;text-align:center;padding:24px;box-sizing:border-box}"
+                            + "@media(prefers-color-scheme:dark){body{background:#1d1914;color:#efe3cb}}"
+                            + "a{display:inline-block;margin-top:12px;padding:14px 28px;border-radius:12px;background:#a3302a;color:#fff;font-weight:600;text-decoration:none}</style></head><body><main>"
+                            + (code != null ? "<p><b>Signed in.</b><br>You can go back to Maktaba now.</p>" : "<p>The sign-in did not finish. Go back to Maktaba and try again.</p>")
+                            + "<a href='" + back + "'>Back to Maktaba</a></main>"
+                            + "<script>setTimeout(function(){location.href='" + back + "'},300)</script></body></html>";
+                        byte[] body = html.getBytes("UTF-8");
+                        OutputStream out = s.getOutputStream();
+                        out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\nContent-Length: " + body.length + "\r\n\r\n").getBytes("UTF-8"));
+                        out.write(body);
+                        out.flush();
+                        if (code == null) continue;
+                        // Hand the code to the app now, even before the reader switches back.
+                        JSObject data = new JSObject();
+                        data.put("url", back);
+                        notifyListeners("authCallback", data, true);
+                        break;
+                    } catch (java.net.SocketTimeoutException e) {
+                        break;
+                    } catch (Exception e) {
+                        if (server.isClosed()) break;
+                    }
+                }
+            } finally {
+                try { server.close(); } catch (Exception ignored) { }
+                if (signInSocket == server) signInSocket = null;
+            }
+        }, "maktaba-signin").start();
+    }
+
+    private void stopSignInListener() {
+        java.net.ServerSocket s = signInSocket;
+        signInSocket = null;
+        if (s != null) try { s.close(); } catch (Exception ignored) { }
     }
 
     /** Opens a web page in the phone's browser (for signing in to an AI service or a cloud). */

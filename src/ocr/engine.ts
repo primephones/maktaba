@@ -117,4 +117,4 @@ export async function recognizePage(image: HTMLCanvasElement | Blob, langs: stri
   return { blocks, conf: Math.round(data.confidence ?? 0), printed: rebuilt.printed, text: data.text ?? '' };
 }
 
-export const OCR_LANGS: Array<[OcrLang, string]> = [['ara', 'Arabic'], ['urd', 'Urdu'], ['fas', 'Persian'], ['eng', 'English']];
+export const OCR_LANGS: Array<[OcrLang, string]> = [['ara', 'Arabic'], ['urd', 'Urdu'], ['fas', 'Persian'], ['pus', 'Pashto'], ['msa', 'Malay'], ['eng', 'English']];

@@ -13,14 +13,15 @@ import { toast } from '../../ui/toast';
 import { HelpFor } from '../setup/help';
 import { mimeOf, openOriginal, saveFile } from '../../lib/saveFile';
 import { BookCover, useCoverUrl } from './BookCover';
-import { CHECK_BELOW, rerunOcr, runOcrQueue } from '../../ocr/queue';
+import { CHECK_BELOW, rereadWithAi, rerunOcr, runOcrQueue } from '../../ocr/queue';
+import { aiReaderFor, aiReaderPausedUntil } from '../../ocr/ai';
 import { aiReady } from '../../ai/client';
 import { cancelBookTranslation, estimateRequests, pullBook, sourceParagraphs, startBookTranslation, translatable } from '../../ai/translation';
 import { timeUntil } from '../settings/AiAllowance';
 import { OCR_LANGS } from '../../ocr/engine';
 
 const STATUS: Array<[ReadStatus, string]> = [['want', 'Want to read'], ['reading', 'Reading'], ['finished', 'Finished']];
-const LANGS: Lang[] = ['ar', 'ur', 'fa', 'en', 'other'];
+const LANGS: Lang[] = ['ar', 'ur', 'fa', 'ps', 'ms', 'en', 'other'];
 const FORMAT: Record<Book['format'], string> = {
   epub: 'EPUB', mobi: 'Kindle', pdf: 'PDF', txt: 'Text', md: 'Markdown', docx: 'Word', fb2: 'FB2', html: 'Web page', image: 'Image',
 };
@@ -46,6 +47,16 @@ function OcrStatus({ book }: { book: Book }) {
   ) ?? 0;
   const [choosing, setChoosing] = useState(false);
   const langLabel = OCR_LANGS.find(([v]) => v === book.ocrLang)?.[1];
+  // Who reads the pages: the reader's AI (much better for Urdu Nastaliq), or the phone.
+  const [reader, setReader] = useState<{ ai: boolean; pausedUntil: number | null } | null>(null);
+  useEffect(() => {
+    const look = () => void Promise.all([aiReaderFor(book), aiReaderPausedUntil()]).then(([k, p]) => setReader({ ai: !!k, pausedUntil: p }));
+    look();
+    window.addEventListener('maktaba:connected', look);
+    return () => window.removeEventListener('maktaba:connected', look);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book.id, book.private, ocr.state]);
+  const byPhone = useLiveQuery(() => db.ocrPages.where('bookId').equals(book.id).filter((p) => !p.edited && p.by !== 'ai').count(), [book.id, ocr.done]) ?? 0;
   const pagesText = book.kind === 'scan' ? 'This is a scanned book.' : `${ocr.total} page${ocr.total === 1 ? ' has' : 's have'} no usable text in the file.`;
   return (
     <div className="card" style={{ display: 'grid', gap: 10 }}>
@@ -61,7 +72,25 @@ function OcrStatus({ book }: { book: Book }) {
         </div>
       </div>
       {ocr.state !== 'done' && ocr.state !== 'failed' && <span className="meter"><i style={{ width: percent(ocr.total ? ocr.done / ocr.total : 0) }} /></span>}
+      {reader && (
+        <p className="muted small" style={{ margin: 0 }}>
+          {book.private
+            ? 'Read on this phone: private books are never sent to an AI that may learn from them.'
+            : reader.ai
+              ? 'Your Gemini AI reads the pages: far better than the phone alone, especially for Urdu Nastaliq.'
+              : reader.pausedUntil
+                ? `Today’s free Gemini allowance is used up, so the phone reads meanwhile. Gemini takes over again ${timeUntil(reader.pausedUntil)}.`
+                : 'Read on this phone. Adding a free Gemini key (Settings, Your AI) reads pages far better, especially Urdu Nastaliq.'}
+        </p>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {ocr.state === 'queued' && <button className="btn" onClick={() => void runOcrQueue()}>Start now</button>}
+        {reader?.ai && !book.private && byPhone > 0 && (ocr.state === 'done' || ocr.state === 'failed') && (
+          <button className="btn" onClick={() => void rereadWithAi(book.id).then((n) => toast(`Reading ${n} page${n === 1 ? '' : 's'} again with your AI.`))}>
+            <span className="ai-mark" aria-hidden="true">✦</span>Read again with AI
+          </button>
+        )}
+        {!reader?.ai && !reader?.pausedUntil && !book.private && <button className="btn btn--quiet" onClick={() => navigate('/settings/ai')}>Add Gemini</button>}
         {ocr.done > 0 && (
           <button className="btn" onClick={() => navigate(`/book/${book.id}/review`)}>
             {flagged ? `Check ${flagged} page${flagged === 1 ? '' : 's'}` : 'Review the text'}
@@ -104,7 +133,8 @@ function TranslationCard({ book }: { book: Book }) {
     void aiReady().then((c) => setConnected(!!c));
     if (!t) void sourceParagraphs(book).then((p) => setEstimate({ paras: p.length, requests: estimateRequests(p) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, !!t]);
+  }, [book.id, !!t, Math.floor((book.ocr?.done ?? 0) / 10), book.lang]);
+  const stillReading = !!book.ocr && book.ocr.state !== 'done';
 
   const start = async () => {
     setBusy(true);
@@ -130,7 +160,9 @@ function TranslationCard({ book }: { book: Book }) {
             {!t
               ? have
                 ? `${have} paragraphs are already translated. Translate the rest of the book?`
-                : estimate
+                : estimate && !estimate.paras && stillReading
+                  ? 'Translation becomes available as the scanned pages are read (see above). You can also translate page by page while reading.'
+                  : estimate
                   ? `${estimate.paras} paragraph${estimate.paras === 1 ? '' : 's'}, about ${estimate.requests} request${estimate.requests === 1 ? '' : 's'} of free allowance${estimate.requests > 150 ? ', spread over several days' : ''}.`
                   : 'Counting the paragraphs…'
               : t.state === 'waiting'
@@ -146,7 +178,7 @@ function TranslationCard({ book }: { book: Book }) {
         <button className="btn" onClick={() => navigate('/settings/ai')}>Connect your AI first</button>
       ) : !t || t.state === 'failed' ? (
         <button className="btn" disabled={busy || (!estimate?.paras && !t)} onClick={() => void start()}>
-          <span className="ai-mark" aria-hidden="true">✦</span>{busy ? 'Starting…' : t ? 'Start again' : 'Translate the whole book'}
+          <span className="ai-mark" aria-hidden="true">✦</span>{busy ? 'Starting…' : t ? 'Start again' : stillReading && estimate?.paras ? 'Translate the pages read so far' : 'Translate the whole book'}
         </button>
       ) : t.state !== 'done' ? (
         <div style={{ display: 'flex', gap: 8 }}>

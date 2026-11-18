@@ -41,6 +41,8 @@ const FOLD: Record<string, string> = {
   'ہ': 'ه', 'ۂ': 'ه', 'ۃ': 'ه', 'ھ': 'ه', 'ە': 'ه', 'ۀ': 'ه',
   // Urdu nūn ghunna is often typed as a plain nūn
   'ں': 'ن',
+  // Pashto yāʾ forms and gāf, and the Jawi letters, by their nearest common letter
+  'ۍ': 'ي', 'ګ': 'گ', 'ݢ': 'گ', 'ڠ': 'غ', 'ڤ': 'ف', 'ڽ': 'ن',
   // the invisible joiners Persian and Urdu typists put inside words (nīm-fāṣila)
   '\u200c': '', '\u200d': '',
   // Eastern digits → ASCII
@@ -105,16 +107,31 @@ export function findAll(text: string, normQuery: string, limit = 50): Array<[num
   return hits;
 }
 
+/** Common Malay words that English does not use. */
+const MALAY_WORDS = / (dan|yang|ini|itu|dengan|untuk|tidak|ialah|kepada|daripada|adalah|dalam|akan|oleh|telah|boleh|bagi|atau|juga) /;
+function malayScore(sample: string): number {
+  const words = sample.toLowerCase().match(/[a-z]+/g) ?? [];
+  if (!words.length) return 0;
+  const hits = words.filter((w) => /^(dan|yang|ini|itu|dengan|untuk|tidak|ialah|kepada|daripada|adalah|dalam|akan|oleh|telah|boleh|bagi|atau|juga|ada|pada|di|ke|dari|kita|mereka|hukum|solat|puasa)$/.test(w)).length;
+  return hits / words.length;
+}
+
 /** Guesses the language of a text from its script and a few tell-tale letters. */
 export function detectLang(sample: string): Lang {
   const arabic = (sample.match(ARABIC_SCRIPT_G) || []).length;
   const latin = (sample.match(LATIN_G) || []).length;
   if (arabic === 0 && latin === 0) return 'other';
-  if (arabic < latin * 0.3) return 'en';
+  if (arabic < latin * 0.3) return MALAY_WORDS.test(` ${sample.toLowerCase().slice(0, 4000)} `) && malayScore(sample) > 0.04 ? 'ms' : 'en';
+  // Letters only Pashto uses.
+  const pashto = (sample.match(/[ټډړږښګڼۍځڅ]/g) || []).length;
+  // Letters only Jawi (Malay in Arabic script) uses.
+  const jawi = (sample.match(/[ڠڤڽݢ]/g) || []).length;
   // Letters that exist in Urdu but not Arabic or Persian.
   const urdu = (sample.match(/[ٹڈڑںےھہ]/g) || []).length;
   // Letters shared by Persian and Urdu but absent from Arabic.
   const ajami = (sample.match(/[پچژگ]/g) || []).length;
+  if (pashto / arabic > 0.006) return 'ps';
+  if (jawi / arabic > 0.004) return 'ms';
   if (urdu / arabic > 0.01) return 'ur';
   if (ajami / arabic > 0.004) return 'fa';
   return 'ar';
@@ -126,10 +143,10 @@ export const langAttr = (text: string): Lang | undefined => {
   return l === 'other' ? undefined : l;
 };
 
-export const isRtl = (lang: Lang) => lang === 'ar' || lang === 'ur' || lang === 'fa';
+export const isRtl = (lang: Lang) => lang === 'ar' || lang === 'ur' || lang === 'fa' || lang === 'ps';
 
 export const langName = (lang: Lang): string =>
-  ({ ar: 'Arabic', ur: 'Urdu', fa: 'Persian', en: 'English', other: 'Other' })[lang];
+  ({ ar: 'Arabic', ur: 'Urdu', fa: 'Persian', ps: 'Pashto', ms: 'Malay', en: 'English', other: 'Other' })[lang];
 
 const AR_ORDINALS: Record<string, number> = {
   'الأول': 1, 'الاول': 1, 'الأولى': 1, 'الثاني': 2, 'الثانية': 2, 'الثالث': 3, 'الثالثة': 3,

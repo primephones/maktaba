@@ -21,7 +21,7 @@ cpSync(new URL('tesseract.js/dist/worker.min.js', nm), new URL('worker.min.js', 
 for (const f of ['tesseract-core-simd-lstm.wasm.js', 'tesseract-core-lstm.wasm.js']) {
   cpSync(new URL(`tesseract.js-core/${f}`, nm), new URL(f, ocr));
 }
-for (const lang of ['ara', 'urd', 'fas', 'eng']) {
+for (const lang of ['ara', 'urd', 'fas', 'pus', 'msa', 'eng']) {
   cpSync(new URL(`@tesseract.js-data/${lang}/4.0.0_best_int/${lang}.traineddata.gz`, nm), new URL(`lang/${lang}.traineddata.gz`, ocr));
 }
 // The Qur'an: Uthmani text with the Saheeh International English, for offline verse popups.

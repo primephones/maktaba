@@ -86,6 +86,10 @@ export async function accessToken(interactive = false): Promise<string> {
       const msg = String((e as Error).message ?? e);
       if (/NEEDS_CONSENT/.test(msg)) throw new CloudError('Sign in to your Google Drive again.', 401, true);
       if (/CANCELLED/.test(msg)) throw new CloudError('Signing in was cancelled.', 0, true);
+      // Google refuses an app it has not been told about (the one-time setup, step 2 of the
+      // setup guide, is not finished yet). Say so plainly rather than show Google's code.
+      if (/DEVELOPER_ERROR|\b10:|28444|not set up correctly|UNREGISTERED_ON_API_CONSOLE|API_NOT_CONNECTED/i.test(msg))
+        throw new CloudError('Google Drive sign-in is not switched on for this app yet: the app’s owner still has to register it with Google (a one-time step in the setup guide). Until then, Settings › Backup moves your library by file.', 0, true);
       throw new CloudError(msg, 0, true);
     }
   }

@@ -54,7 +54,7 @@
   scroll-margin-top: calc(var(--rd-top) + 4px);
   text-align: start;
 }
-.bk[lang='ar'], .bk[lang='fa'] {
+.bk[lang='ar'], .bk[lang='fa'], .bk[lang='ps'] {
   font-family: var(--rd-ar-font);
   font-size: 1.24em;
   line-height: max(var(--rd-lh), 1.85);
@@ -74,7 +74,7 @@
   text-wrap: balance;
   break-after: avoid;
 }
-.bk[data-t='h'][lang='ar'], .bk[data-t='h'][lang='fa'] {
+.bk[data-t='h'][lang='ar'], .bk[data-t='h'][lang='fa'], .bk[data-t='h'][lang='ps'] {
   line-height: 1.6;
   font-weight: 700;
 }
@@ -87,9 +87,9 @@
 .bk[data-t='h'][data-l='4'],
 .bk[data-t='h'][data-l='5'],
 .bk[data-t='h'][data-l='6'] { font-size: 1.04em; color: var(--ink); }
-.bk[data-t='h'][lang='ar'][data-l='1'], .bk[data-t='h'][lang='fa'][data-l='1'] { font-size: 1.75em; }
-.bk[data-t='h'][lang='ar'][data-l='2'], .bk[data-t='h'][lang='fa'][data-l='2'] { font-size: 1.55em; }
-.bk[data-t='h'][lang='ar'][data-l='3'], .bk[data-t='h'][lang='fa'][data-l='3'] { font-size: 1.4em; }
+.bk[data-t='h'][lang='ar'][data-l='1'], .bk[data-t='h'][lang='fa'][data-l='1'], .bk[data-t='h'][lang='ps'][data-l='1'] { font-size: 1.75em; }
+.bk[data-t='h'][lang='ar'][data-l='2'], .bk[data-t='h'][lang='fa'][data-l='2'], .bk[data-t='h'][lang='ps'][data-l='2'] { font-size: 1.55em; }
+.bk[data-t='h'][lang='ar'][data-l='3'], .bk[data-t='h'][lang='fa'][data-l='3'], .bk[data-t='h'][lang='ps'][data-l='3'] { font-size: 1.4em; }
 
 .bk[data-t='quote'] {
   padding-inline-start: 1em;
@@ -132,7 +132,7 @@
 .bk b { font-weight: 700; }
 .bk i { font-style: italic; }
 /* Arabic has no true italic: leave it upright. */
-.bk[lang='ar'] i, .bk[lang='fa'] i, .bk[lang='ur'] i { font-style: normal; }
+.bk[lang='ar'] i, .bk[lang='fa'] i, .bk[lang='ps'] i, .bk[lang='ur'] i { font-style: normal; }
 
 .bk[data-bookmark='true']::after {
   content: '';
@@ -209,7 +209,7 @@ mark.flash {
   margin: 22px 0 8px;
   overflow-wrap: anywhere;
 }
-.hit-book [lang='ar'], .hit-book [lang='fa'] {
+.hit-book [lang='ar'], .hit-book [lang='fa'], .hit-book [lang='ps'] {
   font-size: 1.2em;
   font-weight: 700;
 }
@@ -560,7 +560,7 @@ mark.flash {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.note-text[lang='ar'], .note-text[lang='fa'] {
+.note-text[lang='ar'], .note-text[lang='fa'], .note-text[lang='ps'] {
   font-family: var(--font-arabic);
   font-size: 1.3rem;
   line-height: 1.9;

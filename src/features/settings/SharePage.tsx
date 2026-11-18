@@ -1,16 +1,25 @@
-import { ANDROID_URL, PUBLIC_URL } from '../../app/config';
+import { useEffect, useState } from 'react';
+import { ANDROID_URL, PUBLIC_URL, webVersionLive } from '../../app/config';
 import { isAndroidApp, plugin } from '../../native/maktaba';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
 
-export const SHARE_TEXT =
-  `Maktaba: a library for Islamic scholarship, with Arabic, Urdu and Persian books read in English.\n\n` +
-  `Open it here: ${PUBLIC_URL}\n` +
+const shareText = (web: boolean) =>
+  `Maktaba: a library for Islamic scholarship, with Arabic, Urdu, Persian, Pashto and Malay books read in English.\n\n` +
+  (web ? `Open it here: ${PUBLIC_URL}\n` : '') +
   `Android app: ${ANDROID_URL}\n\n` +
   `Your library is yours alone. When you open it, Maktaba walks you through connecting your own cloud and your own AI (about five minutes, all free).`;
 
+/** The link to hand out: the web version once it is up, otherwise the Android download. */
+async function link(): Promise<{ url: string; web: boolean }> {
+  const web = (await webVersionLive()) !== false;
+  return { url: web ? PUBLIC_URL : ANDROID_URL, web };
+}
+
 /** Shares the link through the phone's own share sheet (or copies it where there is none). */
 export async function shareMaktaba() {
+  const { web } = await link();
+  const SHARE_TEXT = shareText(web);
   try {
     if (isAndroidApp()) {
       await plugin.shareText({ text: SHARE_TEXT, title: 'Share Maktaba' });
@@ -27,11 +36,12 @@ export async function shareMaktaba() {
 }
 
 async function copyLink() {
+  const { url } = await link();
   try {
-    await navigator.clipboard.writeText(PUBLIC_URL);
+    await navigator.clipboard.writeText(url);
     toast('Link copied.');
   } catch {
-    toast(`Copying isn’t allowed here. The link is ${PUBLIC_URL}`);
+    toast(`Copying isn’t allowed here. The link is ${url}`);
   }
 }
 
@@ -41,13 +51,24 @@ async function copyLink() {
  * allowance.
  */
 export function SharePage() {
+  const [web, setWeb] = useState<boolean | undefined>(undefined);
+  useEffect(() => {
+    void webVersionLive().then(setWeb);
+  }, []);
+  const url = web === false ? ANDROID_URL : PUBLIC_URL;
   return (
     <>
       <div className="hero-card">
         <Icon name="share" />
         <h2>Share Maktaba</h2>
         <p>Send this link to anyone. They get their own library, and sign in with their own AI and their own cloud.</p>
-        <code className="share-link">{PUBLIC_URL}</code>
+        <code className="share-link">{url}</code>
+        {web === false && (
+          <p className="muted small">
+            The web version is not switched on yet, so this shares the Android app. Once GitHub Pages is turned on for the project (see the
+            setup guide), the web link is shared instead.
+          </p>
+        )}
         <div className="row-btns">
           <button className="btn btn--primary" onClick={() => void shareMaktaba()}><Icon name="share" size={18} />Share link</button>
           <button className="btn" onClick={() => void copyLink()}><Icon name="copy" size={18} />Copy</button>

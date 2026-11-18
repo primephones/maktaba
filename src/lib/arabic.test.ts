@@ -79,3 +79,19 @@ describe('searching Urdu and Persian', () => {
     expect(finds('صفحہ ۱۲۳', '123')).toBe(true);
   });
 });
+
+describe('Pashto and Malay', () => {
+  it('tells Pashto from Urdu and Persian by its own letters', () => {
+    expect(detectLang('د اسلام په دين کې لمونځ ډېر مهم دی او ښځې او سړي دواړه يې کوي')).toBe('ps');
+    expect(detectLang('نماز دین کا ستون ہے اور ہر مسلمان پر فرض ہے')).toBe('ur');
+  });
+  it('recognises Malay in Jawi and in Latin letters', () => {
+    expect(detectLang('ڤرکارا اين اداله ڤنتيڠ دالم اوݢام اسلام دان ڽاتا')).toBe('ms');
+    expect(detectLang('Hukum solat lima waktu adalah wajib bagi setiap orang Islam yang telah baligh dan berakal.')).toBe('ms');
+    expect(detectLang('The prayer is obligatory on every Muslim who has reached puberty.')).toBe('en');
+  });
+  it('finds Pashto and Jawi spellings with plain Arabic letters', () => {
+    expect(normalizeForSearch('ګناه')).toBe(normalizeForSearch('گناه'));
+    expect(normalizeForSearch('ڤرکارا').startsWith(normalizeForSearch('ف'))).toBe(true);
+  });
+});

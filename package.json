@@ -30,6 +30,8 @@
     "@tesseract.js-data/ara": "^1.0.0",
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/fas": "^1.0.0",
+    "@tesseract.js-data/msa": "^1.0.0",
+    "@tesseract.js-data/pus": "^1.0.0",
     "@tesseract.js-data/urd": "^1.0.0",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",

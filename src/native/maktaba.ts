@@ -23,6 +23,7 @@ interface MaktabaNative {
   shareFile(o: { uri: string; mime: string; title: string }): Promise<void>;
   openFile(o: { uri: string; mime: string; title: string }): Promise<void>;
   openUrl(o: { url: string }): Promise<void>;
+  listenForSignIn(): Promise<{ url: string }>;
   shareText(o: { text: string; title: string }): Promise<void>;
   googleAuthorize(o: { scopes: string[]; interactive: boolean }): Promise<{ accessToken: string }>;
   addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;

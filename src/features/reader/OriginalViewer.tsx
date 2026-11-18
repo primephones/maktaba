@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Book } from '../../db/types';
 import { db } from '../../db/db';
+import { isRtl } from '../../lib/arabic';
 import { openOriginal } from '../../lib/saveFile';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
@@ -16,7 +17,7 @@ export function OriginalViewer({ book, page: start, mark, onGo, onClose }: { boo
   const [found, setFound] = useState<boolean | null>(null);
   const count = book.pageCount ?? start;
   const [page, setPage] = useState(Math.min(Math.max(1, start), count));
-  const rtl = book.lang === 'ar' || book.lang === 'ur' || book.lang === 'fa';
+  const rtl = isRtl(book.lang);
   // Arabic books are bound on the right: the next page is to the left.
   const step = (dir: 1 | -1) => setPage((p) => Math.min(count, Math.max(1, p + dir)));
   const before = () => step(-1);

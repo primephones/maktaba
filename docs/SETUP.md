@@ -9,8 +9,11 @@ can do. Nothing here costs money.
 2. Under **Build and deployment › Source**, choose **GitHub Actions**.
 
 From the next build on, the app is at **<https://primephones.github.io/maktaba/>**. That is
-the link to send people (Settings › Share Maktaba sends it from inside the app). It is also
-where "Sign in with OpenRouter" returns to on Android.
+the link to send people (Settings › Share Maktaba sends it from inside the app).
+
+Until this is done, that address shows GitHub's "404 There isn't a GitHub Pages site here".
+The Android app does not need it: "Sign in with OpenRouter" comes straight back to the app,
+and Share Maktaba sends the Android download instead until the web version is up.
 
 ## 2. "Connect Google Drive" (each person's own cloud), about 10 minutes
 
