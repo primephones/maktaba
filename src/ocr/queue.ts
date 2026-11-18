@@ -77,8 +77,8 @@ export const stopOcr = (bookId: string) => stopped.add(bookId);
  * are read only by the reader's AI, and wait for it.
  */
 export const PHONE_CAN_READ = new Set<OcrLang>(['ara', 'eng', 'msa']);
-const NEED_AI_NOTE = 'Waiting for your AI: the phone cannot read this script properly. Add a free Gemini key in Settings › Your AI and the pages are read and translated.';
-const PAUSED_NOTE = 'Today’s free Gemini allowance is used up. Reading carries on by itself when it renews; meanwhile tap a page in the book to read it on its own.';
+const NEED_AI_NOTE = 'Waiting for your AI: the phone cannot read this script properly. Add a free Gemini key or sign in to OpenRouter (Settings › Your AI) and the pages are read and translated.';
+const PAUSED_NOTE = 'Today’s free AI allowance for reading pages is used up. Reading carries on by itself when it renews.';
 
 /** Picks a recognition language for a book whose language is not known yet (null: only the AI can tell). */
 async function chooseLang(book: Book, firstPage: number): Promise<OcrLang | null> {
@@ -148,7 +148,7 @@ export async function readPageNow(book: Book, page: number): Promise<void> {
   const key = await aiReaderFor(book);
   if (!key) {
     if (book.private) throw new Error('This book is marked private, so its pages are not sent to an AI that may learn from them.');
-    throw new Error('Add a free Gemini key in Settings › Your AI to read and translate scanned pages.');
+    throw new Error('To read and translate scanned pages, add a free Gemini key or sign in to OpenRouter in Settings › Your AI.');
   }
   const lang = book.ocrLang ?? LANG_FOR[book.lang] ?? 'urd';
   const canvas = await inTime(pageImage(book, page), PAGE_LIMIT_MS);
@@ -175,7 +175,7 @@ async function recognizeBook(book: Book): Promise<void> {
     const lang = await chooseLang(book, todo[0] ?? pages[0]);
     let aiKey = await aiReaderFor(book);
     if (!lang || (!aiKey && !PHONE_CAN_READ.has(lang))) {
-      const paused = !book.private && !!(await getMyAi()).gemini;
+      const paused = !book.private && (await getMyAi().then((a) => !!(a.gemini || a.openrouter)));
       await db.books.update(id, { ...(lang ? { ocrLang: lang } : {}), ocr: { state: 'waiting', done, total, error: paused ? PAUSED_NOTE : NEED_AI_NOTE }, scanView: book.scanView ?? 'page' });
       return;
     }
@@ -202,7 +202,7 @@ async function recognizeBook(book: Book): Promise<void> {
         // The phone would only make nonsense of this script: wait for the AI.
         canvas.width = 0;
         canvas.height = 0;
-        const paused = !book.private && !!(await getMyAi()).gemini;
+        const paused = !book.private && (await getMyAi().then((a) => !!(a.gemini || a.openrouter)));
         await db.books.update(id, { ocr: { state: 'waiting', done, total, error: paused ? PAUSED_NOTE : NEED_AI_NOTE } });
         return;
       }

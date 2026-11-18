@@ -4,14 +4,14 @@ import { local, setLocal } from '../sync/sync';
 import { DEFAULT_PROVIDERS, modelsFor } from '../../server/src/providers';
 
 /**
- * Reading scanned pages with the reader's own Gemini key. Gemini reads Urdu Nastaliq,
- * old Arabic prints and Persian far better than the engine on the phone, and keeps
- * headings, paragraphs and verse apart. It is used when the reader has added a Gemini key,
- * for books not marked private (Google may learn from free-tier requests).
+ * Reading scanned pages with the reader's own AI: Gemini first, then OpenRouter's free
+ * models that can see images (Gemma, Nemotron VL…). Both read Urdu Nastaliq, old Arabic
+ * prints and Persian far better than the engine on the phone, and keep headings,
+ * paragraphs and verse apart. Used for books not marked private (free tiers may learn
+ * from what they are sent).
  *
- * The free allowance is paced (a page every few seconds). When the day's allowance runs
- * out, the phone's own engine carries on and those pages are marked, so they can be read
- * again with AI later.
+ * Requests are paced to the free tiers. When a service's day is used up, the other carries
+ * on; when both are, reading rests until the allowance renews.
  */
 
 /** Gemini models to read pages with, best first: asked of Google itself, so a retired model is never stuck to. */
@@ -23,6 +23,13 @@ async function models(key: string): Promise<string[]> {
 /** The free tier allows about ten requests a minute on the first model. (Tests shorten it.) */
 const spacing = () => (globalThis as { __maktabaAiSpacing?: number }).__maktabaAiSpacing ?? 6500;
 const PAUSE_KEY = 'aiOcrPausedUntil';
+const OR_PAUSE_KEY = 'aiOcrOpenRouterPausedUntil';
+
+/** The services that can read a book's pages now. */
+export interface PageReader {
+  gemini?: string;
+  openrouter?: string;
+}
 
 const LANG_NAME: Record<OcrLang, string> = {
   ara: 'Arabic',
@@ -36,20 +43,25 @@ const LANG_NAME: Record<OcrLang, string> = {
 let lastCall = 0;
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** The Gemini key to read pages with, if reading with AI can be used for this book now. */
-export async function aiReaderFor(book: { private?: boolean }): Promise<string | null> {
+/** Who can read this book's pages now, or null (private book, no AI, or every allowance used for today). */
+export async function aiReaderFor(book: { private?: boolean }): Promise<PageReader | null> {
   if (book.private) return null;
-  const key = (await getMyAi()).gemini;
-  if (!key) return null;
-  const paused = (await local(PAUSE_KEY)) as number | undefined;
-  if (paused && paused > Date.now()) return null;
-  return key;
+  const a = await getMyAi();
+  const now = Date.now();
+  const r: PageReader = {};
+  const restsUntil = async (k: string) => ((await local(k)) as number | undefined) ?? 0;
+  if (a.gemini && (await restsUntil(PAUSE_KEY)) <= now) r.gemini = a.gemini;
+  if (a.openrouter && (await restsUntil(OR_PAUSE_KEY)) <= now) r.openrouter = a.openrouter;
+  return r.gemini || r.openrouter ? r : null;
 }
 
-/** Why AI reading is not being used, for the book's details. */
+/** When reading with AI comes back, if every connected service has used its day. */
 export async function aiReaderPausedUntil(): Promise<number | null> {
-  const paused = (await local(PAUSE_KEY)) as number | undefined;
-  return paused && paused > Date.now() ? paused : null;
+  const a = await getMyAi();
+  const now = Date.now();
+  const until = [a.gemini ? ((await local(PAUSE_KEY)) as number | undefined) ?? 0 : null, a.openrouter ? ((await local(OR_PAUSE_KEY)) as number | undefined) ?? 0 : null].filter((x): x is number => x !== null);
+  if (!until.length || until.some((u) => u <= now)) return null;
+  return Math.min(...until);
 }
 
 export class AllowanceUsedUp extends Error {}
@@ -91,9 +103,36 @@ interface Answer {
   blocks?: Array<{ t?: string; text?: string; box?: number[] }>;
 }
 
-/** Reads one page with Gemini. Throws AllowanceUsedUp when the day's free allowance is gone. */
-export async function recognizeWithAi(key: string, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number): Promise<{ blocks: Block[]; printed?: string; text: string }> {
+type PageText = { blocks: Block[]; printed?: string; text: string };
+
+/**
+ * Reads one page with the reader's AI: Gemini, then OpenRouter. Throws AllowanceUsedUp only
+ * when every service it could use has used its day.
+ */
+export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number): Promise<PageText> {
   const data = await jpeg(image);
+  const problems: string[] = [];
+  let tried = 0;
+  let usedUp = 0;
+  for (const [service, read] of [
+    ['gemini', reader.gemini ? () => viaGemini(reader.gemini!, data, lang, page) : null],
+    ['openrouter', reader.openrouter ? () => viaOpenRouter(reader.openrouter!, data, lang, page) : null],
+  ] as const) {
+    if (!read) continue;
+    tried++;
+    try {
+      return await read();
+    } catch (e) {
+      if (e instanceof AllowanceUsedUp) usedUp++;
+      problems.push((e as Error).message);
+      void service;
+    }
+  }
+  if (tried && usedUp === tried) throw new AllowanceUsedUp(problems.join(' '));
+  throw new Error(problems.join(' ') || 'No AI service could read the page.');
+}
+
+async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number): Promise<PageText> {
   let lastError = '';
   for (const model of await models(key)) {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -164,6 +203,97 @@ export async function recognizeWithAi(key: string, image: HTMLCanvasElement, lan
     throw new AllowanceUsedUp('The free Gemini allowance for today is used up.');
   }
   throw new Error(lastError);
+}
+
+// ------------------------------------------------------------------------------- OpenRouter
+
+/** OpenRouter's free models that can read an image, best first (asked of OpenRouter itself). */
+const OR_PREFER = [
+  /^google\/gemma-\d+-31b/,
+  /^nvidia\/nemotron-[\d.]+-super-vl/,
+  /^google\/gemma-\d+-(?:2[6-9]|[3-9]\d)b/,
+  /^qwen\/qwen[\d.]*-vl/,
+  /^meta-llama\/llama-4-(?:maverick|scout)/,
+  /^google\/gemini/,
+  /^mistralai\/(?:pixtral|mistral-(?:small|medium))/,
+];
+let orModels: { at: number; ids: string[] } | null = null;
+async function visionModels(): Promise<string[]> {
+  if (orModels && Date.now() - orModels.at < 6 * 3600_000) return orModels.ids;
+  const res = await fetch('https://openrouter.ai/api/v1/models');
+  if (!res.ok) throw new Error('OpenRouter could not be reached.');
+  const d = (await res.json()) as { data?: Array<{ id: string; architecture?: { input_modalities?: string[] }; pricing?: { prompt?: string } }> };
+  const free = (d.data ?? []).filter(
+    (m) => (m.id.endsWith(':free') || m.pricing?.prompt === '0') && m.architecture?.input_modalities?.includes('image') && !/preview|nano|mini|small|[-_.](?:[1-9]|1[0-4])(?:\.\d+)?b(?![a-z0-9])/i.test(m.id),
+  );
+  const ids: string[] = [];
+  for (const re of OR_PREFER) for (const m of free) if (re.test(m.id) && !ids.includes(m.id)) ids.push(m.id);
+  orModels = { at: Date.now(), ids: ids.slice(0, 3) };
+  return orModels.ids;
+}
+
+let orLastCall = 0;
+async function viaOpenRouter(key: string, data: string, lang: OcrLang | 'auto', page: number): Promise<PageText> {
+  const models = await visionModels();
+  if (!models.length) throw new Error('OpenRouter has no free model that can read images right now.');
+  let lastError = '';
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const gap = orLastCall + Math.max(spacing(), 3500) - Date.now();
+      if (gap > 0) await wait(gap);
+      orLastCall = Date.now();
+      const ask = (json: boolean) =>
+        fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          signal: AbortSignal.timeout(120_000),
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            model,
+            temperature: 0,
+            ...(json ? { response_format: { type: 'json_object' } } : {}),
+            messages: [{ role: 'user', content: [{ type: 'text', text: prompt(lang) }, { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${data}` } }] }],
+          }),
+        });
+      let res: Response;
+      try {
+        res = await ask(true);
+        if (res.status === 400 && /response_format|json/i.test(await res.clone().text())) res = await ask(false);
+      } catch {
+        lastError = 'OpenRouter took too long to answer, or could not be reached.';
+        continue;
+      }
+      if (res.status === 401 || res.status === 403) throw new Error('Your OpenRouter key was refused. Sign in again in Settings, Your AI.');
+      if (res.status === 429 || res.status === 402) {
+        const body = await res.text();
+        if (res.status === 402 || /per-day|per day|daily/i.test(body)) {
+          await setLocal(OR_PAUSE_KEY, nextUtcMidnight());
+          throw new AllowanceUsedUp('The free OpenRouter allowance for today is used up.');
+        }
+        lastError = `OpenRouter’s ${model} is busy.`;
+        await wait(8000);
+        continue;
+      }
+      if (!res.ok) {
+        // Retired, refused, or overloaded: the next model.
+        lastError = `OpenRouter’s ${model} answered with an error (${res.status}).`;
+        break;
+      }
+      const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+      const answer = parse(json.choices?.[0]?.message?.content ?? '');
+      if (!answer) {
+        lastError = 'OpenRouter’s answer could not be read.';
+        break;
+      }
+      // Only Gemini's page positions are dependable; others are left out.
+      return toBlocks({ ...answer, blocks: answer.blocks?.map((b) => ({ ...b, box: undefined })) }, page);
+    }
+  }
+  throw new Error(lastError || 'OpenRouter could not read the page.');
+}
+
+function nextUtcMidnight(): number {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) + 5 * 60_000;
 }
 
 function parse(raw: string): Answer | null {

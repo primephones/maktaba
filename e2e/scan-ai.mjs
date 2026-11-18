@@ -107,7 +107,7 @@ try {
   console.log('Its details');
   await page.evaluate(() => { location.hash = '#/library'; });
   await page.getByRole('button', { name: 'Details for makhtut-scan' }).click();
-  await page.getByText(/Your Gemini AI reads each page/).waitFor({ timeout: 8000 });
+  await page.getByText(/Your AI reads each page/).waitFor({ timeout: 8000 });
   check(true, 'the details say the AI reads the pages');
   await page.getByRole('button', { name: /Translate the whole book/ }).waitFor({ timeout: 8000 });
   check(true, 'and translation is offered for the scanned book');
@@ -172,6 +172,36 @@ try {
   check(true, 'pasting the address the browser ended on finishes the sign-in');
   await page.getByRole('button', { name: 'Sign out of OpenRouter' }).waitFor({ timeout: 5000 });
   check(true, 'and OpenRouter shows as signed in');
+
+  console.log('Gemini’s day used up: OpenRouter’s free image model reads the pages instead');
+  let orReads = 0;
+  await page.route('https://openrouter.ai/api/v1/models', (r) =>
+    r.fulfill({ status: 200, headers: cors, body: JSON.stringify({ data: [{ id: 'baidu/ernie-5.5-flash-preview:free', architecture: { input_modalities: ['text'] } }, { id: 'google/gemma-4-31b-it:free', architecture: { input_modalities: ['image', 'text'] } }, { id: 'liquid/lfm-3-1.7b:free', architecture: { input_modalities: ['text', 'image'] } }] }) }),
+  );
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async (r) => {
+    const body = JSON.parse(r.request().postData() ?? '{}');
+    const content = body.messages?.[0]?.content;
+    if (Array.isArray(content) && content.some((c) => c.type === 'image_url')) {
+      orReads++;
+      const answer = { printed: '', blocks: [{ t: 'p', text: `اوپن روٹر نے یہ صفحہ پڑھا (${body.model})۔ ذکر اللہ دلوں کا سکون ہے۔` }] };
+      return r.fulfill({ status: 200, headers: cors, body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(answer) } }] }) });
+    }
+    return r.fulfill({ status: 200, headers: cors, body: JSON.stringify({ choices: [{ message: { content: '{"paragraphs":[]}' } }] }) });
+  });
+  await page.evaluate(() => { location.hash = '#/'; });
+  await page.evaluate((b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const extra = new TextEncoder().encode('\n% another copy\n');
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes, extra], 'zikr-second.pdf', { type: 'application/pdf' }));
+    const input = document.querySelector('[data-testid=add-input]');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, readFileSync(fx('makhtut-scan.pdf')).toString('base64'));
+  check(await until(async () => (await book('zikr-second'))?.ocr?.state === 'done', 90000), `the scanned pages are read (${JSON.stringify((await book('zikr-second'))?.ocr)})`);
+  const second = await book('zikr-second');
+  const secondPages = (await read('ocrPages')).filter((p) => p.bookId === second?.id);
+  check(orReads > 0 && secondPages.every((p) => p.by === 'ai' && p.blocks.some((b) => b.text.includes('gemma-4-31b'))), `by OpenRouter’s Gemma, the best free model that reads images (${orReads} pages)`);
 
   console.log('Sharing while the web version is not switched on');
   await page.route('https://primephones.github.io/**', (r) => r.fulfill({ status: 404, body: 'There isn’t a GitHub Pages site here.' }));

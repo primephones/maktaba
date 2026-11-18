@@ -77,9 +77,9 @@ function OcrStatus({ book }: { book: Book }) {
           {book.private
             ? 'Read on this phone: private books are never sent to an AI that may learn from them.'
             : reader.ai
-              ? 'Your Gemini AI reads each page, and the English appears under the page as it is printed.'
+              ? 'Your AI reads each page, and the English appears under the page as it is printed.'
               : reader.pausedUntil
-                ? `Today’s free Gemini allowance is used up, so the phone reads meanwhile. Gemini takes over again ${timeUntil(reader.pausedUntil)}.`
+                ? `Today’s free AI allowance for reading pages is used up; it carries on ${timeUntil(reader.pausedUntil)}.`
                 : book.ocrLang && !['ara', 'eng', 'msa'].includes(book.ocrLang)
                   ? 'Urdu, Persian and Pashto pages are read by your AI only: the phone cannot read these scripts properly. Add a free Gemini key in Settings, Your AI.'
                   : 'Read on this phone. Adding a free Gemini key (Settings, Your AI) reads pages far better.'}
