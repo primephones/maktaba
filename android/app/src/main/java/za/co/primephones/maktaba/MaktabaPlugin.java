@@ -702,6 +702,26 @@ public class MaktabaPlugin extends Plugin {
         }, "maktaba-update").start();
     }
 
+    /**
+     * Opens the phone's security settings (on Samsung phones, where Auto Blocker is: it stops
+     * every app that is not from the Play Store or Galaxy Store, Maktaba's updates included).
+     */
+    @PluginMethod
+    public void openSecuritySettings(PluginCall call) {
+        try {
+            Intent i = new Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+        } catch (Exception e) {
+            Intent i = new Intent(android.provider.Settings.ACTION_SETTINGS);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+        }
+        JSObject r = new JSObject();
+        r.put("samsung", "samsung".equalsIgnoreCase(Build.MANUFACTURER));
+        call.resolve(r);
+    }
+
     /** Hands the downloaded update to Android's installer (asking for permission first if needed). */
     @PluginMethod
     public void installUpdate(PluginCall call) {

@@ -87,6 +87,8 @@ export const postpone = (build: number) => setLocal('updateLater', { build, at: 
 export type Step =
   | { kind: 'downloading'; done: number; total: number }
   | { kind: 'allow' }
+  /** Asked to allow installs, but it is still not allowed: Samsung's Auto Blocker (or a work profile) stops it. */
+  | { kind: 'blocked' }
   | { kind: 'installing' }
   | { kind: 'differentKey' }
   | { kind: 'failed'; message: string };

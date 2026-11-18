@@ -48,16 +48,18 @@ export function AppUpdate() {
 function UpdateSheet({ update, onClose }: { update: AvailableUpdate; onClose: () => void }) {
   const [step, setStep] = useState<Step | null>(null);
 
-  // Coming back from "Allow from this source": carry straight on to the installer.
+  // Coming back from "Allow from this source" (or from switching off Auto Blocker): carry
+  // straight on to the installer. Still not allowed means something blocks the switch.
   useEffect(() => {
-    if (step?.kind !== 'allow') return;
+    if (step?.kind !== 'allow' && step?.kind !== 'blocked') return;
     const back = async () => {
       if (document.visibilityState !== 'visible') return;
       if ((await plugin.appInfo()).canInstall) void openInstaller(setStep);
+      else if (step.kind === 'allow') setStep({ kind: 'blocked' });
     };
     document.addEventListener('visibilitychange', back);
     return () => document.removeEventListener('visibilitychange', back);
-  }, [step?.kind]);
+  }, [step]);
 
   const later = () => {
     void postpone(update.build);
@@ -108,11 +110,25 @@ function UpdateSheet({ update, onClose }: { update: AvailableUpdate; onClose: ()
           </div>
         )}
 
+        {step?.kind === 'blocked' && (
+          <div className="app-update-step">
+            <p><b>Your phone’s Auto Blocker is stopping the update.</b> On Samsung phones it blocks every app that is not from the Play Store or Galaxy Store, Maktaba’s own updates included. No app can get past it; you switch it off for a minute:</p>
+            <ol className="app-update-steps">
+              <li>Tap <b>Open security settings</b> below, then <b>Auto Blocker</b>, and switch it <b>off</b>.</li>
+              <li>Come back here: the update carries on by itself (allow Maktaba to install updates if asked).</li>
+              <li>Once Maktaba has updated, switch Auto Blocker back <b>on</b> if you like.</li>
+            </ol>
+            <button className="btn btn--primary btn--block" onClick={() => void plugin.openSecuritySettings()}>Open security settings</button>
+            <button className="btn btn--block" onClick={() => void openInstaller(setStep)}>I’ve switched it off: continue</button>
+          </div>
+        )}
+
         {step?.kind === 'installing' && (
           <div className="app-update-step">
             <p><b>Tap Update</b> in Android’s window to finish. Maktaba closes and opens again on the new version.</p>
-            <p className="muted small">If nothing appeared, tap below.</p>
+            <p className="muted small">If nothing appeared, tap below. If Android says the app was <b>blocked</b>: on a Samsung phone switch off Auto Blocker (Settings › Security and privacy › Auto Blocker) and try again; if <b>Play Protect</b> warns about it, tap <b>More details › Install anyway</b> (it says this about any app not from the Play Store).</p>
             <button className="btn btn--block" onClick={() => void openInstaller(setStep)}>Open the installer again</button>
+            <button className="btn btn--quiet btn--block" onClick={() => void plugin.openSecuritySettings()}>Open security settings (Auto Blocker)</button>
           </div>
         )}
 

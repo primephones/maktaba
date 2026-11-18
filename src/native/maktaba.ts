@@ -27,6 +27,7 @@ interface MaktabaNative {
   appInfo(): Promise<{ versionCode: number; versionName?: string; canInstall: boolean }>;
   downloadUpdate(o: { url: string }): Promise<{ sameKey: boolean; versionCode: number }>;
   installUpdate(): Promise<{ needsPermission: boolean }>;
+  openSecuritySettings(): Promise<{ samsung: boolean }>;
   shareText(o: { text: string; title: string }): Promise<void>;
   googleAuthorize(o: { scopes: string[]; interactive: boolean }): Promise<{ accessToken: string }>;
   addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;
