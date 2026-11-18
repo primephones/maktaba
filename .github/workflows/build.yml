@@ -204,14 +204,15 @@ jobs:
             mkdir -p e2e/out/phone
             adb logcat -c || true
             (adb logcat -v time > e2e/out/phone/logcat.txt 2>&1 &)
+            (while true; do echo "$(date +%T) mem $(free -m | awk '/Mem:/{print "used "$3"MB avail "$7"MB"}') load $(cut -d' ' -f1 /proc/loadavg) emu $(pgrep -f qemu-system | head -1)"; sleep 5; done) > e2e/out/phone/host.txt 2>&1 &
             adb install -r apk/*.apk
-            timeout 900 node e2e/android.mjs
-      # The emulator on shared machines sometimes dies by itself; a second, fresh one decides.
-      # The Android 14 emulator has gone offline the moment the app shows its background-work
-      # notification. The retry draws the screen inside the emulator (-gpu guest) instead of
-      # through the host's graphics emulation. (Android 12's image is no use: its 2021
-      # browser engine is too old for the test driver.)
-      - name: Try again with the emulator drawing in software, if the first one failed
+            timeout 900 node e2e/android.mjs || (echo '--- host memory, last readings ---'; tail -25 e2e/out/phone/host.txt; echo '--- processes the system killed ---'; sudo dmesg | grep -iE 'oom|killed process|qemu' | tail -20; exit 1)
+      # The emulator has died silently, every time, about a minute after the app starts its
+      # background work: what a process killed from outside looks like. Both runs log the
+      # machine's memory and anything the system killed; the retry uses a smaller emulator
+      # (2 GB, 2 cores) in case the machine runs out of memory. Other graphics modes and
+      # Android 12 (whose 2021 WebView is too old for the test driver) did not help.
+      - name: Try again with a smaller emulator, if the first one failed
         id: phone2
         if: steps.phone1.outcome == 'failure'
         uses: reactivecircus/android-emulator-runner@v2
@@ -220,17 +221,18 @@ jobs:
           arch: x86_64
           target: google_apis
           profile: pixel_6
-          cores: 3
-          ram-size: 4096M
+          cores: 2
+          ram-size: 2048M
           disk-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu guest -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
             mkdir -p e2e/out/phone
             adb logcat -c || true
             (adb logcat -v time > e2e/out/phone/logcat.txt 2>&1 &)
+            (while true; do echo "$(date +%T) mem $(free -m | awk '/Mem:/{print "used "$3"MB avail "$7"MB"}') load $(cut -d' ' -f1 /proc/loadavg) emu $(pgrep -f qemu-system | head -1)"; sleep 5; done) > e2e/out/phone/host.txt 2>&1 &
             adb install -r apk/*.apk
-            timeout 900 node e2e/android.mjs
+            timeout 900 node e2e/android.mjs || (echo '--- host memory, last readings ---'; tail -25 e2e/out/phone/host.txt; echo '--- processes the system killed ---'; sudo dmesg | grep -iE 'oom|killed process|qemu' | tail -20; exit 1)
       - name: Phone test result
         if: steps.phone1.outcome == 'failure' && steps.phone2.outcome != 'success'
         run: |
