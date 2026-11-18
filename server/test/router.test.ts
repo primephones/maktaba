@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classify, DEFAULT_PROVIDERS, forgetModels, type CallResult, type Feature } from '../src/providers';
+import { classify, DEFAULT_PROVIDERS, forgetModels, modelsFor, type CallResult, type Feature } from '../src/providers';
 import { NoProviderError, route, type UsageStore } from '../src/router';
 
 function memoryUsage(): UsageStore & { calls: string[] } {
@@ -119,6 +119,15 @@ describe('routing', () => {
     expect(r.model).toBe('gemini-3.5-flash');
     expect((await usage.blockedUntil()).gemini).toBeUndefined();
     forgetModels('gemini');
+  });
+
+  it('picks strong free OpenRouter models from the real list (November 2026), not tiny or preview ones', async () => {
+    const ids = ['inclusionai/ling-3.2-flash:free', 'baidu/ernie-5.5-flash-preview:free', 'thinkingmachines/inkling-2-small:free', 'liquid/lfm-3-1.7b:free', 'particle-ai/particle-1:free', 'recursive/flint-v1.0:free', 'nvidia/nemotron-3.5-super-vl:free', 'dots-studio/dots-3-note-preview:free', 'nvidia/nemotron-3.5-lightning:free', 'cohere/north-mini-code:free', 'nvidia/nemotron-3-ultra-550b-a55b:free', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', 'google/gemma-4-26b-a4b-it:free', 'google/gemma-4-31b-it:free'];
+    forgetModels('openrouter');
+    const p = DEFAULT_PROVIDERS.find((x) => x.id === 'openrouter')!;
+    const r = await modelsFor(p, 'translate', { secrets: { OPENROUTER_API_KEY: 'x' }, fetch: (async () => new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }))) as unknown as typeof fetch });
+    expect(r).toEqual(['nvidia/nemotron-3-ultra-550b-a55b:free', 'google/gemma-4-31b-it:free', 'google/gemma-4-26b-a4b-it:free', 'nvidia/nemotron-3.5-super-vl:free']);
+    forgetModels('openrouter');
   });
 
   it('reads Google’s “API key not valid” (a 400) as a refused key', () => {

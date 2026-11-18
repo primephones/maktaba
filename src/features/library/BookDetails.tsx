@@ -72,7 +72,7 @@ function OcrStatus({ book }: { book: Book }) {
         </div>
       </div>
       {ocr.state !== 'done' && ocr.state !== 'failed' && <span className="meter"><i style={{ width: percent(ocr.total ? ocr.done / ocr.total : 0) }} /></span>}
-      {reader && (
+      {reader && ocr.state !== 'waiting' && (
         <p className="muted small" style={{ margin: 0 }}>
           {book.private
             ? 'Read on this phone: private books are never sent to an AI that may learn from them.'

@@ -153,19 +153,25 @@ const PREFER: Record<string, RegExp[]> = {
   gemini: [/^gemini-\d+(?:\.\d+)?-flash$/, /^gemini-flash-latest$/, /^gemini-\d+(?:\.\d+)?-flash-lite$/, /^gemini-flash-lite-latest$/, /^gemini-\d+(?:\.\d+)?-flash/],
   groq: [/^openai\/gpt-oss-120b$/, /^llama-3\.3-70b-versatile$/, /^moonshotai\/kimi-k2/, /^meta-llama\/llama-4-maverick/, /^qwen\/qwen3-32b$/, /^openai\/gpt-oss-20b$/, /70b|120b|235b/],
   openrouter: [
-    /^deepseek\/deepseek-(chat|v3)[^/]*:free$/,
-    /^qwen\/qwen3-235b[^/]*:free$/,
+    /^deepseek\/deepseek-(chat|v\d)[^/]*:free$/,
+    /^qwen\/qwen3[^/]*-(?:235b|480b)[^/]*:free$/,
     /^openai\/gpt-oss-120b:free$/,
+    /^nvidia\/nemotron-[\d.]+-ultra[^/]*:free$/,
     /^meta-llama\/llama-4-maverick:free$/,
     /^moonshotai\/kimi[^/]*:free$/,
     /^google\/gemini[^/]*:free$/,
+    /^google\/gemma-\d+-(?:2[6-9]|[3-9]\d)b[^/]*:free$/,
     /^z-ai\/glm[^/]*:free$/,
+    /^nvidia\/nemotron-[\d.]+-super[^/]*:free$/,
+    /^mistralai\/mistral-(?:large|medium|small)[^/]*:free$/,
     /^deepseek\/deepseek-r1[^/]*:free$/,
+    // Anything else free, except previews and models made for code or notes.
+    /^(?!.*(?:preview|code|coder|note|omni|reasoning-only)).*:free$/,
     /:free$/,
   ],
 };
 // Models for pictures, speech or safety checks, and small models (14B or less), which translate classical texts poorly.
-const NOT_FOR_TEXT = /image|tts|audio|live|embed|guard|whisper|robotics|computer-use|vision-only|nano|gemma-3n|[-_](?:[1-9]|1[0-4])b(?![a-z0-9])/i;
+const NOT_FOR_TEXT = /image|tts|audio|live|embed|guard|whisper|robotics|computer-use|vision-only|nano|lightning|mini-code|gemma-3n|[-_.](?:[1-9]|1[0-4])(?:\.\d+)?b(?![a-z0-9])/i;
 
 const versionOf = (id: string) => (id.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
 function newestFirst(a: string, b: string): number {
