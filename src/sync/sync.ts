@@ -16,7 +16,7 @@ export const TABLES = ['books', 'folders', 'marks', 'refs', 'settings', 'transla
 export type SyncTable = (typeof TABLES)[number];
 
 /** Settings that follow the reader from phone to phone. */
-const SYNC_SETTINGS = new Set(['theme', 'reader', 'coverStyle', 'flags', 'librarySort', 'ai', 'backupReminder']);
+const SYNC_SETTINGS = new Set(['theme', 'reader', 'coverStyle', 'flags', 'librarySort', 'shelving', 'ai', 'backupReminder']);
 
 /** Fields of a book that sync; the rest (its text, import state, cover) belong to each phone. */
 const BOOK_FIELDS = [

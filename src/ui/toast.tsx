@@ -1,10 +1,15 @@
 import { useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 
+interface Action {
+  label: string;
+  run: () => void;
+}
+
 interface Toast {
   id: number;
   text: string;
-  action?: { label: string; run: () => void };
+  actions: Action[];
 }
 
 let toasts: Toast[] = [];
@@ -12,14 +17,16 @@ let seq = 0;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-export function toast(text: string, action?: Toast['action'], ms = 4200) {
+/** A short message, with up to two buttons (one action, or a list of them). */
+export function toast(text: string, action?: Action | Action[], ms = 4200) {
   const id = ++seq;
-  toasts = [...toasts.slice(-2), { id, text, action }];
+  const actions = action ? (Array.isArray(action) ? action : [action]) : [];
+  toasts = [...toasts.slice(-2), { id, text, actions }];
   emit();
   window.setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     emit();
-  }, action ? Math.max(ms, 6500) : ms);
+  }, actions.length ? Math.max(ms, 6500) : ms);
 }
 
 /** `place` keeps toasts clear of whatever sits at the bottom of the current screen. */
@@ -36,17 +43,18 @@ export function Toasts({ place }: { place: 'bar' | 'reader' | 'edge' }) {
       {list.map((t) => (
         <div className="toast" key={t.id}>
           <span>{t.text}</span>
-          {t.action && (
+          {t.actions.map((a) => (
             <button
+              key={a.label}
               onClick={() => {
-                t.action!.run();
+                a.run();
                 toasts = toasts.filter((x) => x.id !== t.id);
                 emit();
               }}
             >
-              {t.action.label}
+              {a.label}
             </button>
-          )}
+          ))}
         </div>
       ))}
     </div>,

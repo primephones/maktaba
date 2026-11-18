@@ -33,6 +33,7 @@ const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string }> =
   { id: 'backup', title: 'Backup', icon: 'download', sub: 'One file with everything, and a reminder' },
   { id: 'theme', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },
   { id: 'reading', title: 'Reading defaults', icon: 'type', sub: 'Fonts, size, spacing and page mode' },
+  { id: 'library', title: 'Library', icon: 'book', sub: 'Sorting new books into folders' },
   { id: 'covers', title: 'Default cover style', icon: 'book', sub: 'How books look on the shelf' },
   { id: 'switches', title: 'Feature switches', icon: 'switches', sub: 'Motion and experimental features' },
   { id: 'storage', title: 'Storage', icon: 'storage', sub: 'Space used on this device' },
@@ -71,6 +72,7 @@ export function Settings({ page }: { page?: string }) {
         {page === 'voice' && <VoicePage />}
         {page === 'theme' && <ThemePage />}
         {page === 'reading' && <ReadingPage />}
+        {page === 'library' && <LibraryPage />}
         {page === 'covers' && <CoversPage />}
         {page === 'switches' && <SwitchesPage />}
         {page === 'storage' && <StoragePage />}
@@ -115,6 +117,33 @@ const SAMPLE: Book = {
   id: 'sample', title: 'الرسالة', author: 'الإمام الشافعي', lang: 'ar', format: 'epub', kind: 'text', size: 0, hash: '', fileName: '',
   addedAt: 0, status: 'want', hasCover: false, sectionCount: 0, sectionChars: [], toc: [], import: { state: 'ready', done: 0, total: 0 },
 };
+
+/** New books: ask which folder, sort them by themselves, or leave them in the library. */
+function LibraryPage() {
+  const mode = useSetting('shelving');
+  const options: Array<['ask' | 'auto' | 'off', string, string]> = [
+    ['ask', 'Ask me', 'After a book is added, Maktaba suggests a folder by its subject (or with its other volumes); one tap puts it there.'],
+    ['auto', 'Sort automatically', 'New books go straight into the folder for their subject, made if need be. You can undo or change it.'],
+    ['off', 'Leave them', 'New books stay on the top shelf of the library.'],
+  ];
+  return (
+    <>
+      <div className="section-title">When I add a book</div>
+      <div className="list" role="radiogroup" aria-label="When I add a book">
+        {options.map(([value, title, sub]) => (
+          <button className="row" key={value} role="radio" aria-checked={mode === value} onClick={() => void setSetting('shelving', value)}>
+            <span className="grow">
+              <span className="title">{title}</span>
+              <div className="sub">{sub}</div>
+            </span>
+            {mode === value && <Icon name="check" />}
+          </button>
+        ))}
+      </div>
+      <p className="muted small">Subjects Maktaba recognises from titles in Arabic, Urdu, Persian, Pashto, Malay and English: uṣūl al-fiqh, fiqh, ḥadīth and its commentaries, tafsīr, ʿaqīda, sīra and history, Arabic language, tazkiya, and constitutions and law. A book added from inside a folder stays in that folder.</p>
+    </>
+  );
+}
 
 function CoversPage() {
   const style = useSetting('coverStyle');

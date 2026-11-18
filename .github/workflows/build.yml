@@ -57,6 +57,8 @@ jobs:
         run: node e2e/setup.mjs
       - name: Urdu and Persian on every screen, at three screen sizes
         run: node e2e/look-urdu.mjs
+      - name: New books into folders
+        run: node e2e/shelving.mjs
       - name: Translate a whole book through the server, in the app
         run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4

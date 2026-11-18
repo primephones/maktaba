@@ -47,6 +47,8 @@ export interface Settings {
   coverStyle: CoverStyle;
   flags: Flags;
   librarySort: 'recent' | 'added' | 'title' | 'author' | 'progress';
+  /** What happens to a new book: ask which folder, sort it by itself, or leave it. */
+  shelving: 'ask' | 'auto' | 'off';
   lastBackupAt: number;
   backupReminder: 'off' | 'weekly' | 'monthly';
 }
@@ -71,6 +73,7 @@ export const DEFAULTS: Settings = {
   coverStyle: 'bound',
   flags: { pageCurl: false, reduceMotion: false },
   librarySort: 'recent',
+  shelving: 'ask',
   lastBackupAt: 0,
   backupReminder: 'monthly',
 };
