@@ -492,6 +492,16 @@ await section('Other formats', async () => {
     return c.width > 100 && corner.every((v) => v > 240) && dark > 0;
   });
   check(drawn, 'the original page is drawn, paper and ink');
+  await orig.getByText('Highlighted: where you are reading').waitFor({ timeout: 8000 });
+  const zoomed = await page.locator('.zoom-stage').evaluate((el) => el.style.transform);
+  check(/scale\((1\.[0-9]|2)/.test(zoomed), `the paragraph being read is highlighted on the page, and the page opens zoomed to it (${zoomed})`);
+  const tinted = await orig.locator('canvas').evaluate((c) => {
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4 * 7) if (d[i] > 220 && d[i + 1] > 190 && d[i + 2] < 200 && d[i] - d[i + 2] > 40) n++;
+    return n;
+  });
+  check(tinted > 50, `the highlight is painted on the page (${tinted} tinted points)`);
   await shot('10b-original-page');
   await page.getByRole('button', { name: 'Next page' }).click();
   await pause(500);

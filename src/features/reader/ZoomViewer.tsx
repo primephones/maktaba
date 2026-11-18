@@ -3,13 +3,25 @@ import { createPortal } from 'react-dom';
 import { pushOverlay } from '../../app/router';
 import { clamp } from '../../lib/util';
 import { Icon } from '../../ui/Icon';
-import { drawPdfPage } from './PdfPage';
+import { drawPdfPage, paragraphRects, type Rect } from './PdfPage';
 
 export type ZoomSource = { kind: 'pdf'; bookId: string; page: number } | { kind: 'img'; url: string };
 
 /** Full-screen view of a scanned page or picture: pinch to zoom, drag to move, double-tap. */
-export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, onSwipe }: {
+/** A paragraph to show on the page: by its text (PDF text) or its area (a recognised scan). */
+export interface PageMark {
+  page: number;
+  text?: string;
+  /** Fractions of the page: left, top, right, bottom. */
+  box?: [number, number, number, number];
+}
+
+export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, onSwipe, mark, onMarked }: {
   source: ZoomSource;
+  /** Highlight this paragraph on its page, and zoom to it. */
+  mark?: PageMark;
+  /** Told whether the paragraph was found on the page. */
+  onMarked?: (found: boolean) => void;
   onClose: () => void;
   label?: string;
   /** Controls drawn over the page (the original-page viewer's page buttons). */
@@ -60,6 +72,7 @@ export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, o
         c.width = off.width;
         c.height = off.height;
         c.getContext('2d')?.drawImage(off, 0, 0);
+        if (mark && mark.page === source.page) void showMark(c, source.bookId, mark, () => current);
       })
       .catch(() => undefined);
     return () => {
@@ -67,6 +80,45 @@ export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, o
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfKey]);
+
+  /** Bands over the paragraph being read, then the page zoomed so it sits mid-screen. */
+  const showMark = async (c: HTMLCanvasElement, bookId: string, m: PageMark, alive: () => boolean) => {
+    let rects: Rect[] = [];
+    if (m.box) {
+      const [x0, y0, x1, y1] = m.box;
+      rects = [{ x: x0 * c.width, y: y0 * c.height, w: (x1 - x0) * c.width, h: (y1 - y0) * c.height }];
+    } else if (m.text) {
+      rects = await paragraphRects(bookId, m.page, m.text, c.width).catch(() => []);
+    }
+    if (!alive()) return;
+    onMarked?.(rects.length > 0);
+    if (!rects.length) return;
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
+    const pad = c.width * 0.006;
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(232, 190, 80, 0.45)';
+    for (const r of rects) ctx.fillRect(r.x - pad, r.y - pad, r.w + 2 * pad, r.h + 2 * pad);
+    ctx.restore();
+    // A rubric bar in the margin beside the whole paragraph.
+    const top = Math.min(...rects.map((r) => r.y)) - pad;
+    const bottom = Math.max(...rects.map((r) => r.y + r.h)) + pad;
+    const right = Math.max(...rects.map((r) => r.x + r.w));
+    ctx.fillStyle = 'rgba(163, 48, 42, 0.85)';
+    ctx.fillRect(Math.min(c.width - pad * 2, right + pad * 3), top, Math.max(3, c.width * 0.005), bottom - top);
+    // Zoom so the paragraph fills most of the screen's width, centred.
+    const box = c.getBoundingClientRect();
+    if (!box.width) return;
+    const k = box.width / c.width;
+    const left = Math.min(...rects.map((r) => r.x)) - pad;
+    const span = (right - left + pad * 2) * k;
+    const scale = clamp((window.innerWidth * 0.92) / Math.max(span, 1), 1, 2.6);
+    const cx = box.left + ((left + right) / 2) * k;
+    const cy = box.top + ((top + bottom) / 2) * k;
+    view.current = { scale, x: window.innerWidth / 2 - scale * cx, y: window.innerHeight * 0.42 - scale * cy };
+    apply();
+  };
 
   const apply = () => {
     const v = view.current;

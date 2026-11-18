@@ -30,7 +30,7 @@ import { takeJump } from './jump';
 import { ReadingControls } from './ReadingControls';
 import { readSelection, type ReaderSelection } from './selection';
 import { PagedView, ScrollView, type Target } from './views';
-import { ZoomViewer, type ZoomSource } from './ZoomViewer';
+import { ZoomViewer, type PageMark, type ZoomSource } from './ZoomViewer';
 
 const COLORS: HighlightColor[] = ['gold', 'rubric', 'slate', 'rose', 'ink'];
 const COLOR_NAME: Record<HighlightColor, string> = { gold: 'Gold', rubric: 'Red', slate: 'Slate blue', rose: 'Rose', ink: 'Grey' };
@@ -85,7 +85,7 @@ function ReaderInner({ book }: { book: Book }) {
   const [note, setNote] = useState<string | null>(null);
   const [editMark, setEditMark] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomSource | null>(null);
-  const [originalPage, setOriginalPage] = useState<number | null>(null);
+  const [original, setOriginal] = useState<{ page: number; mark?: PageMark } | null>(null);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [scrub, setScrub] = useState<number | null>(null);
 
@@ -368,10 +368,12 @@ function ReaderInner({ book }: { book: Book }) {
   const showOriginal = async (at: { section: number; block: number } = pos) => {
     if (book.format === 'pdf') {
       const blocks = cache.current.get(at.section)?.blocks ?? (await db.sections.get(sectionId(book.id, at.section)))?.blocks ?? [];
-      let page: number | undefined;
-      for (let i = Math.min(at.block, blocks.length - 1); i >= 0 && page === undefined; i--) page = blocks[i]?.page;
-      if (page === undefined) page = blocks.find((b) => b.page)?.page;
-      setOriginalPage(page ?? 1);
+      let i = Math.min(at.block, blocks.length - 1);
+      // The paragraph being read (a page image or a heading carries no text to find).
+      while (i > 0 && (blocks[i]?.page === undefined || blocks[i]?.t === 'img')) i--;
+      const b = blocks[i];
+      const page = b?.page ?? blocks.find((x) => x.page)?.page ?? 1;
+      setOriginal({ page, mark: b && b.page ? { page: b.page, text: b.t === 'img' ? undefined : b.text, box: b.box } : undefined });
       return;
     }
     const rec = await db.files.get(book.id);
@@ -664,7 +666,7 @@ function ReaderInner({ book }: { book: Book }) {
       )}
       {editing && <MarkEditor mark={editing} onClose={() => setEditMark(null)} />}
       {zoom && <ZoomViewer source={zoom} onClose={() => setZoom(null)} />}
-      {originalPage !== null && <OriginalViewer book={book} page={originalPage} onGo={(s, b) => goTo(s, b)} onClose={() => setOriginalPage(null)} />}
+      {original && <OriginalViewer book={book} page={original.page} mark={original.mark} onGo={(s, b) => goTo(s, b)} onClose={() => setOriginal(null)} />}
       {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
       {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} />}
       {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}

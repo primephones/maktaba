@@ -4,7 +4,7 @@ import { db } from '../../db/db';
 import { openOriginal } from '../../lib/saveFile';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
-import { ZoomViewer } from './ZoomViewer';
+import { ZoomViewer, type PageMark } from './ZoomViewer';
 import { findPage } from './Contents';
 
 /**
@@ -12,7 +12,8 @@ import { findPage } from './Contents';
  * against it. Opens on the page being read; swipe or use the arrows for the pages around
  * it, pinch to zoom, and go back to the text at the page being looked at.
  */
-export function OriginalViewer({ book, page: start, onGo, onClose }: { book: Book; page: number; onGo: (section: number, block: number) => void; onClose: () => void }) {
+export function OriginalViewer({ book, page: start, mark, onGo, onClose }: { book: Book; page: number; mark?: PageMark; onGo: (section: number, block: number) => void; onClose: () => void }) {
+  const [found, setFound] = useState<boolean | null>(null);
   const count = book.pageCount ?? start;
   const [page, setPage] = useState(Math.min(Math.max(1, start), count));
   const rtl = book.lang === 'ar' || book.lang === 'ur' || book.lang === 'fa';
@@ -46,6 +47,8 @@ export function OriginalViewer({ book, page: start, onGo, onClose }: { book: Boo
       label={`Original, page ${page} of ${count}`}
       onClose={onClose}
       onSwipe={(dir) => (rtl ? step(dir === 1 ? -1 : 1) : step(dir))}
+      mark={mark}
+      onMarked={setFound}
     >
       <div className="orig-bar" onPointerDown={stop} onPointerUp={stop}>
         <button className="icon-btn" onClick={rtl ? after : before} disabled={rtl ? page >= count : page <= 1} aria-label={rtl ? 'Next page' : 'Previous page'}>
@@ -53,6 +56,9 @@ export function OriginalViewer({ book, page: start, onGo, onClose }: { book: Boo
         </button>
         <div className="orig-mid">
           <b>Original · page {page}<span> of {count}</span></b>
+          {mark && page === mark.page && found !== null && (
+            <span className="orig-note" role="status">{found ? 'Highlighted: where you are reading' : 'This paragraph could not be marked on the page'}</span>
+          )}
           <span className="orig-acts">
             <button
               onClick={async () => {

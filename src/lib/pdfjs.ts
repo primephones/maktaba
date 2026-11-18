@@ -3,7 +3,7 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 let lib: Promise<typeof import('pdfjs-dist')> | null = null;
 
 /** pdf.js is large, so it is loaded only when a PDF is actually opened or imported. */
-function pdfjs() {
+export function pdfjs() {
   if (!lib) {
     lib = (async () => {
       const [mod, worker] = await Promise.all([

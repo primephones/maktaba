@@ -173,6 +173,8 @@ export interface Block {
   src?: string;
   /** 1-based page of the source file this block came from. */
   page?: number;
+  /** Where a recognised paragraph sits on its page image: fractions left, top, right, bottom. */
+  box?: [number, number, number, number];
   /** The number printed on that page, when known. */
   printed?: string;
   /** Override of the book language for this block. */

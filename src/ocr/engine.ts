@@ -86,11 +86,33 @@ export async function recognizePage(image: HTMLCanvasElement | Blob, langs: stri
     text: l.text,
   }));
   const rebuilt = linesToBlocks(lines, page);
+  // The page's size, to keep each paragraph's place on it as fractions (for highlighting
+  // where the reader is, on the page image).
+  let W = 0;
+  let H = 0;
+  if (typeof HTMLCanvasElement !== 'undefined' && image instanceof HTMLCanvasElement) {
+    W = image.width;
+    H = image.height;
+  } else {
+    const bmp = await createImageBitmap(image as Blob).catch(() => null);
+    W = bmp?.width ?? 0;
+    H = bmp?.height ?? 0;
+    bmp?.close();
+  }
   const blocks: Block[] = rebuilt.blocks.map((b) => {
     // A paragraph's confidence is that of the lines it was built from.
     const parts = tLines.filter((l) => b.text.includes(l.text));
     const conf = parts.length ? Math.round(parts.reduce((n, l) => n + l.conf, 0) / parts.length) : Math.round(data.confidence);
-    return { ...b, ocr: true, conf };
+    const box: Block['box'] =
+      parts.length && W && H
+        ? [
+            Math.min(...parts.map((l) => l.bbox.x0)) / W,
+            Math.min(...parts.map((l) => l.bbox.y0)) / H,
+            Math.max(...parts.map((l) => l.bbox.x1)) / W,
+            Math.max(...parts.map((l) => l.bbox.y1)) / H,
+          ]
+        : undefined;
+    return { ...b, ocr: true, conf, ...(box ? { box } : {}) };
   });
   return { blocks, conf: Math.round(data.confidence ?? 0), printed: rebuilt.printed, text: data.text ?? '' };
 }
