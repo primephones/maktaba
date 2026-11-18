@@ -4,6 +4,7 @@ import { detectLang } from '../lib/arabic';
 import { workBegan, workEnded, workProgress } from '../native/work';
 import { recognizePage, releaseEngine, type OcrResult } from './engine';
 import { AllowanceUsedUp, aiReaderFor, recognizeWithAi } from './ai';
+import { getMyAi } from '../ai/device';
 import { applyOcrToSection, sectionOfPage } from './merge';
 import { imagePages, pageImage } from './pages';
 
@@ -70,17 +71,32 @@ let running = false;
 const stopped = new Set<string>();
 export const stopOcr = (bookId: string) => stopped.add(bookId);
 
-/** Picks a recognition language for a book whose language is not known yet. */
-async function chooseLang(book: Book, firstPage: number): Promise<OcrLang> {
+/**
+ * The phone's own engine reads clean Arabic (Naskh) and Latin print fairly; Urdu, Persian
+ * and Pashto are set in Nastaliq and similar hands, which it turns into nonsense. Those
+ * are read only by the reader's AI, and wait for it.
+ */
+export const PHONE_CAN_READ = new Set<OcrLang>(['ara', 'eng', 'msa']);
+const NEED_AI_NOTE = 'Waiting for your AI: the phone cannot read this script properly. Add a free Gemini key in Settings › Your AI and the pages are read and translated.';
+const PAUSED_NOTE = 'Today’s free Gemini allowance is used up. Reading carries on by itself when it renews; meanwhile tap a page in the book to read it on its own.';
+
+/** Picks a recognition language for a book whose language is not known yet (null: only the AI can tell). */
+async function chooseLang(book: Book, firstPage: number): Promise<OcrLang | null> {
   if (book.ocrLang) return book.ocrLang;
   const known = LANG_FOR[book.lang];
   if (known) return known;
-  // Read the first page both ways and keep whichever script is really there.
-  const canvas = await inTime(pageImage(book, firstPage), PAGE_LIMIT_MS);
+  // Read the first page and keep whichever script is really there.
   const key = await aiReaderFor(book);
-  const text = key
-    ? await recognizeWithAi(key, canvas, 'auto', firstPage).then((r) => r.text, () => onPhone(canvas, 'ara+eng', firstPage).then((r) => r.text))
-    : (await onPhone(canvas, 'ara+eng', firstPage)).text;
+  const canvas = await inTime(pageImage(book, firstPage), PAGE_LIMIT_MS);
+  if (!key) {
+    // Without the AI, the phone may go on only if it finds clear Arabic or Latin print:
+    // Nastaliq comes out as low-confidence nonsense, and waits for the AI instead.
+    const r = await onPhone(canvas, 'ara+eng', firstPage).catch(() => null);
+    const seen = r ? detectLang(r.text) : 'other';
+    if (r && r.conf >= 60 && (seen === 'ar' || seen === 'en')) return seen === 'ar' ? 'ara' : 'eng';
+    return null;
+  }
+  const text = await recognizeWithAi(key, canvas, 'auto', firstPage).then((r) => r.text);
   const lang = detectLang(text);
   return LANG_FOR[lang] ?? 'ara';
 }
@@ -91,6 +107,11 @@ export async function runOcrQueue(): Promise<void> {
   if (importBusy()) return;
   running = true;
   try {
+    await forgetUnreadablePages();
+    // Books waiting for the AI start once it is there (a key added, or the allowance back).
+    for (const b of await db.books.filter((x) => x.ocr?.state === 'waiting').toArray()) {
+      if (await aiReaderFor(b)) await db.books.update(b.id, { ocr: { ...b.ocr!, state: 'queued', error: undefined } });
+    }
     for (;;) {
       const book = await db.books.filter((b) => b.import.state === 'ready' && (b.ocr?.state === 'queued' || b.ocr?.state === 'running')).first();
       if (!book) break;
@@ -100,6 +121,44 @@ export async function runOcrQueue(): Promise<void> {
   } finally {
     running = false;
     await releaseEngine();
+  }
+}
+
+/**
+ * Text the phone's engine made of Nastaliq (Urdu, Persian, Pashto) pages is nonsense: it is
+ * taken out of the books (pages corrected by hand are kept), and those pages read again by
+ * the AI when it can.
+ */
+async function forgetUnreadablePages(): Promise<void> {
+  const bad = await db.ocrPages.filter((p) => !p.edited && p.by !== 'ai' && !PHONE_CAN_READ.has(p.lang)).toArray();
+  if (!bad.length) return;
+  await db.ocrPages.bulkDelete(bad.map((p) => p.id));
+  for (const bookId of new Set(bad.map((p) => p.bookId))) {
+    const sections = await db.sections.where('bookId').equals(bookId).toArray();
+    for (const sec of sections) if (sec.blocks.some((b) => b.ocr)) await applyOcrToSection(bookId, sec.idx);
+    const book = await db.books.get(bookId);
+    if (book?.ocr) await db.books.update(bookId, { ocr: { ...book.ocr, state: 'queued', done: await db.ocrPages.where('bookId').equals(bookId).count() }, scanView: 'page' });
+  }
+}
+
+/** Reads one page with the reader's AI now (ahead of the rest of the book), keeping hand corrections. */
+export async function readPageNow(book: Book, page: number): Promise<void> {
+  const existing = await db.ocrPages.get(`${book.id}:${page}`);
+  if (existing && (existing.by === 'ai' || existing.edited)) return;
+  const key = await aiReaderFor(book);
+  if (!key) {
+    if (book.private) throw new Error('This book is marked private, so its pages are not sent to an AI that may learn from them.');
+    throw new Error('Add a free Gemini key in Settings › Your AI to read and translate scanned pages.');
+  }
+  const lang = book.ocrLang ?? LANG_FOR[book.lang] ?? 'urd';
+  const canvas = await inTime(pageImage(book, page), PAGE_LIMIT_MS);
+  try {
+    const r = await recognizeWithAi(key, canvas, lang, page);
+    await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
+    if (book.lang === 'other') await db.books.update(book.id, { lang: LANG_OF[lang] });
+  } finally {
+    canvas.width = 0;
+    canvas.height = 0;
   }
 }
 
@@ -114,8 +173,13 @@ async function recognizeBook(book: Book): Promise<void> {
   await workBegan(key, `Recognising ${book.title}`, `Page ${done + 1} of ${total}`, `Text recognition for “${book.title}” was not finished.`);
   try {
     const lang = await chooseLang(book, todo[0] ?? pages[0]);
-    await db.books.update(id, { ocrLang: lang, ocr: { state: 'running', done, total }, ...(book.lang === 'other' ? { lang: LANG_OF[lang] } : {}) });
     let aiKey = await aiReaderFor(book);
+    if (!lang || (!aiKey && !PHONE_CAN_READ.has(lang))) {
+      const paused = !book.private && !!(await getMyAi()).gemini;
+      await db.books.update(id, { ...(lang ? { ocrLang: lang } : {}), ocr: { state: 'waiting', done, total, error: paused ? PAUSED_NOTE : NEED_AI_NOTE }, scanView: book.scanView ?? 'page' });
+      return;
+    }
+    await db.books.update(id, { ocrLang: lang, ocr: { state: 'running', done, total }, ...(book.lang === 'other' ? { lang: LANG_OF[lang] } : {}) });
     let aiFailures = 0;
     for (const page of todo) {
       if (stopped.has(id)) return;
@@ -134,6 +198,14 @@ async function recognizeBook(book: Book): Promise<void> {
           if (e instanceof AllowanceUsedUp || ++aiFailures >= 3 || /key was refused/.test((e as Error).message)) aiKey = null;
         }
       }
+      if (!saved && !PHONE_CAN_READ.has(lang)) {
+        // The phone would only make nonsense of this script: wait for the AI.
+        canvas.width = 0;
+        canvas.height = 0;
+        const paused = !book.private && !!(await getMyAi()).gemini;
+        await db.books.update(id, { ocr: { state: 'waiting', done, total, error: paused ? PAUSED_NOTE : NEED_AI_NOTE } });
+        return;
+      }
       if (!saved) {
         const result = await onPhone(canvas, lang, page);
         await savePage(book, page, { blocks: result.blocks, conf: result.conf, printed: result.printed, lang, by: 'phone' });
@@ -150,7 +222,7 @@ async function recognizeBook(book: Book): Promise<void> {
         return;
       }
     }
-    await db.books.update(id, { ocr: { state: 'done', done, total }, scanView: book.scanView ?? 'text' });
+    await db.books.update(id, { ocr: { state: 'done', done, total }, scanView: book.scanView ?? 'page' });
   } catch (e) {
     console.error('Text recognition failed', e);
     const error =

@@ -23,7 +23,8 @@ export interface ImportState {
 export type OcrLang = 'ara' | 'urd' | 'fas' | 'pus' | 'msa' | 'eng';
 
 export interface OcrState {
-  state: 'queued' | 'running' | 'done' | 'failed';
+  /** 'waiting': for the reader's AI (a key, or tomorrow's allowance); `error` says which. */
+  state: 'queued' | 'running' | 'done' | 'failed' | 'waiting';
   done: number;
   total: number;
   error?: string;

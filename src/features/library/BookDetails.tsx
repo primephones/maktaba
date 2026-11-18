@@ -64,10 +64,10 @@ function OcrStatus({ book }: { book: Book }) {
         <Icon name="scan" />
         <div className="grow" style={{ flex: 1 }}>
           <div style={{ fontWeight: 600 }}>
-            {ocr.state === 'done' ? 'Text recognised' : ocr.state === 'failed' ? 'Text recognition stopped' : ocr.state === 'running' ? 'Recognising text' : 'Waiting to recognise text'}
+            {ocr.state === 'done' ? 'Pages read' : ocr.state === 'failed' ? 'Reading the pages stopped' : ocr.state === 'running' ? 'Reading the pages' : ocr.state === 'waiting' ? 'Waiting for your AI' : 'Waiting to read the pages'}
           </div>
           <div className="muted small">
-            {pagesText} {ocr.state === 'failed' ? ocr.error : `${ocr.done} of ${ocr.total} pages done${langLabel ? `, in ${langLabel}` : ''}.`}
+            {pagesText} {ocr.state === 'failed' || ocr.state === 'waiting' ? `${ocr.done} of ${ocr.total} pages read. ${ocr.error ?? ''}` : `${ocr.done} of ${ocr.total} pages done${langLabel ? `, in ${langLabel}` : ''}.`}
           </div>
         </div>
       </div>
@@ -77,14 +77,16 @@ function OcrStatus({ book }: { book: Book }) {
           {book.private
             ? 'Read on this phone: private books are never sent to an AI that may learn from them.'
             : reader.ai
-              ? 'Your Gemini AI reads the pages: far better than the phone alone, especially for Urdu Nastaliq.'
+              ? 'Your Gemini AI reads each page, and the English appears under the page as it is printed.'
               : reader.pausedUntil
                 ? `Today’s free Gemini allowance is used up, so the phone reads meanwhile. Gemini takes over again ${timeUntil(reader.pausedUntil)}.`
-                : 'Read on this phone. Adding a free Gemini key (Settings, Your AI) reads pages far better, especially Urdu Nastaliq.'}
+                : book.ocrLang && !['ara', 'eng', 'msa'].includes(book.ocrLang)
+                  ? 'Urdu, Persian and Pashto pages are read by your AI only: the phone cannot read these scripts properly. Add a free Gemini key in Settings, Your AI.'
+                  : 'Read on this phone. Adding a free Gemini key (Settings, Your AI) reads pages far better.'}
         </p>
       )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {ocr.state === 'queued' && <button className="btn" onClick={() => void runOcrQueue()}>Start now</button>}
+        {(ocr.state === 'queued' || (ocr.state === 'waiting' && reader?.ai)) && <button className="btn" onClick={() => void runOcrQueue()}>Start now</button>}
         {reader?.ai && !book.private && byPhone > 0 && (ocr.state === 'done' || ocr.state === 'failed') && (
           <button className="btn" onClick={() => void rereadWithAi(book.id).then((n) => toast(`Reading ${n} page${n === 1 ? '' : 's'} again with your AI.`))}>
             <span className="ai-mark" aria-hidden="true">✦</span>Read again with AI

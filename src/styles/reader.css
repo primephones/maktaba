@@ -1064,3 +1064,36 @@ mark.flash {
     height: 40px;
   }
 }
+
+/* Under a scanned page: read and translate it now. */
+.scan-action {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 22px;
+}
+.scan-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  min-height: 44px;
+}
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--rubric) 25%, transparent);
+  border-top-color: var(--rubric);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}

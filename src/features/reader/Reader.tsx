@@ -24,6 +24,7 @@ import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { BlockView, NO_MARKS } from './BlockView';
+import { ScanPageAction } from './ScanPage';
 import { BookSearch } from './BookSearch';
 import { Contents } from './Contents';
 import { takeJump } from './jump';
@@ -424,9 +425,10 @@ function ReaderInner({ book }: { book: Book }) {
   const [listening, setListening] = useState(false);
   const onQuran = useCallback((m: QuranMatch) => setQuran(m), []);
 
-  // Books with page images: show the pages, or the text recognised from them.
+  // Books with page images: the pages as printed, each with its English beneath (the
+  // default), or the text read from them.
   const hasScans = !!book.ocr;
-  const scanView = book.scanView ?? 'text';
+  const scanView = book.scanView ?? 'page';
 
   const renderSection = useCallback(
     (sec: Section) => {
@@ -453,6 +455,19 @@ function ReaderInner({ book }: { book: Book }) {
           out.push(<div className="pgmark" key={`p${i}`} role="note" aria-label={`Page ${pageNo}`}>{pageNo}</div>);
         }
         if (pageNo) lastPage = pageNo;
+        const blockProps = {
+          bookId: book.id,
+          bookLang: book.lang,
+          section: sec.idx,
+          showTashkil: prefs.tashkil,
+          onNote,
+          onMark,
+          onZoom,
+          flipped: false,
+          onFlip,
+          onUncertain,
+          onQuran,
+        };
         out.push(
           <BlockView
             key={i}
@@ -475,10 +490,35 @@ function ReaderInner({ book }: { book: Book }) {
             onQuran={onQuran}
           />,
         );
+        // Under a scanned page: its English, paragraph by paragraph, and a way to read and
+        // translate the page now if that is not done yet.
+        if (isPageImage && scanView === 'page' && hasScans && (view !== 'orig' || !hasTranslation)) {
+          const p = block.page ?? Number(block.src?.match(/\d+/)?.[0] ?? 1);
+          const onPage = sec.blocks.map((b, j) => (b.ocr && b.page === p && b.text.trim().length > 1 ? j : -1)).filter((j) => j >= 0);
+          const done = onPage.filter((j) => translations.has(`${sec.idx}:${j}`));
+          for (const j of done) {
+            out.push(
+              <BlockView
+                key={`en${j}`}
+                {...blockProps}
+                index={j}
+                block={sec.blocks[j]}
+                marks={marksByBlock.get(`${sec.idx}:${j}`) ?? NO_MARKS}
+                flash={flash && flash.section === sec.idx && flash.block === j ? flash.range : undefined}
+                tr={translations.get(`${sec.idx}:${j}`)}
+                show="en"
+                flipped={flipped.has(`${sec.idx}:${j}`)}
+              />,
+            );
+          }
+          if (!onPage.length || done.length < onPage.length) {
+            out.push(<ScanPageAction key={`act${i}`} book={book} section={sec.idx} page={p} read={onPage.length > 0} some={done.length > 0} />);
+          }
+        }
       });
       return out;
     },
-    [book.id, book.lang, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran],
+    [book, hasScans, hasTranslation, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran],
   );
 
   // Recognised text arrives while the book is open: refresh the chapters on screen.

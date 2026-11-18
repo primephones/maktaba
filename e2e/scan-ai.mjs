@@ -30,6 +30,7 @@ const cors = { 'access-control-allow-origin': '*', 'content-type': 'application/
 
 // The stand-in Gemini: reads each page as Urdu paragraphs, or says the day's allowance is gone.
 let geminiCalls = 0;
+let translateCalls = 0;
 let allowanceGone = false;
 await ctx.route('https://generativelanguage.googleapis.com/**', async (route) => {
   const req = route.request();
@@ -39,6 +40,14 @@ await ctx.route('https://generativelanguage.googleapis.com/**', async (route) =>
   if (allowanceGone) return route.fulfill({ status: 429, headers: cors, body: JSON.stringify({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 250, GenerateRequestsPerDayPerProjectPerModel-FreeTier' } }) });
   const body = JSON.parse(req.postData() ?? '{}');
   const hasImage = !!body.contents?.[0]?.parts?.some((p) => p.inline_data?.data?.length > 1000);
+  if (!hasImage && !body.contents?.[0]?.parts?.some((p) => p.inline_data)) {
+    // A translation request: English for each paragraph id it lists.
+    translateCalls++;
+    const prompt = body.contents?.[0]?.parts?.map((p) => p.text ?? '').join('\n') ?? '';
+    const ids = [...prompt.matchAll(/^\[([^\]]+)\]/gm)].map((m) => m[1]);
+    const paragraphs = ids.map((id) => ({ id, en: 'The AI read this page from its image. Prayer is the pillar of religion.', uncertain: [] }));
+    return route.fulfill({ status: 200, headers: cors, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ paragraphs }) }] }, finishReason: 'STOP' }] }) });
+  }
   const answer = {
     printed: String(geminiCalls),
     blocks: [
@@ -98,10 +107,41 @@ try {
   console.log('Its details');
   await page.evaluate(() => { location.hash = '#/library'; });
   await page.getByRole('button', { name: 'Details for makhtut-scan' }).click();
-  await page.getByText(/Your Gemini AI reads the pages/).waitFor({ timeout: 8000 });
+  await page.getByText(/Your Gemini AI reads each page/).waitFor({ timeout: 8000 });
   check(true, 'the details say the AI reads the pages');
   await page.getByRole('button', { name: /Translate the whole book/ }).waitFor({ timeout: 8000 });
   check(true, 'and translation is offered for the scanned book');
+
+  console.log('Reading it: the page as printed, its English beneath');
+  await page.keyboard.press('Escape');
+  await page.evaluate((id) => { location.hash = `#/book/${id}`; }, scanId);
+  await page.locator('.pdfpage').first().waitFor({ timeout: 15000 });
+  check(true, 'a scanned book opens on its pages as printed');
+  const act = page.getByRole('button', { name: 'Translate this page' }).first();
+  await act.waitFor({ timeout: 8000 });
+  check(true, 'each page offers to translate it');
+  await act.click();
+  await page.getByText('Prayer is the pillar of religion.').first().waitFor({ timeout: 20000 });
+  check((await page.locator('.pdfpage').count()) > 0, 'the English appears under the page, and the page stays');
+  await page.getByText('Prayer is the pillar of religion.').first().scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollBy(0, -260));
+  await wait(600);
+  await page.screenshot({ path: decodeURIComponent(new URL('./out/shots/50-scan-page-english.png', import.meta.url).pathname) });
+  check(translateCalls > 0, 'translated by the reader’s own AI');
+
+  console.log('Nonsense the phone made of Urdu is cleared and read again by the AI');
+  await page.evaluate(async (id) => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    await new Promise((r) => {
+      const tx = dbh.transaction('ocrPages', 'readwrite');
+      tx.objectStore('ocrPages').put({ id: `${id}:5`, bookId: id, page: 5, blocks: [{ t: 'p', text: 'ییبائروک لم بد نیوک بر دلآہ ب نظا', ocr: true, conf: 31 }], conf: 31, lang: 'urd', updatedAt: Date.now() });
+      tx.oncomplete = r;
+    });
+    dbh.close();
+    window.dispatchEvent(new Event('maktaba:connected'));
+  }, scanId);
+  check(await until(async () => (await read('ocrPages')).find((p) => p.id === `${scanId}:5`)?.by === 'ai', 30000), 'a page the phone read in Urdu is read again by the AI');
 
   console.log('When the day’s allowance is used up');
   allowanceGone = true;
