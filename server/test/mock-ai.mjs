@@ -46,7 +46,7 @@ createServer(async (req, res) => {
   }
   if (calls > LIMIT) {
     res.writeHead(429, { 'retry-after': '1' });
-    res.end('{"error":"rate limited"}');
+    res.end('{"error":{"message":"Rate limit exceeded: free-models-per-day"}}');
     return;
   }
   const { messages } = JSON.parse(body);

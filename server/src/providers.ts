@@ -126,7 +126,8 @@ export function classify(status: number, retryAfter: string | null, body = ''): 
   const wait = Number.isFinite(hinted) ? hinted : header;
   if (status === 429 || status === 402) {
     const daily = status === 402 || /PerDay|per[- ]day|daily|free-models-per-day|insufficient credits|quota exceeded for quota metric.*day/i.test(body);
-    if (daily) return new ProviderError('today’s allowance is used up', 'limit', undefined, true);
+    // The service may still say when it comes back (a short wait is honoured; otherwise tomorrow).
+    if (daily) return new ProviderError('today’s allowance is used up', 'limit', Number.isFinite(wait) && wait < 3600 ? now + wait * 1000 : undefined, true);
     return new ProviderError('busy for a moment (too many requests)', 'limit', now + Math.min(120, Number.isFinite(wait) ? wait + 1 : 60) * 1000);
   }
   if (status === 401 || status === 403 || /API_KEY_INVALID|API key not valid|invalid[ _]api[ _]key|incorrect api key/i.test(body)) return new ProviderError('The key was refused', 'auth');

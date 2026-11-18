@@ -121,7 +121,7 @@ export async function route<T>(
         const err = e instanceof ProviderError ? e : new ProviderError(String(e), 'temporary');
         skipped.push({ provider: p.id, reason: `${model}: ${err.message}` });
         if (err.kind === 'limit') {
-          const until = err.daily || !err.retryAt ? nextReset(now) : err.retryAt;
+          const until = err.retryAt && err.retryAt - now < 3_600_000 ? err.retryAt : err.daily ? nextReset(now) : now + 60_000;
           await usage.block(mk, until, err.message);
           soonest = Math.min(soonest, until);
         } else if (err.kind === 'model') {
