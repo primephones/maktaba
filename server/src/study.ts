@@ -17,6 +17,7 @@ export interface Passage {
 export type StudyTask =
   | { task: 'keywords'; question: string }
   | { task: 'ask'; question: string; passages: Passage[] }
+  | { task: 'debate'; question: string; passages: Passage[] }
   | { task: 'explain'; passage: string; en?: string; cite?: string }
   | { task: 'summarise'; passages: Passage[] }
   | { task: 'irab'; sentence: string };
@@ -49,6 +50,20 @@ export function studyMessages(t: StudyTask): Msg[] {
         },
         { role: 'user', content: `Question: ${t.question}\n\nPassages:\n\n${passagesBlock(t.passages)}` },
       ];
+    case 'debate':
+      return [
+        {
+          role: 'system',
+          content: [
+            'You set out the positions on a question of Islamic scholarship, and the arguments for and against each, using ONLY the numbered passages given, which come from the reader’s own books. Never use outside knowledge and never cite anything that is not among the passages.',
+            'For each position the passages give: state it in one sentence; say who holds it if the passages name them (a scholar, a school such as the Ḥanafīs, "the majority"); list its arguments (a verse, a ḥadīth, an analogy, a principle…); and list the objections or replies the passages make to it.',
+            'Every argument and objection cites the ids of the passages it comes from, e.g. ["p3","p7"]. Keep Arabic technical terms in transliteration with their meaning, e.g. qiyās (analogy).',
+            'If the passages give only one side, give it, and say in "note" that the other side is not in these books. If they do not address the question, set "found" to false.',
+            'Answer in English, with JSON only: {"found":true,"positions":[{"position":"…","held_by":"…","arguments":[{"point":"…","ids":["p3"]}],"objections":[{"point":"…","ids":["p5"]}]}],"note":"…"}',
+          ].join('\n'),
+        },
+        { role: 'user', content: `Question: ${t.question}\n\nPassages:\n\n${passagesBlock(t.passages)}` },
+      ];
     case 'explain':
       return [
         {
@@ -66,7 +81,19 @@ export function studyMessages(t: StudyTask): Msg[] {
       return [
         {
           role: 'system',
-          content: 'You give the iʿrāb (grammatical analysis) of an Arabic sentence, word by word, in the terms of classical Arabic grammar, written in Arabic as a grammar teacher would (e.g. "مبتدأ مرفوع وعلامة رفعه الضمة الظاهرة"), with a short English gloss for each. Analyse every word in order, including particles. If a reading is uncertain or more than one analysis is possible, say so. Answer with JSON only: {"words":[{"word":"…","irab":"…","en":"…"}],"note":"…"}',
+          content: [
+            'You teach iʿrāb (the grammatical analysis of Arabic) to an English-speaking student of the Islamic sciences, who wants to learn why each word takes the case it does.',
+            'Analyse every word of the sentence in order, including particles and attached pronouns that matter, in the terms of classical Arabic grammar (Baṣran usage, as in al-Ājurrūmiyya and Qaṭr al-Nadā).',
+            'For each word give:',
+            '- "word": the word as written;',
+            '- "irab": its iʿrāb in Arabic, as a grammar teacher would write it (e.g. "فاعل مرفوع وعلامة رفعه الضمة الظاهرة على آخره");',
+            '- "case": one of "marfu", "mansub", "majrur", "majzum" (for these, the word is muʿrab) or "mabni" (indeclinable: particles, most pronouns, past verbs…);',
+            '- "role": its role in a few English words (e.g. "subject of the verb", "object", "governed by the preposition fī");',
+            '- "why": one or two plain English sentences giving the rule: what makes it take this case, naming the governing word (ʿāmil) where there is one, and the sign of the case (ḍamma, fatḥa, kasra, sukūn, or a letter);',
+            '- "en": a short English gloss of the word.',
+            'If a reading is uncertain or more than one analysis is possible, say which in "note". Do not invent vowels that change the meaning.',
+            'Answer with JSON only: {"words":[{"word":"…","irab":"…","case":"…","role":"…","why":"…","en":"…"}],"note":"…"}',
+          ].join('\n'),
         },
         { role: 'user', content: t.sentence },
       ];
@@ -118,13 +145,41 @@ export function acceptStudy(t: StudyTask, raw: string): unknown {
       if (!explanation) throw new Error('empty explanation');
       return { explanation, terms: Array.isArray(data.terms) ? data.terms : [] };
     }
+    case 'debate': {
+      const ids = new Set(t.passages.map((p) => p.id));
+      const points = (v: unknown) =>
+        (Array.isArray(v) ? v : [])
+          .map((x) => x as { point?: unknown; ids?: unknown })
+          .map((x) => ({ point: String(x.point ?? '').trim(), ids: (Array.isArray(x.ids) ? x.ids : []).map(String) }))
+          .filter((x) => x.point);
+      const positions = (Array.isArray(data.positions) ? data.positions : [])
+        .map((p) => p as Record<string, unknown>)
+        .map((p) => ({ position: String(p.position ?? '').trim(), held_by: p.held_by ? String(p.held_by) : '', arguments: points(p.arguments), objections: points(p.objections) }))
+        .filter((p) => p.position);
+      // Every point must rest on a passage that was given; a citation to anything else means the answer cannot be trusted.
+      const all = positions.flatMap((p) => [...p.arguments, ...p.objections]);
+      const unknown = all.flatMap((x) => x.ids).filter((id) => !ids.has(id));
+      if (unknown.length) throw new Error(`cites passages that were not given: ${[...new Set(unknown)].join(', ')}`);
+      if (all.some((x) => !x.ids.length)) throw new Error('a point without its source');
+      const found = data.found !== false && positions.length > 0;
+      return { found, positions: found ? positions : [], note: String(data.note ?? '') };
+    }
     case 'summarise': {
       const summary = String(data.summary ?? '').trim();
       if (!summary) throw new Error('empty summary');
       return { summary };
     }
     case 'irab': {
-      const words = Array.isArray(data.words) ? (data.words as Array<Record<string, unknown>>).map((w) => ({ word: String(w.word ?? ''), irab: String(w.irab ?? ''), en: String(w.en ?? '') })).filter((w) => w.word) : [];
+      const CASES = ['marfu', 'mansub', 'majrur', 'majzum', 'mabni'];
+      const caseOf = (v: unknown) => {
+        const c = String(v ?? '').toLowerCase().normalize('NFD').replace(/[^a-z]/g, '');
+        return CASES.find((k) => c.startsWith(k.slice(0, 5))) ?? (/raf/.test(c) ? 'marfu' : /nasb|nas/.test(c) ? 'mansub' : /jarr|jar/.test(c) ? 'majrur' : /jazm/.test(c) ? 'majzum' : /mabn|indecl/.test(c) ? 'mabni' : undefined);
+      };
+      const words = Array.isArray(data.words)
+        ? (data.words as Array<Record<string, unknown>>)
+            .map((w) => ({ word: String(w.word ?? ''), irab: String(w.irab ?? ''), en: String(w.en ?? ''), case: caseOf(w.case), role: w.role ? String(w.role) : undefined, why: w.why ? String(w.why) : undefined }))
+            .filter((w) => w.word)
+        : [];
       if (!words.length) throw new Error('no analysis');
       return { words, note: String(data.note ?? '') };
     }

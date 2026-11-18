@@ -118,6 +118,10 @@ export interface Book {
   openedAt?: number;
   status: ReadStatus;
   folderId?: string;
+  /** Where it came from, when downloaded from the book catalogue. */
+  catalogueId?: string;
+  /** Books in the library that are commentaries (shurūḥ) on this one. */
+  commentaries?: string[];
   coverStyle?: CoverStyle;
   hasCover: boolean;
   /** Series name and volume number when the title names one, so volumes group together. */

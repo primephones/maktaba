@@ -8,6 +8,7 @@ import { Sheet } from '../../ui/Sheet';
 import { Icon } from '../../ui/Icon';
 import { HelpFor } from '../setup/help';
 import { toast } from '../../ui/toast';
+import { IrabView } from './IrabView';
 
 interface Props {
   book: Book;
@@ -72,7 +73,8 @@ export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
         </>
       ) : (
         <>
-          <div className="irab">
+          {!editing && <IrabView result={result} />}
+          <div className="irab" hidden={!editing}>
             {(editing && draft ? draft : result).words.map((w, i) => (
               <div className="irab-row" key={i}>
                 <span className="irab-word" lang="ar" dir="rtl">{w.word}</span>

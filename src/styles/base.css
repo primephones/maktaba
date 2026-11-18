@@ -726,7 +726,9 @@ input[type='search']::-webkit-search-decoration {
   bottom: calc(var(--safe-bottom) + 24px);
 }
 .toasts[data-place='reader'] {
-  bottom: calc(var(--safe-bottom) + 104px);
+  /* In the reader, under the title bar: clear of the tools at the foot and of sheets. */
+  top: calc(var(--safe-top) + 64px);
+  bottom: auto;
 }
 
 .banner > svg {
@@ -1355,4 +1357,42 @@ details.finish-by-hand textarea {
 }
 .test-result .small {
   overflow-wrap: anywhere;
+}
+
+/* Settings › Move to a new phone */
+.move-card {
+  display: grid;
+  gap: 12px;
+}
+.move-steps {
+  margin: 0;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 8px;
+  line-height: 1.5;
+}
+.move-card code {
+  overflow-wrap: anywhere;
+}
+
+/* Setup: what each step gives. */
+.gets {
+  display: grid;
+  gap: 8px;
+}
+.gets-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gets-head svg {
+  color: var(--rubric);
+}
+.gets ul {
+  margin: 0;
+  padding-inline-start: 18px;
+  display: grid;
+  gap: 8px;
+  line-height: 1.5;
+  font-size: 0.95rem;
 }

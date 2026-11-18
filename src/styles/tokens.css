@@ -19,6 +19,8 @@
   --font-arabic: 'Amiri', 'IBM Plex Sans Arabic', serif;
   --font-arabic-sans: 'IBM Plex Sans Arabic', 'Amiri', sans-serif;
   --font-urdu: 'Maktaba Honorifics', 'Noto Nastaliq Urdu', 'Amiri', serif;
+  --font-urdu-gulzar: 'Maktaba Honorifics', 'Gulzar', 'Noto Nastaliq Urdu', 'Amiri', serif;
+  --font-arabic-scheherazade: 'Scheherazade New', 'Amiri', serif;
 
   --r-sm: 8px;
   --r-md: 14px;

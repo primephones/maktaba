@@ -1,3 +1,4 @@
+import { MovePage } from './MovePage';
 import { CheckForUpdates } from '../../app/AppUpdate';
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -25,21 +26,23 @@ const THEMES: Array<[ThemeName, string, string]> = [
   ['black', 'Black', 'True black for OLED screens'],
 ];
 
-const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string }> = [
-  { id: 'help', title: 'Help & setup', icon: 'info', sub: 'The setup guide, and answers to common questions' },
-  { id: 'cloud', title: 'Your cloud', icon: 'cloud', sub: 'Your library in your own Google Drive, on all your phones' },
-  { id: 'ai', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account; today’s allowance' },
-  { id: 'share', title: 'Share Maktaba', icon: 'share', sub: 'A link anyone can open, with their own login' },
-  { id: 'voice', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
-  { id: 'backup', title: 'Backup', icon: 'download', sub: 'One file with everything, and a reminder' },
-  { id: 'theme', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },
-  { id: 'reading', title: 'Reading defaults', icon: 'type', sub: 'Fonts, size, spacing and page mode' },
-  { id: 'library', title: 'Library', icon: 'book', sub: 'Sorting new books into folders' },
-  { id: 'covers', title: 'Default cover style', icon: 'book', sub: 'How books look on the shelf' },
-  { id: 'switches', title: 'Feature switches', icon: 'switches', sub: 'Motion and experimental features' },
-  { id: 'storage', title: 'Storage', icon: 'storage', sub: 'Space used on this device' },
-  { id: 'about', title: 'About & installing', icon: 'info', sub: 'Version, install steps, what’s included' },
+const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string; group: string }> = [
+  { id: 'help', group: 'Start here', title: 'Help & setup', icon: 'info', sub: 'The setup guide, and answers to common questions' },
+  { id: 'cloud', group: 'Your accounts', title: 'Your cloud', icon: 'cloud', sub: 'Your library in your own Google Drive, on all your phones' },
+  { id: 'ai', group: 'Your accounts', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account, test it, today’s allowance' },
+  { id: 'theme', group: 'Reading', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },
+  { id: 'reading', group: 'Reading', title: 'Reading defaults', icon: 'type', sub: 'Typefaces, size, spacing and page mode' },
+  { id: 'voice', group: 'Reading', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
+  { id: 'library', group: 'Your library', title: 'Sorting new books', icon: 'folder', sub: 'Into folders: ask me, automatically, or leave them' },
+  { id: 'covers', group: 'Your library', title: 'Cover style', icon: 'book', sub: 'How books look on the shelf' },
+  { id: 'storage', group: 'Your library', title: 'Storage', icon: 'storage', sub: 'Space used on this device' },
+  { id: 'backup', group: 'Keep it safe', title: 'Backup', icon: 'download', sub: 'One file with everything, and a reminder' },
+  { id: 'move', group: 'Keep it safe', title: 'Move to a new phone', icon: 'move', sub: 'Take your books, notes and translations with you' },
+  { id: 'share', group: 'Maktaba', title: 'Share Maktaba', icon: 'share', sub: 'A link anyone can open, with their own login' },
+  { id: 'switches', group: 'Maktaba', title: 'Feature switches', icon: 'switches', sub: 'Motion and experimental features' },
+  { id: 'about', group: 'Maktaba', title: 'About & updates', icon: 'info', sub: 'Version, updates, install steps, what’s included' },
 ];
+const GROUPS = [...new Set(PAGES.map((p) => p.group))];
 
 export function Settings({ page }: { page?: string }) {
   const info = PAGES.find((p) => p.id === page);
@@ -51,9 +54,12 @@ export function Settings({ page }: { page?: string }) {
       </div>
       <ErrorBoundary what="these settings" compact resetKey={page}>
         <div className="settings-page">
-        {!info && (
-          <div className="list">
-            {PAGES.map((p) => (
+        {!info &&
+          GROUPS.map((g) => (
+            <div key={g}>
+              <div className="section-title">{g}</div>
+              <div className="list">
+                {PAGES.filter((p) => p.group === g).map((p) => (
               <button className="row" key={p.id} onClick={() => navigate(`/settings/${p.id}`)}>
                 <Icon name={p.icon} />
                 <span className="grow">
@@ -62,14 +68,16 @@ export function Settings({ page }: { page?: string }) {
                 </span>
                 <Icon name="forward" size={18} />
               </button>
-            ))}
-          </div>
-        )}
+                ))}
+              </div>
+            </div>
+          ))}
         {page === 'help' && <HelpPage />}
         {page === 'cloud' && <CloudPage />}
         {page === 'ai' && <AiSettings />}
         {page === 'share' && <SharePage />}
         {page === 'backup' && <BackupPage />}
+        {page === 'move' && <MovePage />}
         {page === 'voice' && <VoicePage />}
         {page === 'theme' && <ThemePage />}
         {page === 'reading' && <ReadingPage />}

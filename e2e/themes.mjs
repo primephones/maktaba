@@ -162,6 +162,11 @@ for (const theme of THEMES) {
   await page.getByRole('button', { name: 'Text and theme' }).click();
   await look('reader-text-sheet');
   await closeSheet();
+  for (const [name, shot] of [['English', 'reader-english-sheet'], ['Study', 'reader-study-sheet'], ['More', 'reader-more-sheet']]) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await look(shot);
+    await closeSheet();
+  }
   await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();
   await look('reader-contents');
   await page.getByRole('button', { name: 'باب القياس' }).click();
@@ -187,7 +192,8 @@ for (const theme of THEMES) {
   await look('reader-highlight-editor');
   await closeSheet();
   await page.evaluate(() => getSelection().removeAllRanges());
-  await page.getByRole('button', { name: 'Read aloud' }).first().click().catch(() => undefined);
+  await page.getByRole('button', { name: 'More', exact: true }).click().catch(() => undefined);
+  await page.getByRole('button', { name: /^Read aloud/ }).first().click().catch(() => undefined);
   await page.waitForTimeout(400);
   await look('reader-listen');
   await page.getByRole('button', { name: 'Stop reading aloud' }).click().catch(() => undefined);

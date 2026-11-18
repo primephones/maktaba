@@ -12,6 +12,9 @@ import '@fontsource/amiri/400.css';
 import '@fontsource/amiri/700.css';
 import '@fontsource/noto-nastaliq-urdu/400.css';
 import '@fontsource/noto-nastaliq-urdu/700.css';
+import '@fontsource/gulzar/arabic-400.css';
+import '@fontsource/scheherazade-new/arabic-400.css';
+import '@fontsource/scheherazade-new/arabic-700.css';
 
 import './styles/tokens.css';
 import './styles/base.css';

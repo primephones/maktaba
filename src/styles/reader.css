@@ -423,12 +423,23 @@ mark.flash {
 .rd-top-bar .t {
   flex: 1;
   min-width: 0;
-  font-weight: 600;
-  font-size: 0.95rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0 4px;
+  line-height: 1.25;
+}
+.rd-top-bar .t > span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0 4px;
+}
+.rd-top-bar .t-book {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.rd-top-bar .t-chapter {
+  font-size: 0.78rem;
+  color: var(--ink-2);
 }
 .rd-bottom-bar {
   bottom: 0;
@@ -1053,16 +1064,36 @@ mark.flash {
   font-weight: 600;
 }
 
-/* Narrow phones: eight buttons leave no room for a readable title, and the bar at the
-   foot already names the book and chapter, so the title gives way. */
-@media (max-width: 380px) {
-  .rd-top-bar .t {
-    visibility: hidden;
-  }
-  .rd-top-bar .icon-btn {
-    width: 40px;
-    height: 40px;
-  }
+/* The reading tools at the foot: each labelled, the same width, easy to reach. */
+.rd-tools {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 2px;
+  margin: 8px -10px 0;
+}
+.rd-tools button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 56px;
+  padding: 6px 2px;
+  border-radius: var(--r-md);
+  color: var(--ink-2);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.rd-tools button:active {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.rd-tools button[aria-pressed='true'] {
+  color: var(--rubric);
+}
+.rd-tools button span {
+  white-space: nowrap;
 }
 
 /* Under a scanned page: read and translate it now. */
@@ -1096,4 +1127,152 @@ mark.flash {
   .spinner {
     animation-duration: 2.4s;
   }
+}
+
+/* Iʿrāb, word by word: case, role and why; and Test yourself. */
+.irab2 {
+  display: grid;
+  gap: 12px;
+}
+.irab-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.irab-mode button {
+  min-height: 40px;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--ink-2);
+}
+.irab-mode button[aria-pressed='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.irab-score {
+  margin: 0;
+}
+.irab-words {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.irab-card {
+  --case: var(--ink-3);
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--case);
+  border-radius: var(--r-md);
+  padding: 10px 14px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+}
+.irab-card[data-case='marfu'],
+.irab-case[data-case='marfu'] {
+  --case: #3d6fb4;
+}
+.irab-card[data-case='mansub'],
+.irab-case[data-case='mansub'] {
+  --case: #2f8a5b;
+}
+.irab-card[data-case='majrur'],
+.irab-case[data-case='majrur'] {
+  --case: #b9792a;
+}
+.irab-card[data-case='majzum'],
+.irab-case[data-case='majzum'] {
+  --case: #8a4fb0;
+}
+.irab-card[data-case='mabni'],
+.irab-case[data-case='mabni'] {
+  --case: #7a7468;
+}
+.irab-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-direction: row-reverse;
+}
+.irab-card .irab-word {
+  font-family: var(--rd-ar-font, var(--font-arabic));
+  font-size: 1.6rem;
+  line-height: 1.5;
+}
+.irab-case {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--case) 70%, var(--ink));
+  background: color-mix(in srgb, var(--case) 16%, transparent);
+  white-space: nowrap;
+}
+.irab-case [lang='ar'] {
+  font-family: var(--font-arabic);
+  font-weight: 400;
+}
+.irab-role {
+  margin: 0;
+  font-size: 0.92rem;
+}
+.irab-why {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.irab-why-btn {
+  justify-self: start;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--rubric);
+  min-height: 32px;
+}
+.irab-card .irab-text {
+  margin: 0;
+  font-family: var(--font-arabic);
+  font-size: 1.02rem;
+  color: var(--ink-2);
+  line-height: 1.7;
+}
+.irab-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.irab-choices button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.irab-verdict {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.irab-verdict.is-right {
+  color: #2f8a5b;
+}
+.irab-verdict.is-wrong {
+  color: var(--rubric);
+}
+
+/* In the commentary: a linked sharḥ, tapped to open at the passage. */
+.sharh-go {
+  text-align: start;
+  min-height: 52px;
+}
+.sharh-go:disabled {
+  opacity: 0.6;
 }

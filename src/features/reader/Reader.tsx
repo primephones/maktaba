@@ -25,6 +25,7 @@ import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { BlockView, NO_MARKS } from './BlockView';
 import { ScanPageAction } from './ScanPage';
+import { SharhSheet } from './SharhSheet';
 import { BookSearch } from './BookSearch';
 import { Contents } from './Contents';
 import { takeJump } from './jump';
@@ -79,7 +80,7 @@ function ReaderInner({ book }: { book: Book }) {
   const [target, setTarget] = useState<Target>({ section: opening.section, block: opening.block, nonce: 0 });
   const [pos, setPos] = useState({ section: target.section, block: target.block });
   const [chrome, setChrome] = useState(true);
-  const [sheet, setSheet] = useState<null | 'contents' | 'settings' | 'search' | 'summary'>(null);
+  const [sheet, setSheet] = useState<null | 'contents' | 'settings' | 'search' | 'summary' | 'english' | 'study' | 'more' | 'sharh'>(null);
   const [flash, setFlash] = useState<{ section: number; block: number; range: [number, number] } | null>(
     opening.flash ? { section: opening.section, block: opening.block, range: opening.flash } : null,
   );
@@ -573,8 +574,8 @@ function ReaderInner({ book }: { book: Book }) {
     '--rd-lh': String(prefs.lineHeight),
     '--rd-margin': `${prefs.margin}px`,
     '--rd-font': prefs.latinFont === 'plex' ? 'var(--font-ui)' : 'var(--font-read)',
-    '--rd-ar-font': prefs.arabicFont === 'plex' ? 'var(--font-arabic-sans)' : 'var(--font-arabic)',
-    '--rd-ur-font': prefs.urduFont === 'amiri' ? 'var(--font-arabic)' : 'var(--font-urdu)',
+    '--rd-ar-font': prefs.arabicFont === 'plex' ? 'var(--font-arabic-sans)' : prefs.arabicFont === 'scheherazade' ? 'var(--font-arabic-scheherazade)' : 'var(--font-arabic)',
+    '--rd-ur-font': prefs.urduFont === 'amiri' ? 'var(--font-arabic)' : prefs.urduFont === 'gulzar' ? 'var(--font-urdu-gulzar)' : 'var(--font-urdu)',
   } as React.CSSProperties;
   const editing = editMark ? marks.find((m) => m.id === editMark) : undefined;
   const titleLang = detectLang(book.title);
@@ -601,25 +602,14 @@ function ReaderInner({ book }: { book: Book }) {
 
       <header className="rd-top-bar" inert={!chrome || !!selection}>
         <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back to the library"><Icon name="back" /></button>
-        <div className="t" dir="auto" lang={titleLang === 'other' ? undefined : titleLang}>{book.title}</div>
-        {hasScans && (
-          <button
-            className="icon-btn"
-            onClick={() => void db.books.update(book.id, { scanView: scanView === 'text' ? 'page' : 'text' })}
-            aria-label={scanView === 'text' ? 'Show the page images' : 'Show the recognised text'}
-            aria-pressed={scanView === 'page'}
-          >
-            <Icon name="scan" />
-          </button>
-        )}
-        <button className="icon-btn" onClick={() => void showOriginal()} aria-label={book.format === 'pdf' ? 'See this page in the original' : 'Open the original file'}><Icon name="original" /></button>
-        {canSpeak() && <button className="icon-btn" onClick={() => setListening(true)} aria-label="Read aloud" aria-pressed={listening}><Icon name="speaker" /></button>}
+        <div className="t">
+          <span className="t-book" dir="auto" lang={titleLang === 'other' ? undefined : titleLang}>{book.title}</span>
+          {chapter && chapter !== book.title && <span className="t-chapter" dir="auto">{chapter}</span>}
+        </div>
         <button className="icon-btn" onClick={() => setSheet('search')} aria-label="Search in this book"><Icon name="search" /></button>
         <button className="icon-btn" onClick={() => void toggleBookmark()} aria-label={bookmarkHere ? 'Remove bookmark' : 'Bookmark this place'} aria-pressed={!!bookmarkHere}>
           <Icon name={bookmarkHere ? 'bookmarkOn' : 'bookmark'} />
         </button>
-        <button className="icon-btn" onClick={() => setSheet('contents')} aria-label="Contents, bookmarks and highlights"><Icon name="toc" /></button>
-        <button className="icon-btn" onClick={() => setSheet('settings')} aria-label="Text and theme"><Icon name="type" /></button>
       </header>
 
       <footer className="rd-bottom-bar" inert={!chrome || !!selection}>
@@ -636,6 +626,15 @@ function ReaderInner({ book }: { book: Book }) {
           aria-label="Position in the book"
           aria-valuetext={`${percent(fraction)}${chapter ? `, ${chapter}` : ''}`}
         />
+        <nav className="rd-tools" aria-label="Reading tools">
+          <button onClick={() => setSheet('contents')} aria-label="Contents, bookmarks and highlights"><Icon name="toc" /><span>Contents</span></button>
+          <button onClick={() => setSheet('settings')} aria-label="Text and theme"><Icon name="type" /><span>Text</span></button>
+          {translatable(book) && (
+            <button onClick={() => setSheet('english')} aria-pressed={hasTranslation && view !== 'orig'}><Icon name="language" /><span>English</span></button>
+          )}
+          <button onClick={() => setSheet('study')}><Icon name="sparkle" /><span>Study</span></button>
+          <button onClick={() => setSheet('more')}><Icon name="more" /><span>More</span></button>
+        </nav>
       </footer>
 
       {selection && (
@@ -675,9 +674,65 @@ function ReaderInner({ book }: { book: Book }) {
         <BookSearch book={book} onGo={(h) => goTo(h.section, h.block, [h.start, h.end])} onClose={() => setSheet(null)} />
       )}
       {sheet === 'settings' && (
-        <Sheet title="Text and theme" onClose={() => setSheet(null)}>
-          {translatable(book) && <TranslationControls book={book} view={view} hasTranslation={hasTranslation} from={pos} />}
-          <ReadingControls showTheme lang={book.lang} />
+        <Sheet title="Text" onClose={() => setSheet(null)}>
+          <ReadingControls showTheme lang={book.lang} grouped />
+        </Sheet>
+      )}
+      {sheet === 'english' && (
+        <Sheet title="English" onClose={() => setSheet(null)}>
+          <TranslationControls book={book} view={view} hasTranslation={hasTranslation} from={pos} />
+        </Sheet>
+      )}
+      {sheet === 'sharh' && <SharhSheet book={book} at={pos} onClose={() => setSheet(null)} />}
+      {sheet === 'study' && (
+        <Sheet title="Study" onClose={() => setSheet(null)}>
+          <div className="list">
+            <button className="row" onClick={() => setSheet('summary')}>
+              <Icon name="sparkle" />
+              <span className="grow"><span className="title">Summary of this chapter</span><div className="sub">The main points, with where each is in the book</div></span>
+              <Icon name="forward" size={18} />
+            </button>
+            <button className="row" onClick={() => navigate('/search')}>
+              <Icon name="search" />
+              <span className="grow"><span className="title">Ask your books</span><div className="sub">A question answered from your own books, with references</div></span>
+              <Icon name="forward" size={18} />
+            </button>
+          </div>
+          <div className="section-title">On any words</div>
+          <p className="muted small" style={{ margin: 0 }}>
+            Press and hold a word, then drag to choose a passage. Then: <b>Explain</b> (what it means and why), <b>Iʿrāb</b> (each word’s case and the reason for it),
+            <b> Note</b>, <b>Reference</b> (save it, with its citation) or <b>Copy</b>.
+          </p>
+        </Sheet>
+      )}
+      {sheet === 'more' && (
+        <Sheet title="More" onClose={() => setSheet(null)}>
+          <div className="list">
+            <button className="row" onClick={() => { setSheet(null); void showOriginal(); }}>
+              <Icon name="original" />
+              <span className="grow"><span className="title">{book.format === 'pdf' ? 'See the printed page' : 'Open the original file'}</span><div className="sub">{book.format === 'pdf' ? 'Where you are reading, highlighted on the page itself' : 'The file exactly as you added it'}</div></span>
+            </button>
+            {hasScans && (
+              <button className="row" onClick={() => { setSheet(null); void db.books.update(book.id, { scanView: scanView === 'text' ? 'page' : 'text' }); }}>
+                <Icon name="scan" />
+                <span className="grow"><span className="title">{scanView === 'page' ? 'Show the text read from the pages' : 'Show the pages as printed'}</span><div className="sub">{scanView === 'page' ? 'The words alone, to search, highlight and copy' : 'Each page as it is, with its English beneath'}</div></span>
+              </button>
+            )}
+            <button className="row" onClick={() => setSheet('sharh')}>
+              <Icon name="volumes" />
+              <span className="grow"><span className="title">In the commentary (sharḥ)</span><div className="sub">Where its sharḥ comments on the paragraph you are reading</div></span>
+            </button>
+            {canSpeak() && (
+              <button className="row" onClick={() => { setSheet(null); setListening(true); }}>
+                <Icon name="speaker" />
+                <span className="grow"><span className="title">Read aloud</span><div className="sub">From here, in English or the original</div></span>
+              </button>
+            )}
+            <button className="row" onClick={() => setSheet('contents')}>
+              <Icon name="bookmark" />
+              <span className="grow"><span className="title">Bookmarks, highlights and notes</span><div className="sub">Everything you marked in this book</div></span>
+            </button>
+          </div>
         </Sheet>
       )}
       {unsure && (

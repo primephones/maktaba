@@ -43,7 +43,10 @@ const section = async (name, fn) => {
   try {
     await fn();
   } catch (e) {
-    check(false, `${name}: ${e.message.split('\n')[0]}`);
+    const at = (e.stack ?? '').split('\n').find((l) => l.includes('run.mjs')) ?? '';
+    check(false, `${name}: ${e.message.split('\n')[0]} ${at.trim()}`);
+    const call = e.message.split('\n').find((l) => /waiting for/.test(l));
+    if (call) console.log('     ', call.trim());
     await shot(`FAILED-${name.replace(/\W+/g, '-')}`);
   }
 };
@@ -68,6 +71,12 @@ const showChrome = async () => {
     await page.locator('.rd-scroll, .pg').click({ position: { x: 206, y: 520 } });
     await pause(350);
   }
+};
+/** A tool in the reader's More sheet. */
+const fromMore = async (name) => {
+  await showChrome();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
 };
 const openBook = async (title) => {
   await page.goto(server.url + '#/library');
@@ -328,8 +337,7 @@ await section('Reader', async () => {
   await pause();
 
   // Reading aloud: the player opens and marks the paragraph being read.
-  await showChrome();
-  await page.getByRole('button', { name: 'Read aloud' }).first().click();
+  await fromMore('Read aloud');
   await page.getByRole('region', { name: 'Reading aloud' }).waitFor();
   await page.locator('.listen-play').click();
   await page.waitForSelector('.bk[data-speaking]', { timeout: 10000 });
@@ -385,10 +393,7 @@ await section('Pages mode and themes', async () => {
 await section('Scanned and image pages', async () => {
   await openBook('makhtut-scan');
   // Once its text is recognised the book opens as text; switch to the page images.
-  if (!(await page.locator('.pdfpage').count())) {
-    await showChrome();
-    await page.getByRole('button', { name: 'Show the page images' }).click();
-  }
+  if (!(await page.locator('.pdfpage').count())) await fromMore('Show the pages as printed');
   await page.waitForSelector('.pdfpage canvas');
   await page.waitForTimeout(2500);
   const inked = await page.evaluate(() => {
@@ -418,21 +423,17 @@ await section('Text recognition for scans', async () => {
   }
   check(scan?.ocr?.state === 'done' && scan.ocr.done === 5, `all 5 scanned pages are recognised offline (${JSON.stringify(scan?.ocr)}, ${Math.round((Date.now() - t0) / 1000)} s)`);
   await openBook('makhtut-scan');
-  if (await page.getByRole('button', { name: 'Show the recognised text' }).count()) {
-    await showChrome();
-    await page.getByRole('button', { name: 'Show the recognised text' }).click();
-  }
+  await page.locator('.pdfpage, .bk[data-t="p"]').first().waitFor({ timeout: 15000 });
+  if (await page.locator('.pdfpage').count()) await fromMore('Show the text read from the pages');
   await page.waitForSelector('.bk[data-t="p"]');
   const text = await page.locator('.rd-text').textContent();
   check(/الإمام الشافعي/.test(text) && /صفحة مصورة/.test(text), 'the reader shows the recognised Arabic text');
   check((await page.locator('.pdfpage').count()) === 0, 'in text view, recognised pages show text instead of images');
   await shot('16-scan-text');
-  await showChrome();
-  await page.getByRole('button', { name: 'Show the page images' }).click();
+  await fromMore('Show the pages as printed');
   await pause(800);
   check((await page.locator('.pdfpage').count()) > 0 && (await page.locator('.bk[data-t="p"]').count()) === 0, 'the page/text switch shows the page images');
-  await showChrome();
-  await page.getByRole('button', { name: 'Show the recognised text' }).click();
+  await fromMore('Show the text read from the pages');
   await pause(500);
 
   await go('#/search');
@@ -474,8 +475,7 @@ await section('Other formats', async () => {
   check(/p\. 7/.test(await page.locator('.rd-bottom-bar .where').textContent()), 'go-to-page lands on that page');
   check((await page.locator('.pgmark').count()) > 3, 'printed page numbers are marked between paragraphs');
   // The original, one tap away: the printed page being read, as it is in the PDF.
-  await showChrome();
-  await page.getByRole('button', { name: 'See this page in the original' }).click();
+  await fromMore('See the printed page');
   const orig = page.getByRole('dialog', { name: /^Original, page \d+ of \d+$/ });
   await orig.waitFor({ timeout: 8000 });
   const label = await orig.getAttribute('aria-label');
@@ -535,8 +535,9 @@ await section('Other formats', async () => {
   await page.getByRole('button', { name: 'Close' }).click();
   await openBook('مختصر في أصول الفقه');
   await showChrome();
-  const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByRole('button', { name: 'Open the original file' }).click()]);
-  check(dl2.suggestedFilename() === 'usul.epub', 'the reader opens the original file in one tap');
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByRole('button', { name: /^Open the original file/ }).click()]);
+  check(dl2.suggestedFilename() === 'usul.epub', 'the reader opens the original file in two taps (More, then the file)');
 });
 
 await section('Search across the library', async () => {
@@ -560,7 +561,7 @@ await section('Search across the library', async () => {
 
 await section('Settings and navigation', async () => {
   await page.goto(server.url + '#/settings');
-  for (const name of ['Theme', 'Reading defaults', 'Default cover style', 'Feature switches', 'Storage', 'About & installing']) {
+  for (const name of ['Help & setup', 'Theme', 'Reading defaults', 'Cover style', 'Sorting new books', 'Feature switches', 'Storage', 'Backup', 'Move to a new phone', 'About & updates']) {
     await page.getByRole('button', { name: new RegExp('^' + name) }).click();
     await pause(500);
     check((await page.locator('[role=alert]').count()) === 0, `Settings › ${name} opens without an error`);

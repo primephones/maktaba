@@ -10,22 +10,27 @@ interface Props {
   showScriptOptions?: boolean;
   /** Language of the open book, to show only the options that apply. */
   lang?: string;
+  /** Section titles between the groups (in the reader's Text sheet). */
+  grouped?: boolean;
 }
 
-/** The reading controls: one component used by the reader's Aa sheet and by Settings. */
-export function ReadingControls({ showTheme, showScriptOptions, lang }: Props) {
+/** The reading controls: one component used by the reader's Text sheet and by Settings. */
+export function ReadingControls({ showTheme, showScriptOptions, lang, grouped }: Props) {
   const prefs = useSetting('reader');
   const theme = useSetting('theme');
   const set = (patch: Partial<ReaderPrefs>) => void setSetting('reader', { ...prefs, ...patch });
   const arabic = showScriptOptions || lang === 'ar' || lang === 'fa' || lang === 'ps';
   const urdu = showScriptOptions || lang === 'ur';
-  const latin = showScriptOptions || !(arabic || urdu) || lang === 'en';
+  // English: the book's own, or its translation.
+  const latin = true;
 
+  const title = (t: string) => (grouped ? <div className="section-title">{t}</div> : null);
   return (
     <>
+      {showTheme && title('Theme')}
       {showTheme && (
         <div className="ctl">
-          <div className="lbl"><span>Theme</span></div>
+          {!grouped && <div className="lbl"><span>Theme</span></div>}
           <div className="theme-chips" role="group" aria-label="Theme">
             {THEMES.map(([value, label]) => (
               <button key={value} className="theme-chip" aria-pressed={document.documentElement.dataset.theme === value && (theme === value || theme === 'auto')} onClick={() => void setSetting('theme', value)}>
@@ -37,14 +42,38 @@ export function ReadingControls({ showTheme, showScriptOptions, lang }: Props) {
         </div>
       )}
 
-      <div className="ctl">
-        <div className="lbl"><span>Page mode</span></div>
-        <div className="seg" role="group" aria-label="Page mode">
-          <button aria-pressed={prefs.mode === 'scroll'} onClick={() => set({ mode: 'scroll' })}>Scroll</button>
-          <button aria-pressed={prefs.mode === 'paged'} onClick={() => set({ mode: 'paged' })}>Pages</button>
+      {title('Typeface')}
+      {latin && (
+        <div className="ctl">
+          <div className="lbl"><span>English typeface</span></div>
+          <div className="seg" role="group" aria-label="English typeface">
+            <button aria-pressed={prefs.latinFont === 'literata'} onClick={() => set({ latinFont: 'literata' })} style={{ fontFamily: 'var(--font-read)' }}>Literata</button>
+            <button aria-pressed={prefs.latinFont === 'plex'} onClick={() => set({ latinFont: 'plex' })}>Plex Sans</button>
+          </div>
         </div>
-      </div>
+      )}
+      {arabic && (
+        <div className="ctl">
+          <div className="lbl"><span>Arabic &amp; Persian typeface</span></div>
+          <div className="seg" role="group" aria-label="Arabic typeface">
+            <button aria-pressed={prefs.arabicFont === 'amiri'} onClick={() => set({ arabicFont: 'amiri' })} style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.1rem' }}>أميري · Amiri</button>
+            <button aria-pressed={prefs.arabicFont === 'scheherazade'} onClick={() => set({ arabicFont: 'scheherazade' })} style={{ fontFamily: 'var(--font-arabic-scheherazade)', fontSize: '1.15rem' }}>شهرزاد</button>
+            <button aria-pressed={prefs.arabicFont === 'plex'} onClick={() => set({ arabicFont: 'plex' })} style={{ fontFamily: 'var(--font-arabic-sans)' }}>بلكس · Plex</button>
+          </div>
+        </div>
+      )}
+      {urdu && (
+        <div className="ctl">
+          <div className="lbl"><span>Urdu typeface</span></div>
+          <div className="seg" role="group" aria-label="Urdu typeface">
+            <button aria-pressed={prefs.urduFont === 'nastaliq'} onClick={() => set({ urduFont: 'nastaliq' })} style={{ fontFamily: 'var(--font-urdu)', minHeight: 52 }}>نستعلیق</button>
+            <button aria-pressed={prefs.urduFont === 'gulzar'} onClick={() => set({ urduFont: 'gulzar' })} style={{ fontFamily: 'var(--font-urdu-gulzar)', minHeight: 52 }}>گلزار</button>
+            <button aria-pressed={prefs.urduFont === 'amiri'} onClick={() => set({ urduFont: 'amiri' })} style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.1rem' }}>نسخ · Naskh</button>
+          </div>
+        </div>
+      )}
 
+      {title('Size and spacing')}
       <div className="ctl">
         <div className="lbl"><span id="ctl-size">Text size</span><span>{prefs.fontSize}%</span></div>
         <div className="ctl-row">
@@ -64,6 +93,15 @@ export function ReadingControls({ showTheme, showScriptOptions, lang }: Props) {
         <input type="range" min={8} max={56} step={2} value={prefs.margin} aria-labelledby="ctl-mg" onChange={(e) => set({ margin: Number(e.target.value) })} />
       </div>
 
+      {title('Page')}
+      <div className="ctl">
+        <div className="lbl"><span>Page mode</span></div>
+        <div className="seg" role="group" aria-label="Page mode">
+          <button aria-pressed={prefs.mode === 'scroll'} onClick={() => set({ mode: 'scroll' })}>Scroll</button>
+          <button aria-pressed={prefs.mode === 'paged'} onClick={() => set({ mode: 'paged' })}>Pages</button>
+        </div>
+      </div>
+
       <div className="ctl-row">
         <span className="grow" id="ctl-just">Justify text</span>
         <button className="switch" role="switch" aria-checked={prefs.justify} aria-labelledby="ctl-just" onClick={() => set({ justify: !prefs.justify })} />
@@ -81,6 +119,7 @@ export function ReadingControls({ showTheme, showScriptOptions, lang }: Props) {
 
       {isAndroidApp() && (
         <>
+          {title('On this phone')}
           <div className="ctl-row">
             <span className="grow" id="ctl-vol">
               Turn pages with the volume keys
@@ -103,33 +142,6 @@ export function ReadingControls({ showTheme, showScriptOptions, lang }: Props) {
         </>
       )}
 
-      {latin && (
-        <div className="ctl">
-          <div className="lbl"><span>English typeface</span></div>
-          <div className="seg" role="group" aria-label="English typeface">
-            <button aria-pressed={prefs.latinFont === 'literata'} onClick={() => set({ latinFont: 'literata' })} style={{ fontFamily: 'var(--font-read)' }}>Literata</button>
-            <button aria-pressed={prefs.latinFont === 'plex'} onClick={() => set({ latinFont: 'plex' })}>Plex Sans</button>
-          </div>
-        </div>
-      )}
-      {arabic && (
-        <div className="ctl">
-          <div className="lbl"><span>Arabic &amp; Persian typeface</span></div>
-          <div className="seg" role="group" aria-label="Arabic typeface">
-            <button aria-pressed={prefs.arabicFont === 'amiri'} onClick={() => set({ arabicFont: 'amiri' })} style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.1rem' }}>أميري · Amiri</button>
-            <button aria-pressed={prefs.arabicFont === 'plex'} onClick={() => set({ arabicFont: 'plex' })} style={{ fontFamily: 'var(--font-arabic-sans)' }}>بلكس · Plex</button>
-          </div>
-        </div>
-      )}
-      {urdu && (
-        <div className="ctl">
-          <div className="lbl"><span>Urdu typeface</span></div>
-          <div className="seg" role="group" aria-label="Urdu typeface">
-            <button aria-pressed={prefs.urduFont === 'nastaliq'} onClick={() => set({ urduFont: 'nastaliq' })} style={{ fontFamily: 'var(--font-urdu)', minHeight: 52 }}>نستعلیق</button>
-            <button aria-pressed={prefs.urduFont === 'amiri'} onClick={() => set({ urduFont: 'amiri' })} style={{ fontFamily: 'var(--font-arabic)', fontSize: '1.1rem' }}>نسخ · Naskh</button>
-          </div>
-        </div>
-      )}
     </>
   );
 }

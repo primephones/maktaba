@@ -21,7 +21,7 @@ const SYNC_SETTINGS = new Set(['theme', 'reader', 'coverStyle', 'flags', 'librar
 /** Fields of a book that sync; the rest (its text, import state, cover) belong to each phone. */
 const BOOK_FIELDS = [
   'id', 'title', 'author', 'edition', 'lang', 'format', 'size', 'hash', 'fileName', 'addedAt', 'openedAt', 'status', 'folderId',
-  'coverStyle', 'series', 'volume', 'progress', 'private', 'view', 'scanView', 'ocrLang', 'translation', 'pageCount', 'cloudFileId',
+  'coverStyle', 'commentaries', 'catalogueId', 'series', 'volume', 'progress', 'private', 'view', 'scanView', 'ocrLang', 'translation', 'pageCount', 'cloudFileId',
 ] as const;
 
 /** Is this row something that syncs at all? */

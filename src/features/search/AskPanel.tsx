@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
 import { aiReady } from '../../ai/client';
-import { askBooks, type Answer } from '../../ai/study';
+import { askBooks, debateBooks, type Answer, type Debate } from '../../ai/study';
 import { langAttr } from '../../lib/arabic';
 import { navigate } from '../../app/router';
 import { Icon } from '../../ui/Icon';
@@ -24,6 +24,8 @@ export function AskPanel({ question }: { question: string }) {
   const [choosing, setChoosing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<Answer | null>(null);
+  const [mode, setMode] = useState<'answer' | 'debate'>('answer');
+  const [debate, setDebate] = useState<Debate | null>(null);
   const [error, setError] = useState('');
   const [connected, setConnected] = useState<boolean | null>(null);
 
@@ -32,8 +34,9 @@ export function AskPanel({ question }: { question: string }) {
   }, []);
   useEffect(() => {
     setAnswer(null);
+    setDebate(null);
     setError('');
-  }, [question]);
+  }, [question, mode]);
 
   const chosen = useMemo(() => (scope === 'all' ? books.map((b) => b.id) : scope.filter((id) => books.some((b) => b.id === id))), [scope, books]);
   const q = question.trim();
@@ -42,8 +45,10 @@ export function AskPanel({ question }: { question: string }) {
     setBusy(true);
     setError('');
     setAnswer(null);
+    setDebate(null);
     try {
-      setAnswer(await askBooks(q, chosen));
+      if (mode === 'debate') setDebate(await debateBooks(q, chosen));
+      else setAnswer(await askBooks(q, chosen));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -68,11 +73,24 @@ export function AskPanel({ question }: { question: string }) {
     navigate(`/book/${s.bookId}`);
   };
 
+  // For and against: sources numbered in the order they are first cited.
+  const debateOrder = debate ? [...new Set(debate.positions.flatMap((p) => [...p.arguments, ...p.objections].flatMap((x) => x.ids)))] : [];
+  const openSource = (id: string, list: Array<{ id: string; bookId: string; section: number; block: number }>) => {
+    const s = list.find((x) => x.id === id);
+    if (!s) return;
+    setJump(s.bookId, { section: s.section, block: s.block });
+    navigate(`/book/${s.bookId}`);
+  };
+
   return (
     <div className="ask">
+      <div className="seg ask-mode" role="group" aria-label="What to ask for">
+        <button aria-pressed={mode === 'answer'} onClick={() => setMode('answer')}>Answer</button>
+        <button aria-pressed={mode === 'debate'} onClick={() => setMode('debate')}>For and against</button>
+      </div>
       <div className="ask-row">
         <button className="btn btn--primary" disabled={!q || busy || !chosen.length} onClick={() => void ask()}>
-          <span className="ai-mark" aria-hidden="true">✦</span>{busy ? 'Reading your books…' : 'Ask your books'}
+          <span className="ai-mark" aria-hidden="true">✦</span>{busy ? 'Reading your books…' : mode === 'debate' ? 'Find the arguments' : 'Ask your books'}
         </button>
         <button className="chip" onClick={() => setChoosing(true)} aria-label="Choose which books to ask">
           {scope === 'all' ? (books.length === 1 ? 'The 1 book' : `All ${books.length} books`) : `${chosen.length} book${chosen.length === 1 ? '' : 's'}`} ▾
@@ -113,6 +131,63 @@ export function AskPanel({ question }: { question: string }) {
             <p><b>Not found in your books.</b> {answer.answer}</p>
           )}
           <p className="muted small"><span className="ai-mark" aria-hidden="true">✦</span> AI answer from {answer.model.replace(/^.*\//, '') || 'your books'}, using only the passages listed. It may be wrong: tap a source to read it.</p>
+        </article>
+      )}
+      {debate && (
+        <article className="card answer" aria-live="polite">
+          {debate.found ? (
+            <>
+              {debate.positions.map((p, i) => (
+                <section className="position" key={i}>
+                  <h3 className="position-title">{p.position}</h3>
+                  {p.held_by && <p className="muted small position-who">Held by {p.held_by}</p>}
+                  {p.arguments.length > 0 && (
+                    <>
+                      <div className="position-label is-for">Arguments for it</div>
+                      <ul className="points">
+                        {p.arguments.map((a, k) => (
+                          <li key={k}>
+                            {a.point} {a.ids.map((id) => <button key={id} className="cite" onClick={() => openSource(id, debate.sources)} aria-label={`Open source ${debateOrder.indexOf(id) + 1}`}>{debateOrder.indexOf(id) + 1}</button>)}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {p.objections.length > 0 && (
+                    <>
+                      <div className="position-label is-against">Against it</div>
+                      <ul className="points">
+                        {p.objections.map((a, k) => (
+                          <li key={k}>
+                            {a.point} {a.ids.map((id) => <button key={id} className="cite" onClick={() => openSource(id, debate.sources)} aria-label={`Open source ${debateOrder.indexOf(id) + 1}`}>{debateOrder.indexOf(id) + 1}</button>)}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </section>
+              ))}
+              {debate.note && <p className="muted small">{debate.note}</p>}
+              <div className="section-title" style={{ marginTop: 6 }}>Sources</div>
+              <ol className="sources">
+                {debateOrder.map((id) => {
+                  const s = debate.sources.find((x) => x.id === id);
+                  if (!s) return null;
+                  return (
+                    <li key={id}>
+                      <button onClick={() => openSource(id, debate.sources)}>
+                        <span className="src-text" dir="auto" lang={langAttr(s.text)}>{s.text.slice(0, 160)}{s.text.length > 160 ? '…' : ''}</span>
+                        <span className="muted small" dir="auto">{s.cite}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+            </>
+          ) : (
+            <p><b>Not found in your books.</b> {debate.note}</p>
+          )}
+          <p className="muted small"><span className="ai-mark" aria-hidden="true">✦</span> AI summary of the arguments from {debate.model.replace(/^.*\//, '') || 'your books'}, using only the passages listed. Tap a number to read the passage itself.</p>
         </article>
       )}
       {choosing && (

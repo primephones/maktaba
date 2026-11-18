@@ -157,6 +157,8 @@ export function Home() {
       )}
 
       <SetupCard />
+
+      <CatalogueCard />
       <BackupReminder hasBooks={books.length > 0} />
       <HomeAllowance />
       <InstallHint />
@@ -253,6 +255,27 @@ function InstallHint() {
  * For someone new (often someone who was sent the link): their own cloud and their own AI,
  * each one tap away. Gone once both are connected, or when dismissed.
  */
+/** The book catalogue, offered on Home until the reader has taken a book from it. */
+function CatalogueCard() {
+  const used = useLiveQuery(async () => (await db.books.filter((b) => !!b.catalogueId).count()) > 0, []);
+  if (used !== false) return null;
+  return (
+    <>
+      <div className="section-title">Classical books, free</div>
+      <div className="list">
+        <button className="row" onClick={() => navigate('/catalogue')}>
+          <Icon name="download" />
+          <span className="grow">
+            <span className="title">Book catalogue</span>
+            <div className="sub">The six books of ḥadīth with their commentaries, classical and Deobandi, and the great works of Ḥanafī fiqh.</div>
+          </span>
+          <Icon name="forward" size={18} />
+        </button>
+      </div>
+    </>
+  );
+}
+
 function SetupCard() {
   const [state, setState] = useState<{ cloud: boolean; ai: boolean } | null>(null);
   const hidden = useLiveQuery(async () => (await db.settings.get('setupCardHidden'))?.value === true, []);

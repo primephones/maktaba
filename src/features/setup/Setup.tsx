@@ -51,11 +51,27 @@ function Welcome({ onNext }: { onNext: () => void }) {
       <div className="hero-card">
         <span className="ai-mark" aria-hidden="true">✦</span>
         <h2>Two steps, about five minutes</h2>
-        <p>Maktaba is yours alone: your own cloud keeps your library, and your own AI does the translating. Both are free.</p>
+        <p>Maktaba is yours alone: your own cloud keeps your library, and your own AI does the translating. Both are free, and nobody else can see what you read.</p>
       </div>
-      <div className="list">
-        <div className="row"><Icon name="cloud" /><span className="grow"><span className="title">1 · Your cloud</span><div className="sub">Google Drive keeps your books and notes safe, and on all your phones.</div></span></div>
-        <div className="row"><Icon name="sparkle" /><span className="grow"><span className="title">2 · Your AI</span><div className="sub">A free AI account translates into English and helps you study.</div></span></div>
+
+      <div className="section-title">1 · Your cloud: what it gives you</div>
+      <div className="card gets">
+        <div className="gets-head"><Icon name="cloud" /><b>Google Drive</b></div>
+        <ul>
+          <li><b>Never lose your library.</b> Books, notes, highlights, references and translations are kept in your own Drive.</li>
+          <li><b>Read on any phone.</b> Connect the same account on a new phone and everything is there.</li>
+          <li><b>Private.</b> Maktaba can only see the folder it makes for itself; nobody else can see it.</li>
+        </ul>
+      </div>
+
+      <div className="section-title">2 · Your AI: what it gives you</div>
+      <div className="card gets">
+        <div className="gets-head"><Icon name="sparkle" /><b>Gemini or OpenRouter (free)</b></div>
+        <ul>
+          <li><b>Read in English.</b> Arabic, Urdu, Persian, Pashto and Malay books, paragraph by paragraph, with the original a tap away.</li>
+          <li><b>Scanned books, read for you.</b> The AI reads each printed page and translates it; you see the page with its English beneath.</li>
+          <li><b>Study.</b> Explain a passage; the iʿrāb of a sentence and why each word takes its case; ask your books and get the answer with references; the arguments for and against.</li>
+        </ul>
       </div>
       <p className="muted small">You can skip either one and come back any time: Settings › Help &amp; setup.</p>
       <button className="btn btn--primary btn--block" onClick={onNext}>Start</button>

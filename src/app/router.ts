@@ -11,6 +11,7 @@ export type Route =
   | { name: 'home' }
   | { name: 'library'; folderId?: string }
   | { name: 'references' }
+  | { name: 'catalogue' }
   | { name: 'search' }
   | { name: 'settings'; page?: string }
   | { name: 'setup'; step?: string }
@@ -30,6 +31,8 @@ function parse(hash: string): Route {
       return { name: 'library', folderId: parts[1] === 'folder' ? parts[2] : undefined };
     case 'references':
       return { name: 'references' };
+    case 'catalogue':
+      return { name: 'catalogue' };
     case 'search':
       return { name: 'search' };
     case 'settings':

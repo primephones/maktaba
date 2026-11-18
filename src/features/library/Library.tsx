@@ -261,6 +261,10 @@ export function Library({ folderId }: { folderId?: string }) {
               <span className="grow title">Sort by</span>
               <span className="value">{SORTS.find(([v]) => v === sort)?.[1]}</span>
             </button>
+            <button className="row" onClick={() => { setMenu(null); navigate('/catalogue'); }}>
+              <Icon name="download" />
+              <span className="grow"><span className="title">Book catalogue</span><div className="sub">The six books of ḥadīth, their shurūḥ, Ḥanafī fiqh</div></span>
+            </button>
             <button className="row" onClick={() => setMenu('newFolder')}>
               <Icon name="folderPlus" />
               <span className="grow title">{folderId ? 'New folder inside this one' : 'New folder'}</span>

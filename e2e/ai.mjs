@@ -117,7 +117,7 @@ try {
     await wait(300);
   }
   check((await page.locator('.rd').getAttribute('data-chrome')) === 'true', 'a tap at the top of the page brings the reading bars back');
-  await page.getByRole('button', { name: 'Text and theme' }).click();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
   await page.getByRole('button', { name: 'Both', exact: true }).click();
   await page.getByRole('button', { name: 'Close' }).click();
   await wait(500);
@@ -133,6 +133,16 @@ try {
   check((await page.locator('.sources li').count()) > 0, 'each cited passage is listed with where it comes from');
   check((await page.getByText('could not be found word for word').count()) === 0, 'its quotation was checked against the passage');
   await shot('26-ask');
+  // For and against: the positions, with arguments and objections, each from a passage.
+  await page.getByRole('button', { name: 'For and against' }).click();
+  await page.getByRole('button', { name: 'Find the arguments' }).click();
+  await page.locator('.position').first().waitFor({ timeout: 30000 });
+  check((await page.locator('.position-label.is-for').count()) > 0 && (await page.locator('.position-label.is-against').count()) > 0, 'For and against: each position with its arguments and the objections to it');
+  check((await page.locator('.position .cite').count()) >= 2 && (await page.locator('.sources li').count()) > 0, 'every point cites the passage it comes from');
+  await shot('26-ask-for-against');
+  await page.getByRole('button', { name: 'Answer', exact: true }).click();
+  await page.getByRole('button', { name: /Ask your books/ }).click();
+  await page.locator('.answer .cite').first().waitFor({ timeout: 30000 });
   await page.locator('.answer .cite').first().click();
   await page.waitForSelector('.rd');
   check(true, 'tapping a citation opens the passage in the book');
@@ -164,7 +174,19 @@ try {
   const irabBtn = page.getByRole('button', { name: 'Iʿrāb', exact: true });
   if (await irabBtn.count()) {
     await irabBtn.click();
-    await page.locator('.irab-row').first().waitFor({ timeout: 20000 });
+    await page.locator('.irab-card').first().waitFor({ timeout: 20000 });
+    check((await page.locator('.irab-case').count()) >= 4, 'iʿrāb shows each word’s case');
+    await page.getByRole('button', { name: 'Why?' }).first().click();
+    check(await page.getByText(/a subject is marfūʿ/).first().isVisible(), 'and why it takes that case, in plain English');
+    await shot('27-irab-why');
+    await page.getByRole('button', { name: 'Test yourself' }).click();
+    check((await page.locator('.irab-case').count()) === 0, 'Test yourself hides the cases');
+    // The first word is marfūʿ: right; the second is manṣūb: answer wrongly.
+    await page.locator('.irab-choices').first().getByRole('button', { name: 'Marfūʿ' }).click();
+    await page.locator('.irab-choices').first().getByRole('button', { name: 'Majrūr' }).click();
+    check(await page.getByText('Right.').first().isVisible() && (await page.getByText(/Not Majrūr: it is Manṣūb/).count()) === 1, 'each answer is marked right or wrong, with the reason');
+    await shot('27-irab-test');
+    await page.getByRole('button', { name: 'Show the analysis' }).click();
     await page.getByRole('button', { name: 'Correct' }).click();
     await page.locator('.irab input').first().fill('مبتدأ مرفوع وعلامة رفعه الضمة');
     await page.getByRole('button', { name: 'Save corrections' }).click();
@@ -213,7 +235,7 @@ try {
   await page.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
   await page.waitForSelector('.bk');
   if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.mouse.click(200, 40);
-  await page.getByRole('button', { name: 'Text and theme' }).click();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
   await page.getByRole('button', { name: 'Original', exact: true }).click();
   await page.getByRole('button', { name: 'Close' }).click();
   await wait(500);

@@ -140,12 +140,26 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
     if (b) b.scrollIntoView({ block: 'start' });
   }, [layoutKey, topBlock]);
 
+  // The controls tuck away as the reader scrolls on, and come back as soon as they scroll
+  // back up a little (or reach the top): measured over the whole movement, not one event.
   const lastTop = useRef(0);
+  const turnedAt = useRef(0);
+  const goingUp = useRef(false);
+  /** When the reader last moved the page themselves (the app's own scrolling never hides anything). */
+  const touchedAt = useRef(0);
+  const touched = () => void (touchedAt.current = Date.now());
   const onScroll = () => {
     const el = scroller.current;
     if (el) {
-      if (lastTop.current - el.scrollTop > 60) onReveal?.();
-      lastTop.current = el.scrollTop;
+      const top = el.scrollTop;
+      const up = top < lastTop.current;
+      if (up !== goingUp.current) {
+        goingUp.current = up;
+        turnedAt.current = lastTop.current;
+      }
+      if (up && (turnedAt.current - top > 36 || top < 24)) onReveal?.();
+      if (!up && top - turnedAt.current > 24 && Date.now() - touchedAt.current < 900) onUserMove();
+      lastTop.current = top;
     }
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(() => {
@@ -190,8 +204,9 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
       className="rd-scroll"
       ref={scroller}
       onScroll={onScroll}
-      onWheel={onUserMove}
-      onTouchMove={onUserMove}
+      onTouchMove={touched}
+      onWheel={touched}
+      onKeyDown={touched}
       onClick={(e) => {
         if (hasSelection()) return;
         if (e.clientY < TOP_ZONE) return onTap();

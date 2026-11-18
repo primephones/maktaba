@@ -101,6 +101,40 @@ export async function askBooks(question: string, bookIds: string[]): Promise<Ans
   return { ...r.result, sources, provider: r.provider, model: r.model };
 }
 
+export interface Point {
+  point: string;
+  ids: string[];
+}
+export interface Debate {
+  found: boolean;
+  positions: Array<{ position: string; held_by: string; arguments: Point[]; objections: Point[] }>;
+  note: string;
+  sources: Source[];
+  provider: string;
+  model: string;
+}
+
+/** The positions on a question, with the arguments for and against each, from the chosen books only. */
+export async function debateBooks(question: string, bookIds: string[]): Promise<Debate> {
+  const books = (await db.books.bulkGet(bookIds)).filter((b): b is Book => !!b);
+  const isPrivate = books.some((b) => b.private);
+  let words = wordsOf(question);
+  try {
+    const kw = await study<{ ar: string[]; en: string[] }>({ task: 'keywords', question }, isPrivate, 'ask');
+    words = [...kw.result.ar, ...kw.result.en, ...words];
+  } catch {
+    // Without search words from the AI, the question's own words are used.
+  }
+  const sources = await gather(bookIds, words);
+  if (!sources.length) return { found: false, positions: [], note: 'Nothing in the chosen books matches this question.', sources: [], provider: '', model: '' };
+  const r = await study<Omit<Debate, 'sources' | 'provider' | 'model'>>(
+    { task: 'debate', question, passages: sources.map((s) => ({ id: s.id, text: s.text, en: s.en, cite: s.cite })) },
+    isPrivate,
+    'ask',
+  );
+  return { ...r.result, sources, provider: r.provider, model: r.model };
+}
+
 export interface Explanation {
   explanation: string;
   terms: Array<{ term: string; meaning: string }>;
@@ -113,8 +147,20 @@ export async function explainPassage(book: Book, passage: string, en: string | u
   return { ...r.result, provider: r.provider, model: r.model };
 }
 
+export type IrabCase = 'marfu' | 'mansub' | 'majrur' | 'majzum' | 'mabni';
+export interface IrabWord {
+  word: string;
+  irab: string;
+  en: string;
+  /** The case it takes (absent in analyses saved before cases were asked for). */
+  case?: IrabCase;
+  /** Its role, in English. */
+  role?: string;
+  /** Why it takes this case: the rule, in plain English. */
+  why?: string;
+}
 export interface Irab {
-  words: Array<{ word: string; irab: string; en: string }>;
+  words: IrabWord[];
   note: string;
   provider: string;
   model: string;

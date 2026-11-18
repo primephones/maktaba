@@ -4,6 +4,7 @@ import { AppContext } from './AppContext';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useAddBooks } from './addBooks';
 import { UpdateNotice } from './UpdateNotice';
+import { Catalogue } from '../features/library/Catalogue';
 import { resolveTheme, useSetting } from './settings';
 import { BottomBar } from '../ui/BottomBar';
 import { Toasts, toast } from '../ui/toast';
@@ -175,7 +176,7 @@ export function App() {
   }, [route.name, theme]);
 
   const inReader = route.name === 'reader';
-  const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'setup' || route.name === 'review';
+  const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'setup' || route.name === 'review' || route.name === 'catalogue';
   const key = route.name === 'reader' ? `reader:${route.bookId}` : route.name === 'review' ? `review:${route.bookId}` : route.name;
 
   let screen;
@@ -188,6 +189,9 @@ export function App() {
       break;
     case 'references':
       screen = <References />;
+      break;
+    case 'catalogue':
+      screen = <Catalogue />;
       break;
     case 'search':
       screen = <Search />;

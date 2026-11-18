@@ -57,6 +57,17 @@ createServer(async (req, res) => {
     res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(obj) } }], usage: { prompt_tokens: 50, completion_tokens: 80 } }));
   };
   if (system.includes('give the words most likely')) return reply({ ar: ['الإجماع', 'حجة'], en: ['consensus'] });
+  if (system.includes('the arguments for and against each')) {
+    const ids = [...user.matchAll(/\[(p\d+)\]/g)].map((m) => m[1]);
+    if (!ids.length) return reply({ found: false, positions: [], note: 'Not in the passages.' });
+    return reply({
+      found: true,
+      positions: [
+        { position: 'Consensus (ijmāʿ) is a decisive proof.', held_by: 'the majority of the uṣūlīs', arguments: [{ point: 'The scholars of the community do not agree upon an error.', ids: [ids[0]] }], objections: [{ point: 'Some held that a consensus after the Companions cannot be known.', ids: [ids[ids.length - 1]] }] },
+      ],
+      note: '',
+    });
+  }
   if (system.includes('ONLY the numbered passages')) {
     const m = user.match(/\[(p\d+)\][^\n]*\n([^\n]+)/);
     const words = m ? m[2].split(/\s+/).slice(0, 4).join(' ') : '';
@@ -67,7 +78,11 @@ createServer(async (req, res) => {
     return reply({ summary: `The chapter defines analogy (qiyās) [${ids[0]}].\nIt names consensus as a proof [${ids[1] ?? ids[0]}] and cites a passage that does not exist [p999].` });
   }
   if (system.includes('You explain a passage')) return reply({ explanation: 'This passage says that consensus (ijmāʿ) is a decisive proof.', terms: [{ term: 'ijmāʿ', meaning: 'consensus' }] });
-  if (system.includes('iʿrāb')) return reply({ words: user.trim().split(/\s+/).slice(0, 6).map((w) => ({ word: w, irab: 'اسم مرفوع', en: 'a noun' })), note: '' });
+  if (system.includes('iʿrāb')) {
+    const cases = ['marfu', 'mansub', 'majrur', 'mabni'];
+    const why = { marfu: 'It is the subject (fāʿil) of the verb before it, and a subject is marfūʿ; the sign is the ḍamma.', mansub: 'It is the object of the verb, so it is manṣūb; the sign is the fatḥa.', majrur: 'It comes after the preposition fī, which makes the noun after it majrūr; the sign is the kasra.', mabni: 'It is a particle: particles are mabnī and do not change.' };
+    return reply({ words: user.trim().split(/\s+/).slice(0, 6).map((w, i) => ({ word: w, irab: 'اسم مرفوع', case: cases[i % 4], role: ['subject of the verb', 'object', 'after a preposition', 'particle'][i % 4], why: why[cases[i % 4]], en: 'a word' })), note: '' });
+  }
   const part = user.slice(user.indexOf('Translate these paragraphs:'));
   const paras = [...part.matchAll(/\[([^\]]+)\][^\n]*\n([^\n]+)/g)].map((m) => ({ id: m[1], text: m[2] }));
   const toAscii = (s) => s.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));

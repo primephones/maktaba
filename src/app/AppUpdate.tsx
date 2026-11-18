@@ -136,7 +136,7 @@ function UpdateSheet({ update, onClose }: { update: AvailableUpdate; onClose: ()
           <div className="app-update-step">
             <p><b>This one update needs a fresh install.</b> Your current copy came from an early test build signed with a different key, so Android will not install over it. After this, every update is one tap.</p>
             <ol className="app-update-steps">
-              <li>Keep your library: <b>Settings › Your cloud</b> (if connected, it is already safe) or <b>Settings › Backup › Save a backup</b>.</li>
+              <li>Keep your library: <b>Settings › Your cloud</b> (if connected, it is already safe) or <b>Settings › Backup › Back up now</b>.</li>
               <li>Uninstall Maktaba (press and hold its icon › Uninstall).</li>
               <li>Install the new version from the download page, then restore the backup (or connect your cloud again).</li>
             </ol>

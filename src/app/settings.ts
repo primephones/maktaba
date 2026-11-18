@@ -14,8 +14,8 @@ export interface ReaderPrefs {
   margin: number;
   justify: boolean;
   latinFont: 'literata' | 'plex';
-  arabicFont: 'amiri' | 'plex';
-  urduFont: 'nastaliq' | 'amiri';
+  arabicFont: 'amiri' | 'scheherazade' | 'plex';
+  urduFont: 'nastaliq' | 'gulzar' | 'amiri';
   /** Show vowel marks (tashkīl) in Arabic-script text. */
   tashkil: boolean;
   /** Android: the volume keys turn pages while a book is open. */
