@@ -1,3 +1,4 @@
+import { CheckForUpdates } from '../../app/AppUpdate';
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, requestPersistence } from '../../db/db';
@@ -281,6 +282,7 @@ function AboutPage() {
         <div className="muted small">Version {__APP_VERSION__} · built {new Date(__BUILD_TIME__).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</div>
         <p style={{ marginTop: 8 }}>A personal library for Islamic scholarship. Everything you add stays on this device and works without internet.</p>
       </div>
+      <CheckForUpdates />
 
       <div className="section-title">In this version</div>
       <div className="card small" style={{ display: 'grid', gap: 8 }}>
@@ -301,7 +303,7 @@ function AboutPage() {
           <li>Open the Maktaba APK file from <b>My Files</b> or your browser’s downloads.</li>
           <li>If asked, allow that app to <b>install unknown apps</b>, then tap <b>Install</b>.</li>
           <li>You can switch Auto Blocker back on afterwards. Maktaba keeps working.</li>
-          <li>To update, install the newer APK over the top. Your books and notes are kept.</li>
+          <li>Updates then come inside the app: a popup offers each new version, and one tap installs it over this one, keeping your books and notes.</li>
         </ol>
       </div>
     </>

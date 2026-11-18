@@ -61,7 +61,12 @@ try {
   await page.getByRole('button', { name: 'Choose…' }).click();
   await page.getByRole('heading', { name: 'Which folder?' }).waitFor();
   const sel = page.getByRole('combobox', { name: /^Folder for Introduction to Usul/ });
-  check((await sel.inputValue()) !== '', 'choosing by hand starts from the suggestion');
+  let picked = '';
+  for (let i = 0; i < 20 && !picked; i++) {
+    picked = await sel.inputValue();
+    if (!picked) await wait(150);
+  }
+  check(picked !== '', 'choosing by hand starts from the suggestion');
   await sel.selectOption('');
   await page.getByRole('button', { name: 'Put them there' }).click();
   await wait(800);

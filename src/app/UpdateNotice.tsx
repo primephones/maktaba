@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon } from '../ui/Icon';
+import { AppUpdate } from './AppUpdate';
 
 /**
  * Tells the reader when a newer version has been downloaded and is ready to use.
@@ -26,7 +27,7 @@ export function UpdateNotice() {
     };
   }, []);
 
-  if (!update) return null;
+  if (!update) return <AppUpdate />;
   return (
     <div className="update-notice" role="status">
       <Icon name="download" size={20} />

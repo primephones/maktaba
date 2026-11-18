@@ -140,7 +140,7 @@ jobs:
             echo "MAKTABA_KEYSTORE=$RUNNER_TEMP/maktaba.keystore" >> "$GITHUB_ENV"
             echo "Signed with the stored key: this build installs over earlier ones."
           else
-            echo "::warning::No signing key stored. This is a test build and cannot update an earlier install."
+            echo "Signed with the key in the repository: this build installs over earlier ones."
           fi
       - name: Build the APK
         env:
@@ -273,13 +273,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PHONE: ${{ needs.phone.outputs.passed == 'true' && 'success' || 'not passed' }}
+          # What changed, shown in the app's update popup under "What's new".
+          CHANGES: ${{ github.event.head_commit.message }}
         run: |
           APK=$(ls apk/*.apk)
           if [ "$PHONE" = "success" ]; then TESTED="Passed the automated test on an Android emulator."; else TESTED="Browser tests passed; the automated Android emulator test did not pass for this build ($PHONE)."; fi
-          printf '%s\n\n%s\n' "$TESTED" "Install: open this page on your phone, tap the .apk below, then Install. On a Samsung phone, first switch off Settings > Security and privacy > Auto Blocker; you can switch it back on afterwards." > notes.md
-          gh release create "build-${{ github.run_number }}" "$APK" \
-            --repo "${{ github.repository }}" \
-            --target "${{ github.sha }}" \
-            --prerelease \
-            --title "Maktaba test build ${{ github.run_number }}" \
-            --notes-file notes.md
+          {
+            echo "## What's new"
+            echo "$CHANGES" | grep -v -i -E '^(Co-Authored-By|Claude-Session):' | sed '/^[[:space:]]*$/d' | awk 'NR==1 { print "- " $0; next } /^[[:space:]]*[-*]/ { sub(/^[[:space:]]*[-*][[:space:]]*/, ""); print "- " $0; next } { sub(/^[[:space:]]+/, ""); print "  " $0 }'
+            echo
+            echo "$TESTED"
+            echo
+            echo "Install: open this page on your phone, tap the .apk below, then Install. On a Samsung phone, first switch off Settings > Security and privacy > Auto Blocker; you can switch it back on afterwards. Once installed, later versions are offered inside the app."
+          } > notes.md
+          # GitHub now and then refuses to create a release for a while ("Resource not
+          # accessible by integration") even though the same step works on the next push.
+          # Try patiently; if it still refuses, warn instead of failing the whole run (the APK
+          # is kept with the run, and the next build publishes as usual).
+          for wait in 0 30 60 120 240 300; do
+            sleep $wait
+            if gh release view "build-${{ github.run_number }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then exit 0; fi
+            if gh release create "build-${{ github.run_number }}" "$APK" \
+                --repo "${{ github.repository }}" \
+                --target "${{ github.sha }}" \
+                --prerelease \
+                --title "Maktaba build ${{ github.run_number }}" \
+                --notes-file notes.md; then
+              exit 0
+            fi
+            echo "GitHub refused to publish the release; trying again."
+          done
+          echo "::warning::GitHub would not publish this build as a release after several tries. The APK is attached to this run; the next build will publish normally."

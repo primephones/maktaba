@@ -576,6 +576,162 @@ public class MaktabaPlugin extends Plugin {
         if (s != null) try { s.close(); } catch (Exception ignored) { }
     }
 
+    // ------------------------------------------------------------------ updating the app itself
+
+    /** The installed version, and whether Maktaba may install updates (Android asks once). */
+    @PluginMethod
+    public void appInfo(PluginCall call) {
+        JSObject r = new JSObject();
+        try {
+            android.content.pm.PackageInfo info = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
+            r.put("versionCode", Build.VERSION.SDK_INT >= 28 ? (int) info.getLongVersionCode() : info.versionCode);
+            r.put("versionName", info.versionName);
+        } catch (Exception e) {
+            r.put("versionCode", 0);
+        }
+        r.put("canInstall", Build.VERSION.SDK_INT < 26 || getContext().getPackageManager().canRequestPackageInstalls());
+        call.resolve(r);
+    }
+
+    private static String signer(android.content.pm.PackageInfo info) {
+        if (info == null) return null;
+        try {
+            android.content.pm.Signature[] sigs;
+            if (Build.VERSION.SDK_INT >= 28 && info.signingInfo != null) {
+                sigs = info.signingInfo.hasMultipleSigners() ? info.signingInfo.getApkContentsSigners() : info.signingInfo.getSigningCertificateHistory();
+            } else {
+                sigs = info.signatures;
+            }
+            if (sigs == null || sigs.length == 0) return null;
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            return android.util.Base64.encodeToString(md.digest(sigs[sigs.length - 1].toByteArray()), android.util.Base64.NO_WRAP);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static int sigFlag() {
+        return Build.VERSION.SDK_INT >= 28 ? android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES : android.content.pm.PackageManager.GET_SIGNATURES;
+    }
+
+    private File updateFile() {
+        File dir = new File(getContext().getCacheDir(), "update");
+        if (!dir.exists()) dir.mkdirs();
+        return new File(dir, "maktaba-update.apk");
+    }
+
+    /**
+     * Downloads a new version, reporting progress, and checks it is signed with the same key
+     * as the installed app (otherwise Android would refuse to install it over this one).
+     */
+    @PluginMethod
+    public void downloadUpdate(PluginCall call) {
+        String url = call.getString("url", "");
+        if (!url.startsWith("https://")) {
+            call.reject("Not a download address");
+            return;
+        }
+        new Thread(() -> {
+            File out = updateFile();
+            File part = new File(out.getPath() + ".part");
+            try {
+                java.net.HttpURLConnection c = null;
+                String at = url;
+                // GitHub sends downloads on to its file servers: follow, staying on https.
+                for (int hop = 0; hop < 6; hop++) {
+                    c = (java.net.HttpURLConnection) new java.net.URL(at).openConnection();
+                    c.setInstanceFollowRedirects(false);
+                    c.setConnectTimeout(20000);
+                    c.setReadTimeout(60000);
+                    c.setRequestProperty("Accept", "application/octet-stream");
+                    int code = c.getResponseCode();
+                    if (code >= 300 && code < 400) {
+                        String next = c.getHeaderField("Location");
+                        c.disconnect();
+                        if (next == null || !next.startsWith("https://")) throw new Exception("Bad redirect");
+                        at = next;
+                        continue;
+                    }
+                    if (code != 200) throw new Exception("The download answered " + code);
+                    break;
+                }
+                long total = c.getContentLengthLong();
+                long done = 0;
+                long lastReport = 0;
+                try (InputStream in = c.getInputStream(); OutputStream os = new FileOutputStream(part)) {
+                    byte[] buf = new byte[64 * 1024];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        os.write(buf, 0, n);
+                        done += n;
+                        long now = System.currentTimeMillis();
+                        if (now - lastReport > 300) {
+                            lastReport = now;
+                            JSObject p = new JSObject();
+                            p.put("done", done);
+                            p.put("total", total);
+                            notifyListeners("updateProgress", p);
+                        }
+                    }
+                }
+                c.disconnect();
+                if (total > 0 && done != total) throw new Exception("The download was cut short");
+                if (out.exists()) out.delete();
+                if (!part.renameTo(out)) throw new Exception("Could not save the download");
+                android.content.pm.PackageManager pm = getContext().getPackageManager();
+                android.content.pm.PackageInfo apk = pm.getPackageArchiveInfo(out.getPath(), sigFlag());
+                if (apk == null || !getContext().getPackageName().equals(apk.packageName)) {
+                    out.delete();
+                    throw new Exception("The downloaded file is not Maktaba");
+                }
+                if (Build.VERSION.SDK_INT >= 28 && apk.applicationInfo != null) {
+                    apk.applicationInfo.sourceDir = out.getPath();
+                    apk.applicationInfo.publicSourceDir = out.getPath();
+                }
+                String mine = signer(pm.getPackageInfo(getContext().getPackageName(), sigFlag()));
+                String theirs = signer(apk);
+                JSObject r = new JSObject();
+                r.put("sameKey", mine != null && mine.equals(theirs));
+                r.put("versionCode", Build.VERSION.SDK_INT >= 28 ? (int) apk.getLongVersionCode() : apk.versionCode);
+                call.resolve(r);
+            } catch (Exception e) {
+                part.delete();
+                call.reject("The update could not be downloaded: " + e.getMessage());
+            }
+        }, "maktaba-update").start();
+    }
+
+    /** Hands the downloaded update to Android's installer (asking for permission first if needed). */
+    @PluginMethod
+    public void installUpdate(PluginCall call) {
+        try {
+            JSObject r = new JSObject();
+            if (Build.VERSION.SDK_INT >= 26 && !getContext().getPackageManager().canRequestPackageInstalls()) {
+                Intent allow = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getContext().getPackageName()));
+                allow.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(allow);
+                r.put("needsPermission", true);
+                call.resolve(r);
+                return;
+            }
+            File apk = updateFile();
+            if (!apk.exists()) {
+                call.reject("Download the update first");
+                return;
+            }
+            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", apk);
+            Intent install = new Intent(Intent.ACTION_VIEW);
+            install.setDataAndType(uri, "application/vnd.android.package-archive");
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(install);
+            r.put("needsPermission", false);
+            call.resolve(r);
+        } catch (Exception e) {
+            call.reject("Could not open the installer: " + e.getMessage());
+        }
+    }
+
     /** Opens a web page in the phone's browser (for signing in to an AI service or a cloud). */
     @PluginMethod
     public void openUrl(PluginCall call) {

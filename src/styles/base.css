@@ -1291,3 +1291,44 @@ details.finish-by-hand textarea {
 .allowance .legend span:last-child {
   white-space: nowrap;
 }
+
+/* The "new version" popup in the Android app. */
+.app-update {
+  display: grid;
+  gap: 12px;
+}
+.app-update-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.app-update-badge {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--rubric) 14%, var(--surface));
+  color: var(--rubric);
+  flex: none;
+}
+.app-update-ver {
+  font-family: var(--font-read);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+.app-update-notes,
+.app-update-steps {
+  margin: 0;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 6px;
+}
+.app-update-progress,
+.app-update-step {
+  display: grid;
+  gap: 10px;
+}
+.app-update-step p {
+  margin: 0;
+}

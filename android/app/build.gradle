@@ -3,9 +3,11 @@ apply plugin: 'com.android.application'
 // The build number rises with every build so a new APK always installs over the old one.
 def buildNumber = (project.findProperty('buildNumber') ?: '1') as Integer
 def appVersion = project.findProperty('appVersion') ?: '0.1.0'
-// The signing key is supplied from outside the repository. Without it the build is signed
-// with a throwaway key: fine for testing, but it cannot update an earlier install.
-def keystorePath = System.getenv('MAKTABA_KEYSTORE')
+// Every build is signed with the same key, so each new APK (and the in-app update) installs
+// over the last one and keeps the reader's library. The key lives in the repository, by the
+// owner's choice; a key stored as a GitHub secret (MAKTABA_KEYSTORE) takes its place if set.
+def keystorePath = System.getenv('MAKTABA_KEYSTORE') ?: file('maktaba-release.keystore').absolutePath
+def keystorePassword = System.getenv('MAKTABA_KEYSTORE') ? System.getenv('MAKTABA_KEYSTORE_PASSWORD') : 'maktaba-release'
 
 android {
     namespace = "za.co.primephones.maktaba"
@@ -27,9 +29,9 @@ android {
         release {
             if (keystorePath) {
                 storeFile file(keystorePath)
-                storePassword System.getenv('MAKTABA_KEYSTORE_PASSWORD')
+                storePassword keystorePassword
                 keyAlias 'maktaba'
-                keyPassword System.getenv('MAKTABA_KEYSTORE_PASSWORD')
+                keyPassword keystorePassword
             }
         }
     }

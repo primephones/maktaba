@@ -24,6 +24,9 @@ interface MaktabaNative {
   openFile(o: { uri: string; mime: string; title: string }): Promise<void>;
   openUrl(o: { url: string }): Promise<void>;
   listenForSignIn(): Promise<{ url: string }>;
+  appInfo(): Promise<{ versionCode: number; versionName?: string; canInstall: boolean }>;
+  downloadUpdate(o: { url: string }): Promise<{ sameKey: boolean; versionCode: number }>;
+  installUpdate(): Promise<{ needsPermission: boolean }>;
   shareText(o: { text: string; title: string }): Promise<void>;
   googleAuthorize(o: { scopes: string[]; interactive: boolean }): Promise<{ accessToken: string }>;
   addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;
@@ -35,6 +38,7 @@ export interface NativeEvents {
   sharedFiles: { files: SharedFile[]; failed: string[] };
   sharedText: { text: string };
   authCallback: { url: string };
+  updateProgress: { done: number; total: number };
 }
 
 /** True inside the installed Android app (not on the web or iPhone). */
