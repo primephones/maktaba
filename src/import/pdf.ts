@@ -1,6 +1,6 @@
 import type { Block, TocEntry } from '../db/types';
 import type { ImportContext } from './types';
-import { dropRunningHeaders, isDamaged, itemsToLines, linesToBlocks, mergeAcrossPages, textDamage, type PageText, type TextItem } from './pdfText';
+import { dropRunningHeaders, dropWatermarks, isDamaged, itemsToLines, linesToBlocks, mergeAcrossPages, textDamage, type PageText, type TextItem } from './pdfText';
 import { loadPdf } from '../lib/pdfjs';
 
 /** Pages per stored section. Small enough to resume cheaply and lay out quickly. */
@@ -148,7 +148,11 @@ export async function importPdf(ctx: ImportContext): Promise<void> {
         pages.push(pt);
         await ctx.progress(n, total, kind === 'scan' ? 'Preparing scanned pages' : 'Reading pages');
       }
-      if (kind === 'text') dropRunningHeaders(pages.filter((_, i) => !imageOnly.has(from + i)));
+      if (kind === 'text') {
+        const withText = pages.filter((_, i) => !imageOnly.has(from + i));
+        dropWatermarks(withText);
+        dropRunningHeaders(withText);
+      }
       const blocks = mergeAcrossPages(pages);
 
       // Contents entries land on the first block that came from their page.

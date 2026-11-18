@@ -61,8 +61,20 @@ export const isDamaged = (d: { bad: number; total: number; arabic: boolean }) =>
   d.arabic ? d.bad >= 1 : d.bad >= 3 && d.bad / Math.max(1, d.total) > 0.002;
 
 /** Groups positioned text fragments into lines, in reading order for the line's script. */
+/**
+ * Text printed at a slant (more than a few degrees off the line) is a watermark or stamp
+ * laid across the page, not the book's own text.
+ */
+export function isSlanted(it: TextItem): boolean {
+  const [a, b] = it.transform;
+  if (!b) return false;
+  const deg = Math.abs((Math.atan2(b, a) * 180) / Math.PI);
+  return deg > 8 && deg < 172;
+}
+
 export function itemsToLines(items: TextItem[]): Line[] {
   const frags = items
+    .filter((it) => !isSlanted(it))
     .map((it) => {
       let str = (it.str || '').replace(UNMAPPED, '');
       // A vowel mark drawn on its own carries no space of its own.
@@ -206,6 +218,48 @@ export function dropRunningHeaders(pages: PageText[]): void {
     if (!first || first.t !== 'p' || first.text.length > 80 || p.blocks.length < 2) continue;
     const k = key(first.text);
     if (k && (counts.get(k) ?? 0) >= Math.max(3, Math.ceil(pages.length * 0.4))) p.blocks.shift();
+  }
+}
+
+/** A web address, e-mail or phone number: the usual content of a watermark or stamp. */
+const STAMP = /(?:https?:\/\/|www\.)\S+|[\w.-]+@[\w-]+\.\w+|\b[\w-]+\.(?:com|net|org|pk|in|info|co\.za|blogspot\.com)\b|\+?\d[\d\s-]{8,}\d/gi;
+
+/**
+ * Drops watermarks: a short line that appears on most pages (anywhere on the page), and a
+ * web address or phone number stamped on many pages, even when it was read into the
+ * middle of a paragraph. Neither is part of the book.
+ */
+export function dropWatermarks(pages: PageText[]): void {
+  if (pages.length < 4) return;
+  const need = Math.max(4, Math.ceil(pages.length * 0.6));
+  // The same words exactly (a stamp does not change from page to page; a running header
+  // with its page number is dealt with separately). A lead-in such as "قال المصنف:" is kept.
+  const key = (s: string) => (s.length <= 60 && !/[:：؛]\s*$/.test(s) ? s.replace(/\s+/g, ' ').trim() : '');
+  const lines = new Map<string, number>();
+  const stamps = new Map<string, number>();
+  for (const p of pages) {
+    const seenLines = new Set<string>();
+    const seenStamps = new Set<string>();
+    for (const b of p.blocks) {
+      if (b.t === 'img') continue;
+      if (key(b.text)) seenLines.add(key(b.text));
+      for (const m of b.text.match(STAMP) ?? []) seenStamps.add(m.toLowerCase());
+    }
+    seenLines.forEach((k) => lines.set(k, (lines.get(k) ?? 0) + 1));
+    seenStamps.forEach((k) => stamps.set(k, (stamps.get(k) ?? 0) + 1));
+  }
+  const badLines = new Set([...lines].filter(([, n]) => n >= need).map(([k]) => k));
+  const badStamps = [...stamps].filter(([, n]) => n >= Math.max(3, Math.ceil(pages.length * 0.3))).map(([k]) => k);
+  if (!badLines.size && !badStamps.length) return;
+  for (const p of pages) {
+    p.blocks = p.blocks.filter((b) => b.t === 'img' || !badLines.has(key(b.text)));
+    for (const b of p.blocks) {
+      if (b.t === 'img' || !badStamps.length) continue;
+      let t = b.text;
+      for (const st of badStamps) t = t.replace(new RegExp(st.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ' ');
+      if (t !== b.text) b.text = t.replace(/\s{2,}/g, ' ').trim();
+    }
+    p.blocks = p.blocks.filter((b) => b.t === 'img' || b.text.trim());
   }
 }
 

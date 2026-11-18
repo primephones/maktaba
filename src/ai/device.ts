@@ -1,8 +1,8 @@
 import { db, uid } from '../db/db';
 import type { AiJob, AiJobItem } from '../db/types';
 import { DEFAULT_PROVIDERS, FEATURES, type CallEnv, type CallResult, type Feature, type Provider } from '../../server/src/providers';
-import { NoProviderError, nextReset, route, type UsageStore } from '../../server/src/router';
-import { batches, buildMessages, checkAnswer, parseAnswer, type Paragraph, type SourceLang } from '../../server/src/translate';
+import { AnswerRejected, NoProviderError, nextReset, route, type UsageStore } from '../../server/src/router';
+import { batches, buildMessages, acceptAnswer, parseAnswer, type Paragraph, type SourceLang } from '../../server/src/translate';
 import { mergeGlossary, SEED_GLOSSARY, type Term } from '../../server/src/glossary';
 import { acceptStudy, featureOf, studyMessages, type StudyTask } from '../../server/src/study';
 import { workBegan, workEnded, workProgress } from '../native/work';
@@ -133,10 +133,7 @@ async function translateBatch(a: MyAi, body: TranslateBody) {
   const glossary = mergeGlossary(SEED_GLOSSARY, body.glossary ?? []);
   const messages = buildMessages({ lang: body.lang, paragraphs: body.paragraphs, glossary, bookTitle: body.bookTitle, chapter: body.chapter, previous: body.previous });
   const routed = await route(providers(a), callEnv(a), usage, { feature: 'translate', private: !!body.private, prefer: preferFor(a, body.prefer) }, messages, (text) => {
-    const answer = parseAnswer(text);
-    const problems = checkAnswer(body.paragraphs, answer);
-    if (problems.length) throw new Error(problems.map((p) => `${p.id}: ${p.problem}`).join('; '));
-    return answer;
+    return acceptAnswer(body.paragraphs, parseAnswer(text));
   });
   return { results: routed.value.map((r) => ({ ...r, provider: routed.provider, model: routed.model, cached: false })), skipped: routed.skipped, provider: routed.provider };
 }
@@ -144,14 +141,62 @@ async function translateBatch(a: MyAi, body: TranslateBody) {
 /** The reader's own service, if they added one, comes first. */
 const preferFor = (a: MyAi, prefer?: string[]) => (a.custom?.baseUrl ? ['custom', ...(prefer ?? [])] : prefer);
 
+const NAMES: Record<string, string> = { gemini: 'Gemini', groq: 'Groq', openrouter: 'OpenRouter', custom: 'Your service' };
+
+/** "Gemini: busy for a moment; Groq: the key was refused", one line per service. */
+export function explainSkipped(skipped: Array<{ provider: string; reason: string }>): string {
+  const per = new Map<string, string>();
+  for (const s of skipped) per.set(s.provider, s.reason.replace('in the server settings', 'in Settings › Your AI'));
+  return [...per].map(([p, r]) => `${NAMES[p] ?? p}: ${r}`).join('; ');
+}
+
 const noProvider = (e: NoProviderError) =>
   new DeviceError(
     e.skipped.length === 1 && e.skipped[0].provider === '-'
       ? e.skipped[0].reason.replace('on the server', 'in Settings › AI')
-      : 'Your AI is not available right now.',
+      : `Your AI is not available right now. ${explainSkipped(e.skipped)}.`,
     503,
     { retryAt: e.retryAt, skipped: e.skipped },
   );
+
+export interface ServiceTest {
+  id: string;
+  name: string;
+  ok: boolean;
+  /** The model that answered. */
+  model?: string;
+  message: string;
+  ms: number;
+}
+
+/**
+ * Tries each connected service with one short translation (one request of allowance each)
+ * and says exactly what happened. A service that works is cleared of any earlier pause.
+ */
+export async function testServices(): Promise<ServiceTest[]> {
+  const a = await getMyAi();
+  const env = callEnv(a);
+  const out: ServiceTest[] = [];
+  const sample = [{ id: '1', text: 'قال الإمام الشافعي رحمه الله: العلم ما نفع، ليس العلم ما حفظ.', kind: 'p' as const }];
+  const messages = buildMessages({ lang: 'ar', paragraphs: sample, glossary: mergeGlossary(SEED_GLOSSARY, []) });
+  for (const p of providers(a)) {
+    if (!(p.keyName && env.secrets[p.keyName])) continue;
+    // A fresh count, so an earlier pause does not hide whether the service works now.
+    const fresh: UsageStore = { usedToday: async () => ({}), record: async () => undefined, blockedUntil: async () => ({}), block: async () => undefined };
+    const started = Date.now();
+    try {
+      const r = await route([p], env, fresh, { feature: 'translate', private: false }, messages, (text) => acceptAnswer(sample, parseAnswer(text)));
+      out.push({ id: p.id, name: NAMES[p.id] ?? p.name, ok: true, model: r.model, message: r.value[0]?.en ?? '', ms: Date.now() - started });
+      const u = await readUsage();
+      for (const k of Object.keys(u.blocks)) if (k === p.id || k.startsWith(`${p.id}|`)) delete u.blocks[k];
+      await db.settings.put({ key: 'myAiUsage', value: u });
+    } catch (e) {
+      const reason = e instanceof NoProviderError || e instanceof AnswerRejected ? explainSkipped(e.skipped).replace(/^[^:]+: /, '') : (e as Error).message;
+      out.push({ id: p.id, name: NAMES[p.id] ?? p.name, ok: false, message: reason, ms: Date.now() - started });
+    }
+  }
+  return out;
+}
 
 /** Handles one request the way the server would. */
 export async function handle(path: string, method: string, body: Record<string, unknown> | undefined): Promise<unknown> {
@@ -171,6 +216,7 @@ export async function handle(path: string, method: string, body: Record<string, 
     }
   } catch (e) {
     if (e instanceof NoProviderError) throw noProvider(e);
+    if (e instanceof AnswerRejected) throw new DeviceError(`${e.message}. It will try again, a paragraph at a time.`, 502, { skipped: e.skipped });
     throw e;
   }
   if (path === '/v1/jobs' && method === 'POST') return createJob(body ?? {});
@@ -298,8 +344,10 @@ async function work() {
         continue;
       }
       todo.sort((x, y) => x.seq - y.seq);
-      const batch = batches(todo.map((i) => ({ id: String(i.seq), text: i.text, kind: i.kind as Paragraph['kind'] })))[0];
       const first = todo[0];
+      // After a failed try, the first paragraph goes alone, so one awkward paragraph (a
+      // stamp, a table, a garbled scan) cannot hold up the rest of the book.
+      const batch = first.attempts > 0 ? [{ id: String(first.seq), text: first.text, kind: first.kind as Paragraph['kind'] }] : batches(todo.map((i) => ({ id: String(i.seq), text: i.text, kind: i.kind as Paragraph['kind'] })))[0];
       const prev = first.seq > 0 ? await db.aiJobItems.get([due.id, first.seq - 1]) : undefined;
       const started = Date.now();
       try {

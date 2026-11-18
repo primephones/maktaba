@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dropRunningHeaders, isDamaged, itemsToLines, linesToBlocks, mergeAcrossPages, textDamage, type TextItem } from './pdfText';
+import { dropWatermarks, isSlanted } from './pdfText';
 
 const item = (str: string, x: number, y: number, w: number, size = 12): TextItem => ({ str, transform: [size, 0, 0, size, x, y], width: w, height: size });
 
@@ -52,5 +53,27 @@ describe('PDF text reconstruction', () => {
     expect(isDamaged(textDamage([item('قال الإمام: العلم ما حف\u0000 وقد أجمع العلماء على ذلك', 50, 700, 300)]))).toBe(true);
     // In English a stray ornament glyph is not.
     expect(isDamaged(textDamage([item('\uF0B7 A bulleted line of ordinary English text in a book.', 50, 700, 300)]))).toBe(false);
+  });
+});
+
+describe('watermarks', () => {
+  const page = (...texts: string[]) => ({ blocks: texts.map((text) => ({ t: 'p' as const, text })), openEnded: false, chars: 0 });
+  it('drops a line on most pages, and a web address stamped into paragraphs', () => {
+    const pages = [1, 2, 3, 4, 5].map((n) =>
+      page(`باب ${n} في الطهارة وأحكامها`, 'مکتبہ الحسن www.besturdubooks.net', `قال المصنف رحمه الله www.besturdubooks.net الماء طهور ${n} لا ينجسه شيء`),
+    );
+    dropWatermarks(pages);
+    for (const p of pages) {
+      expect(p.blocks.map((b) => b.text).join(' ')).not.toMatch(/besturdubooks|مکتبہ الحسن/);
+      expect(p.blocks.length).toBe(2);
+      expect(p.blocks[1].text).toMatch(/^قال المصنف رحمه الله الماء طهور \d لا ينجسه شيء$/);
+    }
+  });
+  it('leaves a short book alone, and text printed straight', () => {
+    const few = [page('www.example.com'), page('www.example.com')];
+    dropWatermarks(few);
+    expect(few[0].blocks).toHaveLength(1);
+    expect(isSlanted({ str: 'x', transform: [10, 0, 0, 10, 0, 0], width: 1, height: 1 })).toBe(false);
+    expect(isSlanted({ str: 'x', transform: [7, 7, -7, 7, 0, 0], width: 1, height: 1 })).toBe(true);
   });
 });

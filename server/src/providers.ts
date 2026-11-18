@@ -35,7 +35,9 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     keyName: 'GEMINI_API_KEY',
     models: { translate: 'gemini-2.5-flash', ocr: 'gemini-2.5-flash', ask: 'gemini-2.5-flash', explain: 'gemini-2.5-flash', irab: 'gemini-2.5-flash' },
     trains: true,
-    dailyRequests: 200,
+    // Each Gemini model has its own free allowance (2.5 Flash about 250 a day, Flash-Lite
+    // about 1,000); when one runs out the next is used, so the total is generous.
+    dailyRequests: 1100,
     rpm: 8,
     note: 'Strongest free option for classical Arabic. Google may use free-tier requests to improve its products, so private books are never sent here.',
   },
@@ -69,7 +71,7 @@ export const DEFAULT_PROVIDERS: Provider[] = [
     keyName: 'OPENROUTER_API_KEY',
     models: { translate: 'deepseek/deepseek-chat-v3.1:free', ask: 'deepseek/deepseek-chat-v3.1:free', explain: 'deepseek/deepseek-chat-v3.1:free' },
     trains: true,
-    dailyRequests: 45,
+    dailyRequests: 50,
     rpm: 15,
     note: 'Extra free capacity. Free models may log requests, so private books are never sent here.',
   },
@@ -90,10 +92,15 @@ export interface CallResult {
 export class ProviderError extends Error {
   constructor(
     message: string,
-    /** 'limit': out of allowance; 'auth': bad key; 'temporary': try another, then retry later. */
-    readonly kind: 'limit' | 'auth' | 'temporary' | 'bad-answer',
+    /**
+     * 'limit': too many requests (for a minute, or for the day); 'auth': bad key; 'model':
+     * this model is not offered (any more); 'temporary': try another, then retry later.
+     */
+    readonly kind: 'limit' | 'auth' | 'temporary' | 'bad-answer' | 'model',
     /** When the service says to try again. */
     readonly retryAt?: number,
+    /** The day's allowance (not just the minute's) is used up. */
+    readonly daily = false,
   ) {
     super(message);
   }
@@ -107,11 +114,114 @@ export interface CallEnv {
 
 const TIMEOUT_MS = 90_000;
 
-function classify(status: number, retryAfter: string | null): ProviderError {
-  const at = retryAfter ? Date.now() + (Number(retryAfter) > 0 ? Number(retryAfter) * 1000 : 60_000) : undefined;
-  if (status === 429) return new ProviderError('Allowance used up', 'limit', at);
-  if (status === 401 || status === 403) return new ProviderError('The key was refused', 'auth');
-  return new ProviderError(`Service error ${status}`, 'temporary', at);
+/**
+ * What an error answer means. Services put the important part in the body: Gemini says
+ * "retry in 37s" there for a per-minute limit, and which quota (per minute or per day) ran
+ * out; it reports a wrong key as 400; OpenRouter says "no endpoints" for a retired model.
+ */
+export function classify(status: number, retryAfter: string | null, body = ''): ProviderError {
+  const now = Date.now();
+  const hinted = Number(body.match(/"retryDelay":\s*"(\d+(?:\.\d+)?)s"/)?.[1] ?? body.match(/retry (?:in|after) (\d+(?:\.\d+)?)\s*s/i)?.[1] ?? NaN);
+  const header = retryAfter && Number(retryAfter) > 0 ? Number(retryAfter) : NaN;
+  const wait = Number.isFinite(hinted) ? hinted : header;
+  if (status === 429 || status === 402) {
+    const daily = status === 402 || /PerDay|per[- ]day|daily|free-models-per-day|insufficient credits|quota exceeded for quota metric.*day/i.test(body);
+    if (daily) return new ProviderError('today’s allowance is used up', 'limit', undefined, true);
+    return new ProviderError('busy for a moment (too many requests)', 'limit', now + Math.min(120, Number.isFinite(wait) ? wait + 1 : 60) * 1000);
+  }
+  if (status === 401 || status === 403 || /API_KEY_INVALID|API key not valid|invalid[ _]api[ _]key|incorrect api key/i.test(body)) return new ProviderError('The key was refused', 'auth');
+  if (status === 404 || (status === 400 && /model/i.test(body) && /not (found|exist|available|supported)|decommission|deprecat|no endpoints|invalid model|unknown model/i.test(body)))
+    return new ProviderError('this model is no longer offered', 'model');
+  return new ProviderError(`Service error ${status}`, 'temporary', Number.isFinite(wait) ? now + wait * 1000 : undefined);
+}
+
+const errorOf = async (res: Response) => classify(res.status, res.headers.get('retry-after'), await res.text().catch(() => ''));
+
+// ------------------------------------------------------------------------------- models
+
+/**
+ * Which models each service offers changes all the time (OpenRouter's free ones above
+ * all). Rather than trust the names written here, Maktaba asks each service for its list
+ * (a free request) and picks from it, in this order of preference, keeping the configured
+ * model first while it is offered.
+ */
+const PREFER: Record<string, RegExp[]> = {
+  gemini: [/^gemini-\d+(?:\.\d+)?-flash$/, /^gemini-flash-latest$/, /^gemini-\d+(?:\.\d+)?-flash-lite$/, /^gemini-flash-lite-latest$/, /^gemini-\d+(?:\.\d+)?-flash/],
+  groq: [/^openai\/gpt-oss-120b$/, /^llama-3\.3-70b-versatile$/, /^moonshotai\/kimi-k2/, /^meta-llama\/llama-4-maverick/, /^qwen\/qwen3-32b$/, /^openai\/gpt-oss-20b$/, /70b|120b|235b/],
+  openrouter: [
+    /^deepseek\/deepseek-(chat|v3)[^/]*:free$/,
+    /^qwen\/qwen3-235b[^/]*:free$/,
+    /^openai\/gpt-oss-120b:free$/,
+    /^meta-llama\/llama-4-maverick:free$/,
+    /^moonshotai\/kimi[^/]*:free$/,
+    /^google\/gemini[^/]*:free$/,
+    /^z-ai\/glm[^/]*:free$/,
+    /^deepseek\/deepseek-r1[^/]*:free$/,
+    /:free$/,
+  ],
+};
+// Models for pictures, speech or safety checks, and small models (14B or less), which translate classical texts poorly.
+const NOT_FOR_TEXT = /image|tts|audio|live|embed|guard|whisper|robotics|computer-use|vision-only|nano|gemma-3n|[-_](?:[1-9]|1[0-4])b(?![a-z0-9])/i;
+
+const versionOf = (id: string) => (id.match(/\d+(?:\.\d+)?/g) ?? []).map(Number);
+function newestFirst(a: string, b: string): number {
+  const x = versionOf(a);
+  const y = versionOf(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((y[i] ?? 0) !== (x[i] ?? 0)) return (y[i] ?? 0) - (x[i] ?? 0);
+  return a.length - b.length;
+}
+
+const listed = new Map<string, { at: number; ids: string[] | null }>();
+const LIST_FOR = 6 * 3600_000;
+
+/** The models a service offers this key now (free ones only on OpenRouter), or null if it cannot say. */
+export async function listModels(p: Provider, env: CallEnv): Promise<string[] | null> {
+  if (p.kind === 'workers-ai' || !PREFER[p.id]) return null;
+  const hit = listed.get(p.id);
+  if (hit && Date.now() - hit.at < LIST_FOR) return hit.ids;
+  let ids: string[] | null = null;
+  try {
+    const key = p.keyName ? env.secrets[p.keyName] : undefined;
+    if (p.kind === 'gemini') {
+      const res = await env.fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': key ?? '' }, signal: AbortSignal.timeout(15_000) });
+      if (res.ok) {
+        const d = (await res.json()) as { models?: Array<{ name?: string; supportedGenerationMethods?: string[] }> };
+        ids = (d.models ?? []).filter((m) => m.name && m.supportedGenerationMethods?.includes('generateContent')).map((m) => m.name!.replace(/^models\//, ''));
+      }
+    } else {
+      const res = await env.fetch(`${p.baseUrl}/models`, { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(15_000) });
+      if (res.ok) {
+        const d = (await res.json()) as { data?: Array<{ id?: string; pricing?: { prompt?: string; completion?: string } }> };
+        ids = (d.data ?? [])
+          .filter((m) => !!m.id && (p.id !== 'openrouter' || m.id.endsWith(':free') || (m.pricing?.prompt === '0' && m.pricing?.completion === '0')))
+          .map((m) => m.id!);
+      }
+    }
+  } catch {
+    ids = null;
+  }
+  if (ids && !ids.length) ids = null;
+  listed.set(p.id, { at: Date.now(), ids });
+  return ids;
+}
+
+/** Forgets a service's model list, so the next request asks again. */
+export const forgetModels = (providerId: string) => void listed.delete(providerId);
+
+/** The models to try for a feature, best first: the configured one while offered, then the service's own. */
+export async function modelsFor(p: Provider, feature: Feature, env: CallEnv): Promise<string[]> {
+  const configured = p.models[feature];
+  if (!configured) return [];
+  const ids = await listModels(p, env);
+  const out: string[] = [];
+  if (!ids || ids.includes(configured)) out.push(configured);
+  if (ids) {
+    for (const re of PREFER[p.id] ?? []) {
+      for (const id of ids.filter((i) => re.test(i) && !NOT_FOR_TEXT.test(i)).sort(newestFirst)) if (!out.includes(id)) out.push(id);
+    }
+  }
+  if (!out.length) out.push(configured);
+  return out.slice(0, 4);
 }
 
 export async function callProvider(p: Provider, model: string, messages: ChatMessage[], env: CallEnv, json = true): Promise<CallResult> {
@@ -138,7 +248,7 @@ export async function callProvider(p: Provider, model: string, messages: ChatMes
         }),
         signal,
       });
-      if (!res.ok) throw classify(res.status, res.headers.get('retry-after'));
+      if (!res.ok) throw await errorOf(res);
       const data = (await res.json()) as {
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
         usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
@@ -152,13 +262,20 @@ export async function callProvider(p: Provider, model: string, messages: ChatMes
       };
     }
 
-    const res = await env.fetch(`${p.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages, temperature: 0.2, ...(json ? { response_format: { type: 'json_object' } } : {}) }),
-      signal,
-    });
-    if (!res.ok) throw classify(res.status, res.headers.get('retry-after'));
+    const ask = (asJson: boolean) =>
+      env.fetch(`${p.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model, messages, temperature: 0.2, ...(asJson ? { response_format: { type: 'json_object' } } : {}) }),
+        signal,
+      });
+    let res = await ask(json);
+    if (!res.ok && res.status === 400 && json) {
+      // Some models do not take "JSON mode": the instructions already ask for JSON, so ask again without it.
+      const body = await res.clone().text().catch(() => '');
+      if (/response_format|json_object|json mode|structured output/i.test(body)) res = await ask(false);
+    }
+    if (!res.ok) throw await errorOf(res);
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
     return { text: data.choices?.[0]?.message?.content ?? '', tokensIn: data.usage?.prompt_tokens ?? 0, tokensOut: data.usage?.completion_tokens ?? 0 };
   } catch (e) {

@@ -1,4 +1,4 @@
-import { callProvider, ProviderError, type CallEnv, type CallResult, type ChatMessage, type Feature, type Provider } from './providers';
+import { callProvider, forgetModels, modelsFor, ProviderError, type CallEnv, type CallResult, type ChatMessage, type Feature, type Provider } from './providers';
 
 /**
  * Chooses which AI service answers a request, and falls back to the next one when a
@@ -77,12 +77,14 @@ export async function route<T>(
   let soonest = nextReset(now);
 
   const candidates = eligible(providers, env, opts);
+  /** A service answered, but the answer failed the checks (worth trying again soon, in smaller pieces). */
+  let checksFailed = false;
   if (!candidates.length) {
     const why = opts.private ? 'No service that keeps private books private has a key set.' : 'No AI service has a key set on the server.';
     throw new NoProviderError([{ provider: '-', reason: why }], soonest);
   }
 
-  for (const { p, model } of candidates) {
+  for (const { p } of candidates) {
     const b = blocked[p.id];
     if (b && b.until > now) {
       skipped.push({ provider: p.id, reason: b.reason });
@@ -93,29 +95,60 @@ export async function route<T>(
       skipped.push({ provider: p.id, reason: 'today’s allowance is used up' });
       continue;
     }
-    try {
-      const r = await callProvider(p, model, messages, env);
-      await usage.record(p.id, opts.feature, r);
-      try {
-        return { value: accept(r.text), provider: p.id, model, skipped };
-      } catch (e) {
-        skipped.push({ provider: p.id, reason: `answer failed the checks: ${(e as Error).message}` });
+    // Each service may offer several models, each with its own allowance: when one is busy,
+    // used up for the day or retired, the next is tried before moving to another service.
+    const models = await modelsFor(p, opts.feature, env);
+    for (const model of models) {
+      const mk = `${p.id}|${model}`;
+      const mb = blocked[mk];
+      if (mb && mb.until > now) {
+        skipped.push({ provider: p.id, reason: `${model}: ${mb.reason}` });
+        soonest = Math.min(soonest, mb.until);
         continue;
       }
-    } catch (e) {
-      const err = e instanceof ProviderError ? e : new ProviderError(String(e), 'temporary');
-      if (err.kind === 'limit') {
-        const until = err.retryAt && err.retryAt - now < 3_600_000 ? err.retryAt : nextReset(now);
-        await usage.block(p.id, until, 'allowance used up');
-        soonest = Math.min(soonest, until);
-      } else if (err.kind === 'auth') {
-        await usage.block(p.id, nextReset(now), 'the key was refused; check it in the server settings');
-      } else if (err.kind === 'temporary') {
-        await usage.block(p.id, now + 2 * 60_000, err.message);
-        soonest = Math.min(soonest, now + 2 * 60_000);
+      let next = true;
+      try {
+        const r = await callProvider(p, model, messages, env);
+        await usage.record(p.id, opts.feature, r);
+        try {
+          return { value: accept(r.text), provider: p.id, model, skipped };
+        } catch (e) {
+          skipped.push({ provider: p.id, reason: `answer failed the checks: ${(e as Error).message}` });
+          checksFailed = true;
+          next = false;
+        }
+      } catch (e) {
+        const err = e instanceof ProviderError ? e : new ProviderError(String(e), 'temporary');
+        skipped.push({ provider: p.id, reason: `${model}: ${err.message}` });
+        if (err.kind === 'limit') {
+          const until = err.daily || !err.retryAt ? nextReset(now) : err.retryAt;
+          await usage.block(mk, until, err.message);
+          soonest = Math.min(soonest, until);
+        } else if (err.kind === 'model') {
+          forgetModels(p.id);
+          await usage.block(mk, now + 24 * 3_600_000, err.message);
+        } else if (err.kind === 'bad-answer') {
+          // Refused or empty (a safety filter, say): another model may answer.
+        } else if (err.kind === 'auth') {
+          await usage.block(p.id, nextReset(now), 'the key was refused; check it in the server settings');
+          next = false;
+        } else {
+          const until = err.retryAt && err.retryAt - now < 600_000 ? err.retryAt : now + 2 * 60_000;
+          await usage.block(p.id, until, err.message);
+          soonest = Math.min(soonest, until);
+          next = false;
+        }
       }
-      skipped.push({ provider: p.id, reason: err.message });
+      if (!next) break;
     }
   }
+  if (checksFailed) throw new AnswerRejected(skipped);
   throw new NoProviderError(skipped, soonest);
+}
+
+/** Every answer received failed the checks: not a matter of waiting for an allowance. */
+export class AnswerRejected extends Error {
+  constructor(readonly skipped: Array<{ provider: string; reason: string }>) {
+    super(`The AI’s answers failed the checks: ${skipped.filter((s) => /checks/.test(s.reason)).map((s) => s.reason.replace(/^answer failed the checks: /, '')).join('; ')}`.slice(0, 300));
+  }
 }

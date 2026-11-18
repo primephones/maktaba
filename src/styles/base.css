@@ -1332,3 +1332,27 @@ details.finish-by-hand textarea {
 .app-update-step p {
   margin: 0;
 }
+
+/* Settings › Your AI › Test my AI */
+.test-result {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.test-result > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ink-3);
+}
+.test-result[data-ok='true'] > svg {
+  color: var(--slate);
+}
+.test-result[data-ok='false'] > svg {
+  color: var(--rubric);
+}
+.test-result .small {
+  overflow-wrap: anywhere;
+}

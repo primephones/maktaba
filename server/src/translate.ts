@@ -40,6 +40,8 @@ export interface TranslateRequest {
 
 const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urdu', fa: 'Persian (Fārsī)', ps: 'Pashto', ms: 'Malay (in Latin script or Jawi)' };
 
+const SHORT_NAME: Record<SourceLang, string> = { ar: 'Arabic', ur: 'Urdu', fa: 'Persian', ps: 'Pashto', ms: 'Malay' };
+
 export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | 'user'; content: string }> {
   const all = req.paragraphs.map((p) => p.text).join('\n');
   const hits = termsIn(all, req.glossary);
@@ -57,9 +59,10 @@ export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | '
     ...(req.lang === 'ar'
       ? []
       : [
-          `5a. ${req.lang === 'ur' ? 'Urdu' : 'Persian'} works quote Arabic (Qurʾān, ḥadīth, juristic texts) inside the ${req.lang === 'ur' ? 'Urdu' : 'Persian'}. Translate the Arabic quotation too, inside quotation marks, and then the author’s own words; if the author paraphrases the quotation, translate both as written rather than merging them. Religious words the language takes from Persian (e.g. ${req.lang === 'ur' ? 'نماز, روزہ' : 'نماز, روزه'}) are given as the matching Arabic term from the glossary (ṣalāt, ṣawm).`,
+          `5a. ${SHORT_NAME[req.lang]} works quote Arabic (Qurʾān, ḥadīth, juristic texts) inside the ${SHORT_NAME[req.lang]}. Translate the Arabic quotation too, inside quotation marks, and then the author’s own words; if the author paraphrases the quotation, translate both as written rather than merging them. Religious words the language takes from Persian (e.g. ${req.lang === 'ur' ? 'نماز, روزہ' : 'نماز, روزه'}) are given as the matching Arabic term from the glossary (ṣalāt, ṣawm).`,
         ]),
     '6. Write clear, natural English with the formality of the original. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.',
+    '7. Scanned and downloaded books often carry a watermark or stamp (a library, publisher or website name, a web address, a phone number, "for free distribution", a seal) that can slip into the text. It is not part of the book: leave it out of the English without comment. If a whole paragraph is only such a stamp, give an empty "en" for it.',
     '',
     'Answer with JSON only, in this shape:',
     '{"paragraphs":[{"id":"…","en":"…","uncertain":[{"span":"…","reason":"…"}]}]}',
@@ -109,6 +112,8 @@ const toAscii = (s: string) => s.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥
 export interface Problem {
   id: string;
   problem: string;
+  /** A doubt worth flagging to the reader, not a reason to throw the translation away. */
+  soft?: boolean;
 }
 
 /**
@@ -120,26 +125,54 @@ export function checkAnswer(source: Paragraph[], answer: Translated[]): Problem[
   const byId = new Map(answer.map((a) => [a.id, a]));
   for (const p of source) {
     const a = byId.get(p.id);
-    if (!a || !a.en) {
+    if (!a) {
       problems.push({ id: p.id, problem: 'missing' });
       continue;
     }
-    // Every number in the source (dates, verse numbers, counts) must survive.
+    if (!a.en) {
+      // Left empty on purpose only for a stamp or watermark, which is short.
+      if (p.text.replace(/\s/g, '').length > 60) problems.push({ id: p.id, problem: 'missing' });
+      continue;
+    }
+    // Every number in the source (dates, verse numbers, counts) should survive; a number
+    // written out in words, or a stamp's phone number left out, is not worth losing the
+    // translation over, so it is flagged for the reader instead.
     const nums = (toAscii(p.text).match(DIGITS) ?? []).filter((n) => n.length <= 4);
     const enNums = new Set(a.en.match(/[0-9]+/g) ?? []);
     const lost = nums.filter((n) => !enNums.has(String(Number(n))));
-    if (lost.length) problems.push({ id: p.id, problem: `numbers missing: ${lost.join(', ')}` });
+    if (lost.length) problems.push({ id: p.id, problem: `numbers missing: ${lost.join(', ')}`, soft: true });
     // English should be neither a fragment nor padded with commentary.
     const ratio = a.en.length / Math.max(1, p.text.length);
-    if (p.text.length > 40 && ratio < 0.45) problems.push({ id: p.id, problem: 'too short: parts may be missing' });
-    if (p.text.length > 40 && ratio > 4) problems.push({ id: p.id, problem: 'too long: may contain added explanation' });
+    if (p.text.length > 40 && ratio < 0.3) problems.push({ id: p.id, problem: 'too short: parts may be missing' });
+    else if (p.text.length > 40 && ratio < 0.45) problems.push({ id: p.id, problem: 'shorter than expected: check nothing is missing', soft: true });
+    if (p.text.length > 40 && ratio > 5) problems.push({ id: p.id, problem: 'too long: may contain added explanation' });
+    else if (p.text.length > 40 && ratio > 4) problems.push({ id: p.id, problem: 'longer than expected: check nothing was added', soft: true });
     if (/^(here is|translation:|sure[,!])/i.test(a.en) || /as an ai|i cannot/i.test(a.en)) problems.push({ id: p.id, problem: 'chatter instead of translation' });
     // Untranslated Arabic left in the English (beyond a short quoted term).
     const arabicLeft = (a.en.match(/[؀-ۿ]/g) ?? []).length;
     if (arabicLeft > 12) problems.push({ id: p.id, problem: 'untranslated text left in' });
   }
-  for (const a of answer) if (!source.some((p) => p.id === a.id)) problems.push({ id: a.id, problem: 'unknown paragraph id' });
+  for (const a of answer) if (!source.some((p) => p.id === a.id)) problems.push({ id: a.id, problem: 'unknown paragraph id', soft: true });
   return problems;
+}
+
+/**
+ * Accepts an answer: throws if anything is really wrong (the batch is then sent again, to
+ * another model if need be, and never saved half-right); doubts are kept with the
+ * paragraph, marked for the reader to check. Paragraphs the model invented are dropped.
+ */
+export function acceptAnswer(source: Paragraph[], answer: Translated[]): Translated[] {
+  const problems = checkAnswer(source, answer);
+  const hard = problems.filter((p) => !p.soft);
+  if (hard.length) throw new Error(hard.map((p) => `${p.id}: ${p.problem}`).join('; '));
+  const ids = new Set(source.map((p) => p.id));
+  return answer
+    .filter((a) => ids.has(a.id))
+    .map((a) => {
+      const doubts = problems.filter((p) => p.id === a.id).map((p) => ({ span: '', reason: p.problem }));
+      // A † at the end lets the reader tap to see the doubt.
+      return doubts.length ? { ...a, en: /†\s*$/.test(a.en) ? a.en : `${a.en} †`, uncertain: [...a.uncertain, ...doubts] } : a;
+    });
 }
 
 /** Splits a long run of paragraphs into batches small enough for one request. */

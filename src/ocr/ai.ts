@@ -1,6 +1,7 @@
 import type { Block, OcrLang } from '../db/types';
 import { getMyAi } from '../ai/device';
 import { local, setLocal } from '../sync/sync';
+import { DEFAULT_PROVIDERS, modelsFor } from '../../server/src/providers';
 
 /**
  * Reading scanned pages with the reader's own Gemini key. Gemini reads Urdu Nastaliq,
@@ -13,7 +14,12 @@ import { local, setLocal } from '../sync/sync';
  * again with AI later.
  */
 
-const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+/** Gemini models to read pages with, best first: asked of Google itself, so a retired model is never stuck to. */
+async function models(key: string): Promise<string[]> {
+  const gemini = DEFAULT_PROVIDERS.find((p) => p.id === 'gemini')!;
+  const list = await modelsFor(gemini, 'ocr', { secrets: { GEMINI_API_KEY: key }, fetch: (...a: Parameters<typeof fetch>) => fetch(...a) }).catch(() => ['gemini-2.5-flash']);
+  return [...new Set([...list, 'gemini-2.5-flash-lite'])];
+}
 /** The free tier allows about ten requests a minute on the first model. (Tests shorten it.) */
 const spacing = () => (globalThis as { __maktabaAiSpacing?: number }).__maktabaAiSpacing ?? 6500;
 const PAUSE_KEY = 'aiOcrPausedUntil';
@@ -75,6 +81,7 @@ const prompt = (lang: OcrLang | 'auto') =>
   `- Join the lines of a paragraph into one paragraph; keep separate paragraphs separate.\n` +
   `- Mark headings as "h", Qur'an verses and poetry set apart as "quote", footnotes as "note", other text as "p".\n` +
   `- Leave out running headers at the very top and the page number; give the printed page number separately.\n` +
+  `- Leave out watermarks and stamps: faint or slanted text behind or across the page, a library or website name, a phone number, a seal. Transcribe only the book's own text.\n` +
   `- For each paragraph give its box on the page as [ymin, xmin, ymax, xmax], scaled 0 to 1000.\n` +
   `- Do not translate, explain, correct or complete anything. If a word cannot be read, write […].\n` +
   `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "...", "box": [0,0,0,0]}]}`;
@@ -88,7 +95,7 @@ interface Answer {
 export async function recognizeWithAi(key: string, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number): Promise<{ blocks: Block[]; printed?: string; text: string }> {
   const data = await jpeg(image);
   let lastError = '';
-  for (const model of MODELS) {
+  for (const model of await models(key)) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const gap = lastCall + spacing() - Date.now();
       if (gap > 0) await wait(gap);

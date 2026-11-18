@@ -87,6 +87,9 @@ try {
   await page.getByText('No daily limit').waitFor({ timeout: 10000 });
   check(true, 'once connected, today’s allowance is shown');
   await shot('41-my-ai');
+  await page.getByRole('button', { name: 'Test my AI' }).click();
+  await page.locator('.test-result[data-ok="true"]').first().waitFor({ timeout: 20000 });
+  check((await page.locator('.test-result').first().textContent()).includes('works'), 'Test my AI says plainly that the service works');
 
   console.log('Translating a whole book on the phone');
   await go('#/library');

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchStatus, getServer, type ServerStatus } from '../../ai/client';
-import { getMyAi, hasMyAi, setMyAi, type MyAi } from '../../ai/device';
+import { getMyAi, hasMyAi, setMyAi, testServices, type MyAi, type ServiceTest } from '../../ai/device';
 import { checkKey, codeFromPasted, finishOpenRouterSignIn, startOpenRouterSignIn, type KeyService } from '../../ai/signin';
 import { readKey } from '../../ai/keys';
 import { isAndroidApp, plugin } from '../../native/maktaba';
@@ -33,6 +33,53 @@ const SERVICES: Array<{ id: KeyService; name: string; getKey: string; blurb: str
     private: 'Does not keep or learn from what it is sent: used for private books.',
   },
 ];
+
+/**
+ * Tries each connected service with one short translation and shows what happened, in
+ * plain words: so "it doesn't work" becomes "Groq: the key was refused" or "Gemini works".
+ */
+function TestMyAi() {
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<ServiceTest[] | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResults(null);
+    try {
+      setResults(await testServices());
+      window.dispatchEvent(new Event('maktaba:connected'));
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <div className="section-title">Check it works</div>
+      <div className="card" style={{ display: 'grid', gap: 10 }}>
+        <p className="muted small" style={{ margin: 0 }}>Sends one short Arabic sentence to each service you added (one request of its allowance) and shows exactly what happened.</p>
+        <button className="btn" disabled={busy} onClick={() => void run()}>
+          <span className="ai-mark" aria-hidden="true">✦</span>{busy ? 'Testing…' : 'Test my AI'}
+        </button>
+        {results && !results.length && <p className="small" style={{ margin: 0 }}>No service has a key yet. Add one above.</p>}
+        {results?.map((r) => (
+          <div key={r.id} className="test-result" data-ok={r.ok}>
+            <Icon name={r.ok ? 'check' : 'warn'} size={18} />
+            <div>
+              <b>{r.name}</b> {r.ok ? <span className="muted small">works ({r.model}, {(r.ms / 1000).toFixed(1)} s)</span> : <span className="small">did not work</span>}
+              <div className="small" dir={r.ok ? 'ltr' : undefined}>{r.ok ? `“${r.message}”` : r.message}</div>
+            </div>
+          </div>
+        ))}
+        {results?.some((r) => !r.ok) && (
+          <p className="muted small" style={{ margin: 0 }}>
+            “Key refused”: copy the key again in full, or make a new one. “Busy for a moment”: wait a minute and test again. “Today’s allowance is used up”: it comes back tomorrow; the other services carry on meanwhile.
+          </p>
+        )}
+      </div>
+    </>
+  );
+}
 
 /**
  * If the browser does not come back to Maktaba after signing in (it ended on an error page,
@@ -171,6 +218,8 @@ export function AiSettings() {
       ))}
 
       <OtherService ai={ai} onSave={save} />
+
+      {connected && <TestMyAi />}
 
       {connected && st && (
         <>

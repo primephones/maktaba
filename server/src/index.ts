@@ -1,7 +1,7 @@
 import { SEED_GLOSSARY, mergeGlossary, type Term } from './glossary';
 import { DEFAULT_PROVIDERS, FEATURES, type CallEnv, type CallResult, type Feature, type Provider } from './providers';
 import { NoProviderError, nextReset, route, type UsageStore } from './router';
-import { batches, buildMessages, checkAnswer, parseAnswer, type Paragraph, type SourceLang, type Translated } from './translate';
+import { batches, buildMessages, acceptAnswer, parseAnswer, type Paragraph, type SourceLang, type Translated } from './translate';
 import { acceptStudy, featureOf, studyMessages, type StudyTask } from './study';
 
 /**
@@ -147,10 +147,7 @@ async function translateBatch(env: Env, member: string, body: TranslateBody): Pr
 
   const messages = buildMessages({ lang: body.lang, paragraphs: todo, glossary, bookTitle: body.bookTitle, chapter: body.chapter, previous: body.previous });
   const routed = await route(providersFor(env), callEnv(env), usageStore(env, member), { feature: 'translate', private: !!body.private, prefer: body.prefer }, messages, (text) => {
-    const answer = parseAnswer(text);
-    const problems = checkAnswer(todo, answer);
-    if (problems.length) throw new Error(problems.map((p) => `${p.id}: ${p.problem}`).join('; '));
-    return answer;
+    return acceptAnswer(todo, parseAnswer(text));
   });
   const now = Date.now();
   for (const a of routed.value) {

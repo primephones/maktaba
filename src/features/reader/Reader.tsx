@@ -647,7 +647,7 @@ function ReaderInner({ book }: { book: Book }) {
               {unsure.uncertain.map((u, i) => (
                 <div className="row" key={i}>
                   <span className="grow">
-                    <span className="title">“{u.span}”</span>
+                    <span className="title">{u.span ? `“${u.span}”` : 'The whole paragraph'}</span>
                     <div className="sub">{u.reason}</div>
                   </span>
                 </div>

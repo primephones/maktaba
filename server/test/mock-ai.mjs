@@ -31,6 +31,12 @@ createServer(async (req, res) => {
     res.end('{}');
     return;
   }
+  // The list of models, as every OpenAI-style service offers it.
+  if (req.method === 'GET' && /\/models$/.test(req.url)) {
+    res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+    res.end(JSON.stringify({ data: [{ id: 'openai/gpt-oss-120b' }, { id: 'test-model' }] }));
+    return;
+  }
   calls++;
   try {
     last.push(JSON.parse(body).messages);

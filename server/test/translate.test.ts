@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SEED_GLOSSARY, mergeGlossary, termsIn } from '../src/glossary';
-import { batches, buildMessages, checkAnswer, parseAnswer } from '../src/translate';
+import { acceptAnswer, batches, buildMessages, checkAnswer, parseAnswer } from '../src/translate';
 
 describe('glossary', () => {
   it('finds terms with attached prefixes and spelling variants', () => {
@@ -34,10 +34,25 @@ describe('checking answers', () => {
     const ans = parseAnswer('```json\n{"paragraphs":[{"id":"a","en":"Al-Shāfiʿī said in the year 204 AH: Knowledge is what benefits, not what is memorised; the scholars agreed on this.","uncertain":[]}]}\n```');
     expect(checkAnswer(src, ans)).toEqual([]);
   });
-  it('rejects a dropped number, a missing paragraph and chatter', () => {
-    expect(checkAnswer(src, [{ id: 'a', en: 'Al-Shāfiʿī said: Knowledge is what benefits, not what is memorised; the scholars agreed on this.', uncertain: [] }])[0].problem).toMatch(/numbers missing: 204/);
+  it('rejects a missing paragraph and chatter', () => {
     expect(checkAnswer(src, [])[0].problem).toBe('missing');
+    expect(() => acceptAnswer(src, [])).toThrow(/missing/);
     expect(checkAnswer(src, [{ id: 'a', en: 'Here is the translation of the year 204 text you asked for, which says knowledge benefits.', uncertain: [] }]).some((p) => /chatter/.test(p.problem))).toBe(true);
+  });
+  it('keeps a translation with a dropped number, marked for the reader to check', () => {
+    const out = acceptAnswer(src, [{ id: 'a', en: 'Al-Shāfiʿī said: Knowledge is what benefits, not what is memorised; the scholars agreed on this.', uncertain: [] }]);
+    expect(out[0].en.endsWith('†')).toBe(true);
+    expect(out[0].uncertain[0].reason).toMatch(/numbers missing: 204/);
+  });
+  it('lets a watermark-only paragraph come back empty, but not a real one', () => {
+    const stamp = [{ id: 's', text: 'www.besturdubooks.net' }];
+    expect(acceptAnswer(stamp, [{ id: 's', en: '', uncertain: [] }])).toHaveLength(1);
+    expect(() => acceptAnswer(src, [{ id: 'a', en: '', uncertain: [] }])).toThrow(/missing/);
+  });
+  it('tells the AI to leave watermarks out', () => {
+    const sys = buildMessages({ lang: 'ur', paragraphs: [{ id: '1', text: 'نماز' }], glossary: [] })[0].content;
+    expect(sys).toMatch(/watermark/);
+    expect(sys).toMatch(/Urdu works quote Arabic/);
   });
   it('keeps the reasons for uncertain words', () => {
     const ans = parseAnswer('{"paragraphs":[{"id":"a","en":"x†","uncertain":[{"span":"x","reason":"unclear reading"}]}]}');
