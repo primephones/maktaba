@@ -130,6 +130,9 @@ export function classify(status: number, retryAfter: string | null, body = ''): 
     if (daily) return new ProviderError('today’s allowance is used up', 'limit', Number.isFinite(wait) && wait < 3600 ? now + wait * 1000 : undefined, true);
     return new ProviderError('busy for a moment (too many requests)', 'limit', now + Math.min(120, Number.isFinite(wait) ? wait + 1 : 60) * 1000);
   }
+  // Overloaded (503 is common with a newly released model): that model rests a moment,
+  // and the next model of the same service is tried.
+  if (status >= 500 && status !== 501) return new ProviderError('this model is overloaded right now', 'limit', now + Math.min(300, Number.isFinite(wait) ? wait + 1 : 120) * 1000);
   if (status === 401 || status === 403 || /API_KEY_INVALID|API key not valid|invalid[ _]api[ _]key|incorrect api key/i.test(body)) return new ProviderError('The key was refused', 'auth');
   if (status === 404 || (status === 400 && /model/i.test(body) && /not (found|exist|available|supported)|decommission|deprecat|no endpoints|invalid model|unknown model/i.test(body)))
     return new ProviderError('this model is no longer offered', 'model');

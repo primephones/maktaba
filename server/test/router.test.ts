@@ -102,6 +102,25 @@ describe('routing', () => {
     forgetModels('openrouter');
   });
 
+  it('moves to the next model of the same service when one is overloaded (503)', async () => {
+    forgetModels('gemini');
+    const usage = memoryUsage();
+    const env = {
+      secrets: { GEMINI_API_KEY: 'g' },
+      fetch: (async (url: string) => {
+        const u = String(url);
+        if (u.includes('/models?')) return new Response(JSON.stringify({ models: ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-flash-lite-latest'].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }));
+        if (u.includes('gemini-3.8-flash:')) return new Response('{"error":{"code":503,"message":"The model is overloaded. Please try again later.","status":"UNAVAILABLE"}}', { status: 503 });
+        return gem('{"a":1}');
+      }) as unknown as typeof fetch,
+    };
+    const r = await route(DEFAULT_PROVIDERS, env, usage, { feature: 'translate', private: false }, messages, (t) => JSON.parse(t));
+    expect(r.provider).toBe('gemini');
+    expect(r.model).toBe('gemini-3.5-flash');
+    expect((await usage.blockedUntil()).gemini).toBeUndefined();
+    forgetModels('gemini');
+  });
+
   it('reads Google’s “API key not valid” (a 400) as a refused key', () => {
     const e = classify(400, null, JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT', details: [{ reason: 'API_KEY_INVALID' }] } }));
     expect(e.kind).toBe('auth');

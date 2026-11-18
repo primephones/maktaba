@@ -135,6 +135,13 @@ export async function recognizeWithAi(key: string, image: HTMLCanvasElement, lan
         break;
       }
       if (res.status === 401 || res.status === 403) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');
+      if (res.status >= 500) {
+        // This model is overloaded: try the next one rather than wait on it.
+        lastError = `Gemini’s ${model} is overloaded right now.`;
+        if (attempt >= 1) break;
+        await wait(2000);
+        continue;
+      }
       if (!res.ok) {
         lastError = `Gemini answered with an error (${res.status}).`;
         await wait(3000 * (attempt + 1));
