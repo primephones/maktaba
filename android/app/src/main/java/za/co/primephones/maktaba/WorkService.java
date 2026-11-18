@@ -45,8 +45,10 @@ public class WorkService extends Service {
             .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE);
+        // A bar only when there is a count to show. An endless (indeterminate) bar keeps the
+        // system redrawing; with animations turned off (an accessibility setting) it has been
+        // seen to freeze a slow phone.
         if (total > 0) b.setProgress(total, Math.min(done, total), false);
-        else b.setProgress(0, 0, true);
         return b.build();
     }
 
