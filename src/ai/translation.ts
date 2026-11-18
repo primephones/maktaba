@@ -129,11 +129,17 @@ export async function pullBook(bookId: string): Promise<void> {
 }
 
 let pulling = false;
+let again = false;
 
 /** Collects finished translations for every book that has one in progress. */
 export async function pullAll(): Promise<void> {
-  if (pulling) return;
+  // A pull asked for while one is running runs straight after it, so nothing waits for the next check.
+  if (pulling) {
+    again = true;
+    return;
+  }
   pulling = true;
+  again = false;
   try {
     const books = await db.books.filter((b) => !!b.translation?.jobId && b.translation.state !== 'done' && b.translation.state !== 'cancelled').toArray();
     for (const b of books) {
@@ -146,6 +152,7 @@ export async function pullAll(): Promise<void> {
     }
   } finally {
     pulling = false;
+    if (again) void pullAll();
   }
 }
 

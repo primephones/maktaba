@@ -1,9 +1,9 @@
-import { db } from '../db/db';
+import { db, sectionId } from '../db/db';
 import type { Book, OcrLang } from '../db/types';
 import { detectLang } from '../lib/arabic';
 import { workBegan, workEnded, workProgress } from '../native/work';
 import { recognizePage, releaseEngine, type OcrResult } from './engine';
-import { AllowanceUsedUp, aiReaderFor, recognizeWithAi } from './ai';
+import { AllowanceUsedUp, aiReaderFor, recognizeWithAi, type PageText } from './ai';
 import { getMyAi } from '../ai/device';
 import { applyOcrToSection, sectionOfPage } from './merge';
 import { imagePages, pageImage } from './pages';
@@ -141,6 +141,30 @@ async function forgetUnreadablePages(): Promise<void> {
   }
 }
 
+/** English needs no reading or translating: its pages are shown as printed. */
+async function leaveAsPrinted(book: Book): Promise<void> {
+  await db.books.update(book.id, { ocr: undefined, ocrLang: 'eng', scanView: 'page', ...(book.lang === 'other' ? { lang: 'en' } : {}) });
+}
+
+/** Scans not in English are translated as they are read: one request gives both. */
+const translateAsRead = (book: Book, lang: OcrLang) => lang !== 'eng' && book.lang !== 'en';
+
+/** Keeps the English that came with a page read and translated in one go. */
+async function savePageEnglish(book: Pick<Book, 'id'>, page: number, r: PageText): Promise<void> {
+  if (!r.en?.some(Boolean)) return;
+  const idx = await sectionOfPage(book.id, page);
+  if (idx === null) return;
+  const sec = await db.sections.get(sectionId(book.id, idx));
+  if (!sec) return;
+  const at = sec.blocks.map((b, i) => (b.ocr && b.page === page ? i : -1)).filter((i) => i >= 0);
+  const now = Date.now();
+  const rows = at.flatMap((block, k) => {
+    const e = r.en?.[k];
+    return e ? [{ id: `${book.id}:${idx}:${block}`, bookId: book.id, section: idx, block, en: e.en, uncertain: e.uncertain, label: 'draft' as const, provider: r.service ?? 'ai', model: r.model ?? '', updatedAt: now }] : [];
+  });
+  if (rows.length) await db.translations.bulkPut(rows);
+}
+
 /** Reads one page with the reader's AI now (ahead of the rest of the book), keeping hand corrections. */
 export async function readPageNow(book: Book, page: number): Promise<void> {
   const existing = await db.ocrPages.get(`${book.id}:${page}`);
@@ -153,8 +177,9 @@ export async function readPageNow(book: Book, page: number): Promise<void> {
   const lang = book.ocrLang ?? LANG_FOR[book.lang] ?? 'urd';
   const canvas = await inTime(pageImage(book, page), PAGE_LIMIT_MS);
   try {
-    const r = await recognizeWithAi(key, canvas, lang, page);
+    const r = await recognizeWithAi(key, canvas, lang, page, { translate: translateAsRead(book, lang) });
     await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
+    await savePageEnglish(book, page, r);
     if (book.lang === 'other') await db.books.update(book.id, { lang: LANG_OF[lang] });
   } finally {
     canvas.width = 0;
@@ -173,6 +198,11 @@ async function recognizeBook(book: Book): Promise<void> {
   await workBegan(key, `Recognising ${book.title}`, `Page ${done + 1} of ${total}`, `Text recognition for “${book.title}” was not finished.`);
   try {
     const lang = await chooseLang(book, todo[0] ?? pages[0]);
+    if (lang === 'eng' && !doneRows.size) {
+      // An English book is read as printed: nothing to recognise or translate.
+      await leaveAsPrinted(book);
+      return;
+    }
     let aiKey = await aiReaderFor(book);
     if (!lang || (!aiKey && !PHONE_CAN_READ.has(lang))) {
       const paused = !book.private && (await getMyAi().then((a) => !!(a.gemini || a.openrouter)));
@@ -189,8 +219,9 @@ async function recognizeBook(book: Book): Promise<void> {
       let saved = false;
       if (aiKey) {
         try {
-          const r = await recognizeWithAi(aiKey, canvas, lang, page);
+          const r = await recognizeWithAi(aiKey, canvas, lang, page, { translate: translateAsRead(book, lang) });
           await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
+          await savePageEnglish(book, page, r);
           saved = true;
           aiFailures = 0;
         } catch (e) {

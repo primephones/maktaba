@@ -42,13 +42,10 @@ const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urd
 
 const SHORT_NAME: Record<SourceLang, string> = { ar: 'Arabic', ur: 'Urdu', fa: 'Persian', ps: 'Pashto', ms: 'Malay' };
 
-export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | 'user'; content: string }> {
-  const all = req.paragraphs.map((p) => p.text).join('\n');
-  const hits = termsIn(all, req.glossary);
-  const glossaryLines = hits.map((h) => `- ${h.found} → ${h.term.tr} (${h.term.en})`).join('\n');
-
-  const system = [
-    `You translate ${LANG_NAME[req.lang]} works of Islamic scholarship (fiqh, uṣūl, ḥadīth, tafsīr, ʿaqīda, history) into English for a serious student.`,
+/** The rules every translation follows (also used when a scanned page is read and translated in one go). */
+export function translationRules(lang: SourceLang): string {
+  return [
+    `You translate ${LANG_NAME[lang]} works of Islamic scholarship (fiqh, uṣūl, ḥadīth, tafsīr, ʿaqīda, history) into English for a serious student.`,
     '',
     'Rules, in order of importance:',
     '1. Be faithful. Translate what the text says and nothing more. Do not add explanations, do not merge or drop clauses, do not soften or modernise the meaning. If a sentence is elliptical, keep it elliptical rather than guessing.',
@@ -56,13 +53,23 @@ export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | '
     '3. Use the glossary. Write each listed term in its transliteration followed by the English in brackets the first time it appears in a paragraph, e.g. "ijmāʿ (consensus)", and the transliteration alone after that. Keep transliteration consistent with the glossary exactly.',
     '4. Qurʾān: translate the meaning of quoted verses and keep the surah:verse reference if the text gives one. Ḥadīth: translate the chain of narrators as "So-and-so narrated to us from So-and-so…" with names transliterated.',
     '5. Names of people and places are transliterated (with ʿ, ʾ and macrons). Honorifics are kept, in every spelling and abbreviation: ﷺ, ؐ, صلى الله عليه وسلم, صلی اللہ علیہ وسلم, (ص) → "(may God bless him and grant him peace)"; ؑ, عليه السلام, علیہ السلام, (ع) → "(peace be upon him)"; ؓ, رضي الله عنه, رضی اللہ عنہ, (رض) → "(may God be pleased with him)" (or "her"/"them" as the form shows); ؒ, رحمه الله, رحمۃ اللہ علیہ, رحمہ اللہ, (ره) → "(may God have mercy on him)"; ﷻ, جل جلاله, عز وجل → "(Mighty and Majestic)"; تعالى, تعالیٰ → "the Exalted".',
-    ...(req.lang === 'ar'
+    ...(lang === 'ar'
       ? []
       : [
-          `5a. ${SHORT_NAME[req.lang]} works quote Arabic (Qurʾān, ḥadīth, juristic texts) inside the ${SHORT_NAME[req.lang]}. Translate the Arabic quotation too, inside quotation marks, and then the author’s own words; if the author paraphrases the quotation, translate both as written rather than merging them. Religious words the language takes from Persian (e.g. ${req.lang === 'ur' ? 'نماز, روزہ' : 'نماز, روزه'}) are given as the matching Arabic term from the glossary (ṣalāt, ṣawm).`,
+          `5a. ${SHORT_NAME[lang]} works quote Arabic (Qurʾān, ḥadīth, juristic texts) inside the ${SHORT_NAME[lang]}. Translate the Arabic quotation too, inside quotation marks, and then the author’s own words; if the author paraphrases the quotation, translate both as written rather than merging them. Religious words the language takes from Persian (e.g. ${lang === 'ur' ? 'نماز, روزہ' : 'نماز, روزه'}) are given as the matching Arabic term from the glossary (ṣalāt, ṣawm).`,
         ]),
     '6. Write clear, natural English with the formality of the original. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.',
     '7. Scanned and downloaded books often carry a watermark or stamp (a library, publisher or website name, a web address, a phone number, "for free distribution", a seal) that can slip into the text. It is not part of the book: leave it out of the English without comment. If a whole paragraph is only such a stamp, give an empty "en" for it.',
+  ].join('\n');
+}
+
+export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | 'user'; content: string }> {
+  const all = req.paragraphs.map((p) => p.text).join('\n');
+  const hits = termsIn(all, req.glossary);
+  const glossaryLines = hits.map((h) => `- ${h.found} → ${h.term.tr} (${h.term.en})`).join('\n');
+
+  const system = [
+    translationRules(req.lang),
     '',
     'Answer with JSON only, in this shape:',
     '{"paragraphs":[{"id":"…","en":"…","uncertain":[{"span":"…","reason":"…"}]}]}',

@@ -341,6 +341,7 @@ async function work() {
       const todo = await db.aiJobItems.where('[jobId+status]').equals([due.id, 'todo']).limit(24).toArray();
       if (!todo.length) {
         await db.aiJobs.update(due.id, { state: 'done', last_error: null, updated_at: Date.now() });
+        void import('./translation').then((t) => t.pullAll()).catch(() => undefined);
         continue;
       }
       todo.sort((x, y) => x.seq - y.seq);
@@ -371,6 +372,8 @@ async function work() {
         });
         const job = await db.aiJobs.get(due.id);
         if (job) workProgress(key, 'Translating', job.title, job.done, job.total);
+        // The English goes into the book at once (not at the next check), so it shows as it comes.
+        void import('./translation').then((t) => t.pullAll()).catch(() => undefined);
         // Keep to the service's requests-per-minute.
         const rpm = providers(a).find((p) => p.id === out.provider)?.rpm ?? 10;
         await pause(Math.max(0, 60_000 / rpm - (Date.now() - started)));

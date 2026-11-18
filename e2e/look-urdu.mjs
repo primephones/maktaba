@@ -72,6 +72,8 @@ for (const size of sizes) {
   await page.waitForTimeout(500);
   await shot('details-urdu');
   await page.keyboard.press('Escape');
+  // Let the sheet finish closing (it steps the history back) before moving on.
+  await page.waitForTimeout(800);
   await go('#/search');
   await page.getByRole('searchbox').fill('نماز');
   await page.waitForTimeout(2000);

@@ -25,7 +25,7 @@ function keysFor(blocks: Block[]): string[] {
  * the paragraphs they belong to.
  */
 export async function applyOcrToSection(bookId: string, idx: number): Promise<void> {
-  await db.transaction('rw', [db.sections, db.ocrPages, db.marks, db.refs, db.books], async () => {
+  await db.transaction('rw', [db.sections, db.ocrPages, db.marks, db.refs, db.books, db.translations], async () => {
     const sec = await db.sections.get(sectionId(bookId, idx));
     if (!sec) return;
     const before = sec.blocks;
@@ -74,6 +74,25 @@ export async function applyOcrToSection(bookId: string, idx: number): Promise<vo
     await db.refs.where('bookId').equals(bookId).filter((r) => r.section === idx).modify((r) => {
       r.block = remap(r.block);
     });
+    // English follows its paragraph; English of a paragraph that is gone goes with it.
+    const newKeys = keysFor(after);
+    const trs = await db.translations.where('bookId').equals(bookId).filter((t) => t.section === idx).toArray();
+    const gone: string[] = [];
+    const moved: typeof trs = [];
+    for (const t of trs) {
+      const key = oldKeys[t.block];
+      const n = key ? newIndex.get(key) : undefined;
+      if (n === undefined) {
+        // Not a known paragraph before (written straight after reading the page): keep it if it still fits.
+        if (!key && t.block < after.length && newKeys[t.block]) continue;
+        gone.push(t.id);
+      } else if (n !== t.block) {
+        gone.push(t.id);
+        moved.push({ ...t, block: n, id: `${bookId}:${idx}:${n}` });
+      }
+    }
+    if (gone.length) await db.translations.bulkDelete(gone);
+    if (moved.length) await db.translations.bulkPut(moved);
     const book = await db.books.get(bookId);
     if (book?.progress?.section === idx) {
       await db.books.update(bookId, { progress: { ...book.progress, block: remap(book.progress.block) } });

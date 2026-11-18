@@ -1,4 +1,5 @@
-import type { Block, OcrLang } from '../db/types';
+import type { Block, OcrLang, Uncertain } from '../db/types';
+import { translationRules, type SourceLang } from '../../server/src/translate';
 import { getMyAi } from '../ai/device';
 import { local, setLocal } from '../sync/sync';
 import { DEFAULT_PROVIDERS, modelsFor } from '../../server/src/providers';
@@ -87,7 +88,9 @@ async function jpeg(image: HTMLCanvasElement): Promise<string> {
   return btoa(bin);
 }
 
-const prompt = (lang: OcrLang | 'auto') =>
+const SOURCE: Partial<Record<OcrLang, SourceLang>> = { ara: 'ar', urd: 'ur', fas: 'fa', pus: 'ps', msa: 'ms' };
+
+const readOnly = (lang: OcrLang | 'auto') =>
   `This is one page of a printed book in ${lang === 'auto' ? 'the language printed on it (Arabic, Urdu, Persian, Pashto, Malay or English)' : LANG_NAME[lang]}. Transcribe it exactly, letter for letter, in its own script.\n` +
   `- Keep every diacritic (harakat) that is printed; add none that are not.\n` +
   `- Join the lines of a paragraph into one paragraph; keep separate paragraphs separate.\n` +
@@ -98,25 +101,49 @@ const prompt = (lang: OcrLang | 'auto') =>
   `- Do not translate, explain, correct or complete anything. If a word cannot be read, write […].\n` +
   `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "...", "box": [0,0,0,0]}]}`;
 
+/** Reading and translating in one go: the page's own text, and the English of each block. */
+const prompt = (lang: OcrLang | 'auto', translate: boolean) => {
+  const src = lang === 'auto' ? undefined : SOURCE[lang];
+  if (!translate || !src) return readOnly(lang);
+  return (
+    readOnly(lang).replace(/Answer with JSON only:[\s\S]*$/, '') +
+    `\nThen translate every block into English, for the reader. The translation follows these rules:\n\n${translationRules(src)}\n\n` +
+    `The "text" stays exactly as printed (not translated); the English goes in "en", one for each block. A heading's English is a heading.\n` +
+    `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "... as printed ...", "en": "... English ...", "uncertain": [{"span": "...", "reason": "..."}], "box": [0,0,0,0]}]}`
+  );
+};
+
+
+
 interface Answer {
   printed?: string;
-  blocks?: Array<{ t?: string; text?: string; box?: number[] }>;
+  blocks?: Array<{ t?: string; text?: string; en?: string; uncertain?: unknown; box?: number[] }>;
 }
 
-type PageText = { blocks: Block[]; printed?: string; text: string };
+export interface PageText {
+  blocks: Block[];
+  printed?: string;
+  text: string;
+  /** The English of each block, when the page was read and translated in one go. */
+  en?: Array<{ en: string; uncertain: Uncertain[] } | null>;
+  /** Who read it. */
+  service?: string;
+  model?: string;
+}
 
 /**
  * Reads one page with the reader's AI: Gemini, then OpenRouter. Throws AllowanceUsedUp only
  * when every service it could use has used its day.
  */
-export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number): Promise<PageText> {
+export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number, opts: { translate?: boolean } = {}): Promise<PageText> {
+  const translate = !!opts.translate;
   const data = await jpeg(image);
   const problems: string[] = [];
   let tried = 0;
   let usedUp = 0;
   for (const [service, read] of [
-    ['gemini', reader.gemini ? () => viaGemini(reader.gemini!, data, lang, page) : null],
-    ['openrouter', reader.openrouter ? () => viaOpenRouter(reader.openrouter!, data, lang, page) : null],
+    ['gemini', reader.gemini ? () => viaGemini(reader.gemini!, data, lang, page, translate) : null],
+    ['openrouter', reader.openrouter ? () => viaOpenRouter(reader.openrouter!, data, lang, page, translate) : null],
   ] as const) {
     if (!read) continue;
     tried++;
@@ -132,7 +159,7 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
   throw new Error(problems.join(' ') || 'No AI service could read the page.');
 }
 
-async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number): Promise<PageText> {
+async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean): Promise<PageText> {
   let lastError = '';
   for (const model of await models(key)) {
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -148,7 +175,7 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
           signal: ctrl.signal,
           headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt(lang) }, { inline_data: { mime_type: 'image/jpeg', data } }] }],
+            contents: [{ role: 'user', parts: [{ text: prompt(lang, translate) }, { inline_data: { mime_type: 'image/jpeg', data } }] }],
             generationConfig: { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
           }),
         });
@@ -193,7 +220,7 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
         lastError = 'Gemini’s answer could not be read.';
         continue;
       }
-      return toBlocks(answer, page);
+      return { ...toBlocks(answer, page), service: 'gemini', model };
     }
   }
   if (!lastError) {
@@ -233,7 +260,7 @@ async function visionModels(): Promise<string[]> {
 }
 
 let orLastCall = 0;
-async function viaOpenRouter(key: string, data: string, lang: OcrLang | 'auto', page: number): Promise<PageText> {
+async function viaOpenRouter(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean): Promise<PageText> {
   const models = await visionModels();
   if (!models.length) throw new Error('OpenRouter has no free model that can read images right now.');
   let lastError = '';
@@ -251,7 +278,7 @@ async function viaOpenRouter(key: string, data: string, lang: OcrLang | 'auto', 
             model,
             temperature: 0,
             ...(json ? { response_format: { type: 'json_object' } } : {}),
-            messages: [{ role: 'user', content: [{ type: 'text', text: prompt(lang) }, { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${data}` } }] }],
+            messages: [{ role: 'user', content: [{ type: 'text', text: prompt(lang, translate) }, { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${data}` } }] }],
           }),
         });
       let res: Response;
@@ -285,7 +312,7 @@ async function viaOpenRouter(key: string, data: string, lang: OcrLang | 'auto', 
         break;
       }
       // Only Gemini's page positions are dependable; others are left out.
-      return toBlocks({ ...answer, blocks: answer.blocks?.map((b) => ({ ...b, box: undefined })) }, page);
+      return { ...toBlocks({ ...answer, blocks: answer.blocks?.map((b) => ({ ...b, box: undefined })) }, page), service: 'openrouter', model };
     }
   }
   throw new Error(lastError || 'OpenRouter could not read the page.');
@@ -308,8 +335,9 @@ function parse(raw: string): Answer | null {
 
 const KIND: Record<string, Block['t']> = { h: 'h', quote: 'quote', p: 'p', note: 'p' };
 
-function toBlocks(a: Answer, page: number): { blocks: Block[]; printed?: string; text: string } {
+function toBlocks(a: Answer, page: number): PageText {
   const blocks: Block[] = [];
+  const en: PageText['en'] = [];
   for (const b of a.blocks ?? []) {
     const text = (b.text ?? '').replace(/\s+/g, ' ').trim();
     if (!text) continue;
@@ -319,9 +347,15 @@ function toBlocks(a: Answer, page: number): { blocks: Block[]; printed?: string;
         ? ([b.box[1] / 1000, b.box[0] / 1000, b.box[3] / 1000, b.box[2] / 1000] as [number, number, number, number])
         : undefined;
     blocks.push({ t, text, page, ...(t === 'h' ? { level: 2 } : {}), ocr: true, conf: 95, ...(box && box[2] > box[0] && box[3] > box[1] ? { box } : {}) });
+    const english = typeof b.en === 'string' ? b.en.trim() : '';
+    const uncertain = Array.isArray(b.uncertain)
+      ? (b.uncertain as Array<{ span?: unknown; reason?: unknown }>).filter((u) => typeof u?.span === 'string' && typeof u?.reason === 'string').map((u) => ({ span: String(u.span), reason: String(u.reason) }))
+      : [];
+    // English that is really the original copied back is no translation.
+    en.push(english && english !== text && !/[\u0600-\u06ff]{20,}/.test(english) ? { en: english, uncertain } : null);
   }
   const printed = (a.printed ?? '').trim() || undefined;
-  return { blocks, printed, text: blocks.map((b) => b.text).join('\n\n') };
+  return { blocks, printed, text: blocks.map((b) => b.text).join('\n\n'), ...(en.some(Boolean) ? { en } : {}) };
 }
 
 /** Google renews the free allowance at midnight Pacific time. */
