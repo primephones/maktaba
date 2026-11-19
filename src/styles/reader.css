@@ -1387,3 +1387,27 @@ mark.flash {
   color: var(--ink);
   font: inherit;
 }
+
+/* Define a word */
+.define-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 4px;
+}
+.define-lemma {
+  font-family: var(--font-ar, inherit);
+  font-size: 1.6rem;
+  line-height: 1.3;
+}
+.define-root {
+  letter-spacing: 0.25em;
+}
+.define-meanings {
+  margin: 6px 0 10px;
+  padding-inline-start: 22px;
+}
+.define-meanings li {
+  margin: 2px 0;
+}

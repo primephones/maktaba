@@ -21,9 +21,10 @@ export type StudyTask =
   | { task: 'explain'; passage: string; en?: string; cite?: string }
   | { task: 'summarise'; passages: Passage[] }
   | { task: 'quiz'; passages: Passage[] }
-  | { task: 'irab'; sentence: string };
+  | { task: 'irab'; sentence: string }
+  | { task: 'define'; word: string; context: string };
 
-export const featureOf = (t: StudyTask): Feature => (t.task === 'irab' ? 'irab' : t.task === 'explain' || t.task === 'summarise' || t.task === 'quiz' ? 'explain' : 'ask');
+export const featureOf = (t: StudyTask): Feature => (t.task === 'irab' ? 'irab' : t.task === 'explain' || t.task === 'summarise' || t.task === 'quiz' || t.task === 'define' ? 'explain' : 'ask');
 
 type Msg = { role: 'system' | 'user'; content: string };
 
@@ -72,6 +73,26 @@ export function studyMessages(t: StudyTask): Msg[] {
           content: 'You explain a passage of classical Islamic scholarship to a serious student: what it says, its technical terms (transliterated, with meaning), the reasoning, and anything the student needs to follow it. Stay with what the passage says; when you add background that is not in the passage, say clearly that it is background. Answer with JSON only: {"explanation":"…","terms":[{"term":"…","meaning":"…"}]}',
         },
         { role: 'user', content: `${t.cite ? `Source: ${t.cite}\n` : ''}Passage:\n${t.passage}${t.en ? `\n\nEnglish:\n${t.en}` : ''}` },
+      ];
+    case 'define':
+      return [
+        {
+          role: 'system',
+          content: [
+            'You are a dictionary of classical Arabic, Urdu and Persian for an English-speaking student of the Islamic sciences, in the manner of Lane and Hans Wehr.',
+            'Define the word given, as it is used in the sentence given. Give:',
+            '- "translit": the word in transliteration (e.g. "ijmāʿ");',
+            '- "lemma": its dictionary form in its own script (the singular, the masdar or the past verb);',
+            '- "root": for an Arabic word or one taken from Arabic, its root letters separated by spaces (e.g. "ج م ع"); otherwise "";',
+            '- "pos": its part of speech and form in English (e.g. "verbal noun, form IV");',
+            '- "meanings": its main meanings in English, most common first, at most five;',
+            '- "here": what it means in this sentence, in one English sentence;',
+            '- "technical": if it is a technical term (iṣṭilāḥ) in a science (fiqh, uṣūl, ḥadīth, grammar, theology…), its technical meaning and the science; otherwise "".',
+            'Do not invent meanings; if the word is unclear or a misprint, say so in "here".',
+            'Answer with JSON only: {"translit":"…","lemma":"…","root":"…","pos":"…","meanings":["…"],"here":"…","technical":"…"}',
+          ].join('\n'),
+        },
+        { role: 'user', content: `Word: ${t.word}\nSentence: ${t.context}` },
       ];
     case 'quiz':
       return [
@@ -178,6 +199,20 @@ export function acceptStudy(t: StudyTask, raw: string): unknown {
       if (all.some((x) => !x.ids.length)) throw new Error('a point without its source');
       const found = data.found !== false && positions.length > 0;
       return { found, positions: found ? positions : [], note: String(data.note ?? '') };
+    }
+    case 'define': {
+      const meanings = (Array.isArray(data.meanings) ? data.meanings : []).map((m) => String(m).trim()).filter(Boolean).slice(0, 6);
+      const here = String(data.here ?? '').trim();
+      if (!meanings.length && !here) throw new Error('no definition');
+      return {
+        translit: String(data.translit ?? '').trim(),
+        lemma: String(data.lemma ?? '').trim(),
+        root: String(data.root ?? '').trim(),
+        pos: String(data.pos ?? '').trim(),
+        meanings,
+        here,
+        technical: String(data.technical ?? '').trim(),
+      };
     }
     case 'quiz': {
       const ids = new Set(t.passages.map((p) => p.id));

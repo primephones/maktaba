@@ -181,6 +181,31 @@ export async function saveIrab(sentence: string, value: Irab): Promise<void> {
   await db.settings.put({ key: irabKey(sentence), value: { ...value, corrected: true } });
 }
 
+export interface Definition {
+  translit: string;
+  lemma: string;
+  root: string;
+  pos: string;
+  meanings: string[];
+  here: string;
+  technical: string;
+  provider: string;
+  model: string;
+}
+
+const defineKey = (word: string, context: string) => `define:${normalizeForSearch(word)}:${normalizeForSearch(context).slice(0, 120)}`;
+
+/** A word's meanings, and what it means in the sentence it stands in. Kept, so asking again costs nothing. */
+export async function defineWord(book: Book, word: string, context: string): Promise<Definition> {
+  const key = defineKey(word, context);
+  const saved = (await db.settings.get(key))?.value as Definition | undefined;
+  if (saved) return saved;
+  const r = await study<Omit<Definition, 'provider' | 'model'>>({ task: 'define', word, context }, !!book.private, 'explain');
+  const value = { ...r.result, provider: r.provider, model: r.model };
+  await db.settings.put({ key, value });
+  return value;
+}
+
 export interface Summary {
   summary: string;
   sources: Source[];

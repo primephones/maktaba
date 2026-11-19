@@ -91,6 +91,7 @@ createServer(async (req, res) => {
     const ids = [...user.matchAll(/\[(p\d+)\]/g)].map((m) => m[1]);
     return reply({ summary: `The chapter defines analogy (qiyās) [${ids[0]}].\nIt names consensus as a proof [${ids[1] ?? ids[0]}] and cites a passage that does not exist [p999].` });
   }
+  if (system.includes('You are a dictionary of classical Arabic')) return reply({ translit: 'ijmāʿ', lemma: 'إجماع', root: 'ج م ع', pos: 'verbal noun, form IV', meanings: ['agreement', 'resolve'], here: 'Consensus of the qualified jurists on a ruling.', technical: 'In uṣūl al-fiqh: the agreement of the mujtahids of an age on a ruling; a decisive proof.' });
   if (system.includes('You explain a passage')) return reply({ explanation: 'This passage says that consensus (ijmāʿ) is a decisive proof.', terms: [{ term: 'ijmāʿ', meaning: 'consensus' }] });
   if (system.includes('iʿrāb')) {
     const cases = ['marfu', 'mansub', 'majrur', 'mabni'];

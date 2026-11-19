@@ -172,6 +172,26 @@ try {
   await page.getByText('This passage says that consensus').waitFor({ timeout: 20000 });
   check(true, 'Explain answers from the reader’s own AI');
   await page.getByRole('button', { name: 'Close' }).click();
+  // Define: one word, with the sentence around it.
+  await wait(400);
+  await page.evaluate(() => {
+    const p = [...document.querySelectorAll('.bk[data-t="p"]')][1];
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode()) && !/\S{3,}/.test(node.textContent ?? ''));
+    const m = /\S{3,}/.exec(node.textContent);
+    const r = document.createRange();
+    r.setStart(node, m.index);
+    r.setEnd(node, m.index + m[0].length);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await wait(400);
+  await page.getByRole('button', { name: 'Define', exact: true }).click();
+  await page.getByText('Consensus of the qualified jurists on a ruling.').waitFor({ timeout: 20000 });
+  check((await page.getByText('ج م ع').count()) > 0 && (await page.getByText(/As a technical term/).count()) > 0, 'Define gives a word’s root, its meanings, its sense here and its technical meaning');
+  await page.screenshot({ path: `${root}e2e/out/shots/43-define.png` });
+  await page.getByRole('button', { name: 'Close' }).click();
   await wait(400);
   await page.evaluate(() => getSelection().removeAllRanges());
   await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();

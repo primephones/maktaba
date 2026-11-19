@@ -322,7 +322,7 @@ async function handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Re
   if (path === '/v1/study' && req.method === 'POST') {
     if (await overShare(env, member)) return fail(429, 'Your share of today’s AI allowance is used up.', { retryAt: nextReset() });
     const t = body as unknown as StudyTask & { private?: boolean; prefer?: string[] };
-    if (!['keywords', 'ask', 'debate', 'explain', 'summarise', 'quiz', 'irab'].includes(t.task)) return fail(400, 'Unknown task.');
+    if (!['keywords', 'ask', 'debate', 'explain', 'summarise', 'quiz', 'irab', 'define'].includes(t.task)) return fail(400, 'Unknown task.');
     if (JSON.stringify(t).length > 60_000) return fail(413, 'Too much text at once.');
     try {
       const routed = await route(providersFor(env), callEnv(env), usageStore(env, member.key_hash), { feature: featureOf(t), private: !!t.private, prefer: t.prefer }, studyMessages(t), (text) => acceptStudy(t, text));

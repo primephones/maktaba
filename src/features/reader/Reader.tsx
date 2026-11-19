@@ -338,14 +338,19 @@ function ReaderInner({ book }: { book: Book }) {
   };
 
   // ----- Explain and iʿrāb -----
-  const [studyOpen, setStudyOpen] = useState<{ kind: 'explain' | 'irab'; text: string; en?: string; cite: string } | null>(null);
-  const openStudy = (kind: 'explain' | 'irab') => {
+  const [studyOpen, setStudyOpen] = useState<{ kind: 'explain' | 'irab' | 'define'; text: string; en?: string; cite: string; context?: string } | null>(null);
+  const openStudy = (kind: 'explain' | 'irab' | 'define') => {
     if (!selection) return;
     const parts = selection.parts.map((p) => (p.en ? { ...p, en: false, start: 0, end: cache.current.get(p.section)?.blocks[p.block]?.text.length ?? 0 } : p)).map(toStored).filter((p): p is NonNullable<typeof p> => !!p);
     const first = parts[0] ?? selection.parts[0];
     const text = kind === 'irab' ? selection.text : parts.map((p) => p.text).join('\n') || selection.text;
     const en = parts.map((p) => translations.get(`${p.section}:${p.block}`)?.en).filter(Boolean).join('\n') || undefined;
-    setStudyOpen({ kind, text, en, cite: formatCitation(citationAt(first.section, first.block)) });
+    // Define: the word, and the sentence around it (from its paragraph) for its sense here.
+    const para = cache.current.get(first.section)?.blocks[first.block]?.text ?? '';
+    const word = selection.text.trim();
+    const at = Math.max(0, para.indexOf(word));
+    const context = para.slice(Math.max(0, at - 200), at + word.length + 200);
+    setStudyOpen({ kind, text: kind === 'define' ? word : text, en, cite: formatCitation(citationAt(first.section, first.block)), context: kind === 'define' ? context || word : undefined });
     clearSelection();
   };
 
@@ -652,6 +657,7 @@ function ReaderInner({ book }: { book: Book }) {
           <div className="acts">
             <button className="sel-act" onClick={() => void highlight('gold', true)}><Icon name="note" size={20} />Note</button>
             <button className="sel-act" onClick={() => void saveReference()}><Icon name="references" size={20} />Reference</button>
+            {selection.text.trim().split(/\s+/).length <= 3 && <button className="sel-act" onClick={() => openStudy('define')}><Icon name="sparkle" size={20} />Define</button>}
             <button className="sel-act" onClick={() => openStudy('explain')}><Icon name="sparkle" size={20} />Explain</button>
             {hasArabicScript(selection.text) && <button className="sel-act" onClick={() => openStudy('irab')}><Icon name="sparkle" size={20} />Iʿrāb</button>}
             {book.format === 'pdf' && (

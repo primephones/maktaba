@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Book } from '../../db/types';
-import { explainPassage, irab, saveIrab, type Explanation, type Irab } from '../../ai/study';
+import { defineWord, explainPassage, irab, saveIrab, type Definition, type Explanation, type Irab } from '../../ai/study';
 import { aiReady } from '../../ai/client';
 import { langAttr } from '../../lib/arabic';
 import { navigate } from '../../app/router';
@@ -12,16 +12,18 @@ import { IrabView } from './IrabView';
 
 interface Props {
   book: Book;
-  kind: 'explain' | 'irab';
+  kind: 'explain' | 'irab' | 'define';
   text: string;
   en?: string;
   cite: string;
+  /** For Define: the sentence the word stands in. */
+  context?: string;
   onClose: () => void;
 }
 
 /** Explain a passage, or give the iʿrāb of a sentence: AI drafts, clearly marked as such. */
-export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
-  const [result, setResult] = useState<Explanation | Irab | null>(null);
+export function StudySheet({ book, kind, text, en, cite, context, onClose }: Props) {
+  const [result, setResult] = useState<Explanation | Irab | Definition | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Irab | null>(null);
@@ -38,7 +40,7 @@ export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
         return;
       }
       try {
-        const r = kind === 'explain' ? await explainPassage(book, text, en, cite) : await irab(book, text);
+        const r = kind === 'explain' ? await explainPassage(book, text, en, cite) : kind === 'define' ? await defineWord(book, text, context ?? text) : await irab(book, text);
         if (alive) setResult(r);
       } catch (e) {
         if (alive) setError((e as Error).message);
@@ -47,9 +49,9 @@ export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
     return () => {
       alive = false;
     };
-  }, [kind, text, en, cite]);
+  }, [kind, text, en, cite, context]);
 
-  const title = kind === 'explain' ? 'Explain' : 'Iʿrāb';
+  const title = kind === 'explain' ? 'Explain' : kind === 'define' ? 'Define' : 'Iʿrāb';
   return (
     <Sheet title={title} onClose={onClose}>
       <blockquote className="study-quote" dir="auto" lang={langAttr(text)}>{text.length > 600 ? `${text.slice(0, 600)}…` : text}</blockquote>
@@ -59,6 +61,21 @@ export function StudySheet({ book, kind, text, en, cite, onClose }: Props) {
         <HelpFor error={error} />
       ) : !result ? (
         <p className="muted" role="status"><span className="ai-mark" aria-hidden="true">✦</span> Thinking…</p>
+      ) : 'meanings' in result ? (
+        <div className="define">
+          <p className="define-head">
+            {result.lemma && <span className="define-lemma" dir="auto" lang={langAttr(result.lemma)}>{result.lemma}</span>}
+            {result.translit && <i>{result.translit}</i>}
+            {result.pos && <span className="muted small">{result.pos}</span>}
+          </p>
+          {result.root && <p className="muted small">Root: <span lang="ar" dir="rtl" className="define-root">{result.root}</span></p>}
+          {result.here && <p className="study-text"><b>Here:</b> {result.here}</p>}
+          {result.meanings.length > 0 && (
+            <ol className="define-meanings">{result.meanings.map((m, i) => <li key={i}>{m}</li>)}</ol>
+          )}
+          {result.technical && <p className="study-text"><b>As a technical term:</b> {result.technical}</p>}
+          <p className="muted small"><span className="ai-mark" aria-hidden="true">✦</span> AI draft ({result.model.replace(/^.*\//, '')}). Check it in a dictionary for anything that matters.</p>
+        </div>
       ) : 'explanation' in result ? (
         <>
           <p className="study-text">{result.explanation}</p>

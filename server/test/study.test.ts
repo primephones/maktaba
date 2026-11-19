@@ -70,3 +70,19 @@ describe('quiz on a chapter', () => {
     expect(() => acceptStudy({ task: 'quiz', passages }, JSON.stringify({ questions: [q(1)] }))).toThrow(/too few/);
   });
 });
+
+describe('define a word', () => {
+  const t = { task: 'define' as const, word: 'الإجماع', context: 'واعلم أن الإجماع حجة قاطعة عند الجمهور' };
+  it('asks for the root, the meanings and the sense in this sentence', () => {
+    const m = studyMessages(t);
+    expect(m[0].content).toMatch(/root/);
+    expect(m[1].content).toContain('الإجماع حجة قاطعة');
+  });
+  it('keeps a definition, and refuses an empty one', () => {
+    const d = acceptStudy(t, JSON.stringify({ translit: 'ijmāʿ', lemma: 'إجماع', root: 'ج م ع', pos: 'verbal noun', meanings: ['agreement'], here: 'consensus of the jurists', technical: 'uṣūl: a decisive proof' })) as { meanings: string[]; root: string };
+    expect(d.meanings).toEqual(['agreement']);
+    expect(d.root).toBe('ج م ع');
+    expect(() => acceptStudy(t, '{"meanings":[],"here":""}')).toThrow();
+  });
+});
+
