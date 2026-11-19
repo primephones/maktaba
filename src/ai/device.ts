@@ -2,7 +2,7 @@ import { db, uid } from '../db/db';
 import type { AiJob, AiJobItem } from '../db/types';
 import { DEFAULT_PROVIDERS, FEATURES, type CallEnv, type CallResult, type Feature, type Provider } from '../../server/src/providers';
 import { AnswerRejected, NoProviderError, nextReset, route, type UsageStore } from '../../server/src/router';
-import { batches, buildMessages, acceptAnswer, parseAnswer, type Paragraph, type SourceLang } from '../../server/src/translate';
+import { batches, buildMessages, acceptAnswer, parseAnswer, buildReviewMessages, acceptReview, type Paragraph, type ReviewItem, type SourceLang } from '../../server/src/translate';
 import { mergeGlossary, SEED_GLOSSARY, type Term } from '../../server/src/glossary';
 import { acceptStudy, featureOf, studyMessages, type StudyTask } from '../../server/src/study';
 import { workBegan, workEnded, workProgress } from '../native/work';
@@ -208,6 +208,16 @@ export async function handle(path: string, method: string, body: Record<string, 
       if (!b?.paragraphs?.length) throw new DeviceError('Nothing to translate.', 400);
       const out = await translateBatch(a, b);
       return { results: out.results, skipped: out.skipped };
+    }
+    if (path === '/v1/review' && method === 'POST') {
+      // A second check: another service than the one that made the draft, where there is one.
+      const b = body as unknown as { lang: SourceLang; items: ReviewItem[]; private?: boolean; avoid?: string };
+      if (!b?.items?.length) throw new DeviceError('Nothing to check.', 400);
+      const ids = providers(a).map((p) => p.id);
+      const prefer = [...ids.filter((id) => id !== b.avoid), ...(b.avoid ? [b.avoid] : [])];
+      const glossary = mergeGlossary(SEED_GLOSSARY, []);
+      const routed = await route(providers(a), callEnv(a), usage, { feature: 'translate', private: !!b.private, prefer }, buildReviewMessages(b.lang, b.items, glossary), (text) => acceptReview(b.items, text));
+      return { results: routed.value, provider: routed.provider, model: routed.model };
     }
     if (path === '/v1/study' && method === 'POST') {
       const t = body as unknown as StudyTask & { private?: boolean; prefer?: string[] };

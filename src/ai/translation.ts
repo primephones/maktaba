@@ -188,3 +188,37 @@ export async function translateNow(book: Book, paras: SourceParagraph[], opts: {
   await flush();
   return done;
 }
+
+/**
+ * A second AI checks the English of a chapter against the original. Paragraphs found
+ * faithful are marked checked; corrected ones get the correction, with each change and its
+ * reason kept under the paragraph's †.
+ */
+export async function reviewChapter(book: Book, section: number, onProgress?: (done: number, total: number) => void): Promise<{ checked: number; corrected: number }> {
+  const sec = await db.sections.get(sectionId(book.id, section));
+  if (!sec) return { checked: 0, corrected: 0 };
+  const trs = (await db.translations.where('bookId').equals(book.id).filter((t) => t.section === section && t.label === 'draft').toArray()).sort((x, y) => x.block - y.block);
+  const items = trs.map((t) => ({ t, text: sec.blocks[t.block]?.text ?? '' })).filter((x) => x.text.trim().length > 1);
+  let checked = 0;
+  let corrected = 0;
+  const sample = items.slice(0, 20).map((x) => x.text).join(' ');
+  for (let i = 0; i < items.length; i += 6) {
+    const batch = items.slice(i, i + 6);
+    const res = await request<{ results: Array<{ id: string; ok: boolean; en: string; changes: Array<{ was: string; now: string; why: string }> }>; provider: string; model: string }>('/v1/review', {
+      body: { lang: lang(book, sample), private: !!book.private, avoid: batch[0].t.provider, items: batch.map((x) => ({ id: String(x.t.block), text: x.text, en: x.t.en })) },
+      timeoutMs: 120_000,
+    });
+    const now = Date.now();
+    for (const r of res.results) {
+      const t = batch.find((x) => String(x.t.block) === r.id)?.t;
+      if (!t) continue;
+      if (r.ok) checked++;
+      else corrected++;
+      const notes = r.changes.map((c) => ({ span: c.now, reason: `Corrected by a second AI (${res.model.replace(/^.*\//, '')}): ${c.why}${c.was ? ` Was: “${c.was}”.` : ''}` }));
+      const en = !r.ok && notes.length && !/†/.test(r.en) ? `${r.en} †` : r.en;
+      await db.translations.put({ ...t, en, uncertain: r.ok ? t.uncertain : [...t.uncertain, ...notes], label: 'checked', updatedAt: now });
+    }
+    onProgress?.(Math.min(items.length, i + 6), items.length);
+  }
+  return { checked, corrected };
+}

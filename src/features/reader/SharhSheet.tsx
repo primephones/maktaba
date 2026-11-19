@@ -10,15 +10,18 @@ import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
 import { setJump } from './jump';
 
-/** The text of the paragraph being read (or the next one with text). */
-async function textAt(book: Book, at: { section: number; block: number }): Promise<string> {
-  const sec = await db.sections.get(sectionId(book.id, at.section));
-  if (!sec) return '';
-  for (let i = at.block; i < sec.blocks.length; i++) {
-    const b = sec.blocks[i];
-    if (b.t !== 'img' && b.text.trim().length > 12) return b.text;
+/** The paragraphs being read, from the one at the top of the screen (headings are passed over). */
+async function textsAt(book: Book, at: { section: number; block: number }, count = 3): Promise<string[]> {
+  const out: string[] = [];
+  for (let s = at.section; s < book.sectionCount && out.length < count; s++) {
+    const sec = await db.sections.get(sectionId(book.id, s));
+    if (!sec) continue;
+    for (let i = s === at.section ? at.block : 0; i < sec.blocks.length && out.length < count; i++) {
+      const b = sec.blocks[i];
+      if ((b.t === 'p' || b.t === 'quote') && b.text.trim().split(/\s+/).length >= 4) out.push(b.text);
+    }
   }
-  return '';
+  return out;
 }
 
 /**
@@ -38,17 +41,23 @@ export function SharhSheet({ book, at, onClose }: { book: Book; at: { section: n
   const go = async (sharh: Book) => {
     setBusy(sharh.id);
     try {
-      const text = await textAt(book, at);
-      if (!text) {
+      const texts = await textsAt(book, at);
+      if (!texts.length) {
         toast('There is no text here to look for. Move to a paragraph and try again.');
         return;
       }
-      const place = await findInSharh(text, sharh.id);
+      // The paragraph being read; if the sharḥ does not quote it, the next ones.
+      let place = null;
+      for (const t of texts) {
+        place = await findInSharh(t, sharh.id);
+        if (place) break;
+      }
       if (!place) {
         toast(`This passage is not quoted in “${sharh.title}”; it may comment on it in other words, or in another volume.`);
         return;
       }
-      setJump(sharh.id, { section: place.section, block: place.block });
+      // The paragraph is lit up for a moment on arrival, so the eye finds it.
+      setJump(sharh.id, { section: place.section, block: place.block, flash: [0, Math.min(place.length, 600)] });
       onClose();
       navigate(`/book/${sharh.id}`);
       toast(`In “${sharh.title}”, where it comments on this passage.`);

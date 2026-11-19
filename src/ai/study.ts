@@ -222,13 +222,8 @@ export async function savedSummary(book: Book, at: { section: number; block: num
  * Summarises the chapter the reader is in, only from its own paragraphs, each point tied
  * to the paragraph it came from. Kept, so it is asked for once.
  */
-export async function summariseChapter(book: Book, at: { section: number; block: number }, again = false): Promise<Summary> {
-  const ch = chapterAt(book, at);
-  const key = summaryKey(book.id, ch.from.section, ch.from.block);
-  if (!again) {
-    const saved = (await db.settings.get(key))?.value as Summary | undefined;
-    if (saved) return saved;
-  }
+/** The paragraphs of a chapter (with their English and citation), numbered p1, p2…, up to a size an AI can take. */
+async function chapterSources(book: Book, ch: ReturnType<typeof chapterAt>): Promise<{ sources: Source[]; total: number }> {
   const trs = new Map((await db.translations.where('bookId').equals(book.id).toArray()).map((t) => [`${t.section}:${t.block}`, t.en]));
   const all: Source[] = [];
   for (let s = ch.from.section; s < Math.min(ch.to.section + 1, book.sectionCount); s++) {
@@ -243,7 +238,7 @@ export async function summariseChapter(book: Book, at: { section: number; block:
       all.push({ id: '', bookId: book.id, section: s, block: i, text: b.text, en: trs.get(`${s}:${i}`), cite: formatCitation({ author: book.author, book: book.title, page, chapter: sec.title }) });
     });
   }
-  if (!all.length) throw new Error('This chapter has no text to summarise (its pages are images that have not been recognised yet).');
+  if (!all.length) throw new Error('This chapter has no text yet (its pages are images that have not been read).');
   const sources: Source[] = [];
   let size = 0;
   for (const src of all) {
@@ -252,11 +247,38 @@ export async function summariseChapter(book: Book, at: { section: number; block:
     size += len;
     sources.push({ ...src, text: src.text.slice(0, 4000), en: src.en?.slice(0, 4000), id: `p${sources.length + 1}` });
   }
+  return { sources, total: all.length };
+}
+
+export async function summariseChapter(book: Book, at: { section: number; block: number }, again = false): Promise<Summary> {
+  const ch = chapterAt(book, at);
+  const key = summaryKey(book.id, ch.from.section, ch.from.block);
+  if (!again) {
+    const saved = (await db.settings.get(key))?.value as Summary | undefined;
+    if (saved) return saved;
+  }
+  const { sources, total } = await chapterSources(book, ch);
   const r = await study<{ summary: string }>({ task: 'summarise', passages: sources.map(({ id, text, en, cite }) => ({ id, text, en, cite })) }, !!book.private, 'explain');
   // A citation to a paragraph that was not given is removed rather than shown.
   const known = new Set(sources.map((s) => s.id));
   const summary = r.result.summary.replace(/\s*\[([^\]\s]+)\]/g, (m, id: string) => (known.has(id) ? m : ''));
-  const out: Summary = { summary, sources, covered: sources.length, total: all.length, title: ch.title, provider: r.provider, model: r.model };
+  const out: Summary = { summary, sources, covered: sources.length, total, title: ch.title, provider: r.provider, model: r.model };
   await db.settings.put({ key, value: out });
   return out;
+}
+
+export interface Quiz {
+  questions: Array<{ q: string; options: string[]; answer: number; why: string; ids: string[] }>;
+  sources: Source[];
+  title: string;
+  provider: string;
+  model: string;
+}
+
+/** Five questions on the chapter being read, from its own text, each with why and where. */
+export async function quizChapter(book: Book, at: { section: number; block: number }): Promise<Quiz> {
+  const ch = chapterAt(book, at);
+  const { sources } = await chapterSources(book, ch);
+  const r = await study<{ questions: Quiz['questions'] }>({ task: 'quiz', passages: sources.map(({ id, text, en, cite }) => ({ id, text, en, cite })) }, !!book.private, 'explain');
+  return { ...r.result, sources, title: ch.title, provider: r.provider, model: r.model };
 }

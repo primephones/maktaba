@@ -1276,3 +1276,51 @@ mark.flash {
 .sharh-go:disabled {
   opacity: 0.6;
 }
+
+/* Quiz me on this chapter */
+.quiz {
+  margin: 0;
+  padding-inline-start: 20px;
+  display: grid;
+  gap: 18px;
+}
+.quiz-text {
+  margin: 0 0 8px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.quiz-options {
+  display: grid;
+  gap: 6px;
+}
+.quiz-options button {
+  text-align: start;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  line-height: 1.4;
+}
+.quiz-options button:disabled {
+  opacity: 1;
+  color: var(--ink-2);
+}
+.quiz-options button[data-state='right'] {
+  border-color: #2f8a5b;
+  background: color-mix(in srgb, #2f8a5b 14%, transparent);
+  color: var(--ink);
+}
+.quiz-options button[data-state='wrong'] {
+  border-color: var(--rubric);
+  background: color-mix(in srgb, var(--rubric) 12%, transparent);
+  color: var(--ink);
+}
+.quiz-why {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.quiz-src {
+  color: var(--rubric);
+  font-weight: 700;
+}

@@ -134,6 +134,31 @@ try {
   check(true, 'chapter summaries come from the reader’s own AI');
   await page.getByRole('button', { name: 'Close' }).click();
 
+  console.log('A second AI checks the translation');
+  await wait(400);
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.locator('.rd-scroll').click({ position: { x: 200, y: 500 } });
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByRole('button', { name: 'Check this chapter' }).click();
+  await page.getByText(/paragraphs checked: \d+ confirmed, \d+ corrected/).waitFor({ timeout: 30000 });
+  const trs2 = await dbRead('translations');
+  check(trs2.some((t) => t.label === 'checked') && trs2.some((t) => t.uncertain?.some((u) => /Corrected by a second AI/.test(u.reason))), 'confirmed paragraphs are marked checked; a corrected one keeps the reason');
+  await page.getByRole('button', { name: 'Close' }).click().catch(() => undefined);
+
+  console.log('Quiz me on this chapter');
+  await wait(400);
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.locator('.rd-scroll').click({ position: { x: 200, y: 500 } });
+  await page.getByRole('button', { name: 'Study', exact: true }).click();
+  await page.getByRole('button', { name: /^Quiz me on this chapter/ }).click();
+  await page.locator('.quiz-q').first().waitFor({ timeout: 30000 });
+  check((await page.locator('.quiz-q').count()) === 5, 'five questions from the chapter');
+  await page.locator('.quiz-options').first().getByRole('button').first().click();
+  await page.locator('.quiz-options').nth(1).getByRole('button').nth(2).click();
+  check((await page.getByText('Right.').count()) === 1 && (await page.getByText('Not quite.').count()) === 1, 'each answer is marked, with the reason');
+  await shot('42-quiz');
+  await page.getByRole('button', { name: 'Read the passage' }).first().click();
+  await wait(600);
+  check((await page.locator('.sheet').count()) === 0, 'and the passage it rests on is one tap away');
+
   console.log('An Urdu book, translated with your own AI');
   const namaz = readFileSync(fx('نماز کے احکام.md')).toString('base64');
   await page.evaluate((b64) => {

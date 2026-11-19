@@ -57,6 +57,20 @@ createServer(async (req, res) => {
     res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(obj) } }], usage: { prompt_tokens: 50, completion_tokens: 80 } }));
   };
   if (system.includes('give the words most likely')) return reply({ ar: ['الإجماع', 'حجة'], en: ['consensus'] });
+  if (system.includes('Write a short quiz')) {
+    const ids = [...user.matchAll(/\[(p\d+)\]/g)].map((m) => m[1]);
+    return reply({ questions: Array.from({ length: 5 }, (_, i) => ({ q: `Question ${i + 1}: what does the chapter say qiyās is?`, options: ['Joining a branch case to a root case for a shared cause', 'A report from the Prophet', 'The agreement of the scholars', 'A custom of the people'], answer: 0, why: 'The chapter defines qiyās as joining a branch to a root in the ruling for a shared cause.', ids: [ids[i % ids.length] ?? 'p1'] })) });
+  }
+  if (system.includes('You are the second translator')) {
+    const items = [...user.matchAll(/\[([^\]]+)\]\nOriginal: [^\n]*\nDraft: ([^\n]*)/g)].map((m) => ({ id: m[1], en: m[2] }));
+    return reply({
+      paragraphs: items.map((it, i) =>
+        i === 1
+          ? { id: it.id, ok: false, en: `${it.en} (corrected: "qiyās" is analogy, not opinion)`, changes: [{ was: 'opinion', now: 'analogy', why: 'qiyās is analogy, a technical term' }] }
+          : { id: it.id, ok: true, en: it.en, changes: [] },
+      ),
+    });
+  }
   if (system.includes('the arguments for and against each')) {
     const ids = [...user.matchAll(/\[(p\d+)\]/g)].map((m) => m[1]);
     if (!ids.length) return reply({ found: false, positions: [], note: 'Not in the passages.' });

@@ -7,25 +7,23 @@ The owner's standing instructions (18 Nov 2026):
 - Permission to look for better alternatives for everything (models, engines, libraries).
 - When usage runs out, carry on when it resets. Do full checks.
 
-## Now
-1. Reader: tap or scroll up a little shows all controls, grouped and labelled:
-   top (back, title, search, bookmark); bottom (position + Contents, Text, English,
-   Study, More). Sheets with clear sections. Intuitive.
-2. Full checks of reading in every language (e2e/languages.mjs), and look at screenshots
-   of every reader screen and sheet in every theme.
-3. Better alternatives: AI models (live lists), PDF/EPUB engines, fonts for Nastaliq.
+## Done (19 Nov 2026)
+- Reader tools: tap, or scroll up a little, shows them; labelled bar (Contents, Text,
+  English, Study, More); Text sheet in groups; only the reader's own scrolling hides them.
+- Fonts: Gulzar (Urdu Nastaliq) and Scheherazade New (vowelled Arabic) as choices.
+- Iʿrāb: case, role and why for each word; Test yourself.
+- Ask your books: For and against (positions, arguments, objections, each cited).
+- Matn → sharḥ (More › In the commentary), with the place lit up on arrival.
+- Book catalogue: 39 OpenITI works (six books, shurūḥ classical and Deobandi, Ḥanafī
+  fiqh and shurūḥ, siyāsa); commentaries linked to their matn by themselves.
+- Constitutions of 49 Muslim-majority countries (+ Nigeria, Lebanon, Bosnia) from
+  Constitute Project, English and Arabic where given; files in data/constitutions.
+- Settings grouped; Move to a new phone page; setup says what each step gives.
 
-## Then (owner's list, not done yet)
-- Iʿrāb learning: why each word takes its case, with a practice mode.
-- AI: arguments and opposing arguments with references from the owner's books; define a
-  word; study notes; quiz on a chapter; "what does the sharh say".
+## Next
 - Second checking pass for translations (uṣūl al-fiqh especially).
-- Catalogue: the six books of ḥadīth with classical and Deobandi shurūḥ; Ḥanafī fiqh
-  with shurūḥ (OpenITI, CC BY-NC-SA, attribution; ids in the session notes).
-- Matn → sharḥ: jump from the matn paragraph to the place in its sharḥ.
-- Constitutions of Muslim countries, with a few books on them.
-- Moving to a new phone: a guided page (Drive or backup file).
-- Settings grouped; onboarding that says what each step gives.
+- AI: define a word; study notes; quiz on a chapter.
+- Real-AI checks once the owner adds keys as network secrets (Gemini, OpenRouter).
 
 ## Facts to remember
 - Builds: GitHub Actions on branch ccr-0620b64f-krkauh; releases build-NN; Pages live.

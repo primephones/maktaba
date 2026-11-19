@@ -63,6 +63,10 @@ jobs:
         run: node e2e/scan-ai.mjs
       - name: Every language (Arabic, Urdu, Persian, Pashto, Malay, English), as text and as scans
         run: node e2e/languages.mjs
+      - name: From a matn to its sharḥ
+        run: node e2e/sharh.mjs
+      - name: The book catalogue (a real OpenITI download) and the constitutions
+        run: node e2e/catalogue.mjs
       - name: Translate a whole book through the server, in the app
         run: WRANGLER_SEND_METRICS=false node e2e/ai.mjs
       - uses: actions/upload-artifact@v4

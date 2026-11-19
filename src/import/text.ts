@@ -221,7 +221,8 @@ export function parseOpenITI(source: string): ParsedBook {
     }
     if (line.startsWith('# ')) {
       flush();
-      current = stamp({ t: 'p', text: cleanInline(line.slice(2)) });
+      // "# | 1 ( قوله … )": a commentary's quotation of its matn, numbered; the marks go.
+      current = stamp({ t: 'p', text: cleanInline(line.slice(2).replace(/^\|\s*\d*\s*/, '')) });
       continue;
     }
     if (line.startsWith('~~')) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SEED_GLOSSARY, mergeGlossary, termsIn } from '../src/glossary';
-import { acceptAnswer, batches, buildMessages, checkAnswer, parseAnswer } from '../src/translate';
+import { acceptAnswer, acceptReview, buildReviewMessages, batches, buildMessages, checkAnswer, parseAnswer } from '../src/translate';
 
 describe('glossary', () => {
   it('finds terms with attached prefixes and spelling variants', () => {
@@ -86,5 +86,30 @@ describe('Urdu and Persian', () => {
   it('keeps Urdu digits in the number check', () => {
     expect(checkAnswer([{ id: 'p1', text: 'فجر کی دو رکعتیں ہیں، اور سورۃ البقرۃ کی آیت ۲۲۲ میں ہے۔' }], [{ id: 'p1', en: 'Fajr has two rakʿas, and verse 222 of al-Baqara says so.', uncertain: [] }])).toEqual([]);
     expect(checkAnswer([{ id: 'p1', text: 'فجر کی دو رکعتیں ہیں، اور سورۃ البقرۃ کی آیت ۲۲۲ میں ہے۔' }], [{ id: 'p1', en: 'Fajr has two rakʿas, and a verse of al-Baqara says so.', uncertain: [] }])[0].problem).toMatch(/222/);
+  });
+});
+
+describe('second check', () => {
+  const items = [
+    { id: '1', text: 'والقياس حجة عند الجمهور', en: 'Analogy is a proof according to the majority.' },
+    { id: '2', text: 'ولا يجوز القياس في الحدود', en: 'Analogy is permitted in the prescribed punishments.' },
+  ];
+  it('confirms a faithful draft and corrects a wrong one, keeping what was changed and why', () => {
+    const r = acceptReview(items, JSON.stringify({ paragraphs: [
+      { id: '1', ok: true, en: items[0].en, changes: [] },
+      { id: '2', ok: false, en: 'Analogy is not permitted in the prescribed punishments (ḥudūd).', changes: [{ was: 'is permitted', now: 'is not permitted', why: 'the original negates: lā yajūz' }] },
+    ] }));
+    expect(r[0]).toMatchObject({ ok: true, en: items[0].en, changes: [] });
+    expect(r[1].ok).toBe(false);
+    expect(r[1].changes[0].why).toMatch(/negates/);
+  });
+  it('refuses an answer that drops a paragraph, or cuts a draft down to a fragment', () => {
+    expect(() => acceptReview(items, JSON.stringify({ paragraphs: [{ id: '1', ok: true, en: items[0].en }] }))).toThrow(/2: missing/);
+    expect(() => acceptReview(items, JSON.stringify({ paragraphs: [{ id: '1', ok: true, en: items[0].en }, { id: '2', ok: false, en: 'No.', changes: [] }] }))).toThrow(/shorter/);
+  });
+  it('tells the checker to watch negations, speakers and technical terms', () => {
+    const sys = buildReviewMessages('ar', items, [])[0].content;
+    expect(sys).toMatch(/reverses a negation/);
+    expect(sys).toMatch(/fa-in qīla/);
   });
 });

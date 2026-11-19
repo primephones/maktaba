@@ -565,7 +565,7 @@ await section('Settings and navigation', async () => {
     await page.getByRole('button', { name: new RegExp('^' + name) }).click();
     await pause(500);
     check((await page.locator('[role=alert]').count()) === 0, `Settings › ${name} opens without an error`);
-    await page.getByRole('button', { name: 'Back' }).click();
+    await page.locator('.screen-head').getByRole('button', { name: 'Back' }).click();
     await pause(300);
   }
   await go('#/settings/storage');

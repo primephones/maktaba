@@ -59,3 +59,14 @@ describe('iʿrāb, to learn from', () => {
     expect(r.words.map((w) => w.case)).toEqual(['mabni', 'marfu']);
   });
 });
+
+describe('quiz on a chapter', () => {
+  const passages = [{ id: 'p1', text: 'والقياس إلحاق فرع بأصل', cite: 'x' }];
+  it('keeps well-formed questions and refuses a quiz with too few', () => {
+    const q = (n: number) => ({ q: `Q${n}`, options: ['a', 'b', 'c', 'd'], answer: 1, why: 'because', ids: ['p1', 'p9'] });
+    const r = acceptStudy({ task: 'quiz', passages }, JSON.stringify({ questions: [q(1), q(2), q(3), { q: 'bad', options: ['a'], answer: 3 }] })) as { questions: Array<{ ids: string[] }> };
+    expect(r.questions).toHaveLength(3);
+    expect(r.questions[0].ids).toEqual(['p1']);
+    expect(() => acceptStudy({ task: 'quiz', passages }, JSON.stringify({ questions: [q(1)] }))).toThrow(/too few/);
+  });
+});

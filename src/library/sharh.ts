@@ -28,6 +28,8 @@ export interface SharhPlace {
   block: number;
   /** How many runs of words the two share (more is surer). */
   score: number;
+  /** The length of that paragraph (to highlight it on arrival). */
+  length: number;
 }
 
 /** Where in the sharḥ the given matn text is commented on, or null if it is not found. */
@@ -42,7 +44,7 @@ export async function findInSharh(matnText: string, sharhId: string): Promise<Sh
       const ws = words(b.text);
       let score = 0;
       for (let k = 0; k + N <= ws.length; k++) if (want.has(ws.slice(k, k + N).join(' '))) score++;
-      if (score && (!best || score > best.score)) best = { section: sec.idx, block: i, score };
+      if (score && (!best || score > best.score)) best = { section: sec.idx, block: i, score, length: b.text.length };
     });
   }
   // One shared run of three words can be chance; two is a quotation.

@@ -199,3 +199,61 @@ export function batches(paragraphs: Paragraph[], maxChars = 3500, maxItems = 12)
   if (cur.length) out.push(cur);
   return out;
 }
+
+// ------------------------------------------------------------------------------- second check
+
+export interface ReviewItem {
+  id: string;
+  text: string;
+  en: string;
+}
+export interface Reviewed {
+  id: string;
+  /** The draft was faithful as it stood. */
+  ok: boolean;
+  en: string;
+  changes: Array<{ was: string; now: string; why: string }>;
+}
+
+/**
+ * A second translator checks a draft against the original: faithful drafts are confirmed
+ * as they are; anything mistranslated, left out or added is corrected, and each change is
+ * given with its reason, so the reader can see what was changed and why.
+ */
+export function buildReviewMessages(lang: SourceLang, items: ReviewItem[], glossary: Term[]): Array<{ role: 'system' | 'user'; content: string }> {
+  const all = items.map((p) => p.text).join('\n');
+  const hits = termsIn(all, glossary);
+  const system = [
+    `You are the second translator, checking an English draft of a ${LANG_NAME[lang]} work of Islamic scholarship against the original, for a serious student. Uṣūl al-fiqh, fiqh and ḥadīth terms must be exact.`,
+    'For each paragraph: if the English is faithful and complete, return it exactly as it is, with "ok": true and no changes. Do not polish style.',
+    'If it mistranslates, leaves something out, adds something not in the original, reverses a negation, confuses who is speaking (the author, an objector "fa-in qīla", the reply "qulnā"), or renders a technical term wrongly, correct it: return the corrected English with "ok": false, and list each change as {"was": "draft words", "now": "corrected words", "why": "a short reason"}.',
+    'Keep the draft’s transliteration and its † marks where they still apply, and the same paragraph ids.',
+    hits.length ? `Glossary (use these renderings): ${hits.map((h) => `${h.found} → ${h.term.tr} (${h.term.en})`).join('; ')}` : '',
+    'Answer with JSON only: {"paragraphs":[{"id":"…","ok":true,"en":"…","changes":[]}]}',
+  ].filter(Boolean).join('\n');
+  const body = items.map((p) => `[${p.id}]\nOriginal: ${p.text}\nDraft: ${p.en}`).join('\n\n');
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: `Check these paragraphs:\n\n${body}` },
+  ];
+}
+
+/** Reads and checks a second translator's answer: every paragraph must come back, with English. */
+export function acceptReview(items: ReviewItem[], raw: string): Reviewed[] {
+  let text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  text = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const data = JSON.parse(text) as { paragraphs?: Array<Record<string, unknown>> };
+  const got = new Map((data.paragraphs ?? []).map((p) => [String(p.id ?? ''), p] as const));
+  return items.map((it) => {
+    const p = got.get(it.id);
+    if (!p) throw new Error(`${it.id}: missing`);
+    const en = typeof p.en === 'string' && p.en.trim() ? p.en.trim() : it.en;
+    const changes = (Array.isArray(p.changes) ? p.changes : [])
+      .map((c) => c as Record<string, unknown>)
+      .filter((c) => typeof c.now === 'string')
+      .map((c) => ({ was: String(c.was ?? ''), now: String(c.now), why: String(c.why ?? '') }));
+    const ok = p.ok === true || en === it.en;
+    if (!ok && en.length < it.en.length * 0.4) throw new Error(`${it.id}: the correction is much shorter than the draft`);
+    return { id: it.id, ok, en: ok ? it.en : en, changes: ok ? [] : changes };
+  });
+}

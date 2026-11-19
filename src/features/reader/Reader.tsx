@@ -8,7 +8,7 @@ import { clamp, percent } from '../../lib/util';
 import { closePdf } from '../../lib/pdfjs';
 import { formatCitation } from '../../lib/citation';
 import { native } from '../../native/maktaba';
-import { sourceParagraphs, translatable, translateNow } from '../../ai/translation';
+import { reviewChapter, sourceParagraphs, translatable, translateNow } from '../../ai/translation';
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
 import { StudySheet } from './StudySheet';
@@ -26,6 +26,7 @@ import { toast } from '../../ui/toast';
 import { BlockView, NO_MARKS } from './BlockView';
 import { ScanPageAction } from './ScanPage';
 import { SharhSheet } from './SharhSheet';
+import { QuizSheet } from './QuizSheet';
 import { BookSearch } from './BookSearch';
 import { Contents } from './Contents';
 import { takeJump } from './jump';
@@ -80,7 +81,7 @@ function ReaderInner({ book }: { book: Book }) {
   const [target, setTarget] = useState<Target>({ section: opening.section, block: opening.block, nonce: 0 });
   const [pos, setPos] = useState({ section: target.section, block: target.block });
   const [chrome, setChrome] = useState(true);
-  const [sheet, setSheet] = useState<null | 'contents' | 'settings' | 'search' | 'summary' | 'english' | 'study' | 'more' | 'sharh'>(null);
+  const [sheet, setSheet] = useState<null | 'contents' | 'settings' | 'search' | 'summary' | 'english' | 'study' | 'more' | 'sharh' | 'quiz'>(null);
   const [flash, setFlash] = useState<{ section: number; block: number; range: [number, number] } | null>(
     opening.flash ? { section: opening.section, block: opening.block, range: opening.flash } : null,
   );
@@ -683,6 +684,7 @@ function ReaderInner({ book }: { book: Book }) {
           <TranslationControls book={book} view={view} hasTranslation={hasTranslation} from={pos} />
         </Sheet>
       )}
+      {sheet === 'quiz' && <QuizSheet book={book} at={pos} onGo={(s, b) => goTo(s, b)} onClose={() => setSheet(null)} />}
       {sheet === 'sharh' && <SharhSheet book={book} at={pos} onClose={() => setSheet(null)} />}
       {sheet === 'study' && (
         <Sheet title="Study" onClose={() => setSheet(null)}>
@@ -690,6 +692,11 @@ function ReaderInner({ book }: { book: Book }) {
             <button className="row" onClick={() => setSheet('summary')}>
               <Icon name="sparkle" />
               <span className="grow"><span className="title">Summary of this chapter</span><div className="sub">The main points, with where each is in the book</div></span>
+              <Icon name="forward" size={18} />
+            </button>
+            <button className="row" onClick={() => setSheet('quiz')}>
+              <Icon name="check" />
+              <span className="grow"><span className="title">Quiz me on this chapter</span><div className="sub">Five questions from the text, each with why and where</div></span>
               <Icon name="forward" size={18} />
             </button>
             <button className="row" onClick={() => navigate('/search')}>
@@ -811,6 +818,31 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
         </div>
         {busy && <p className="muted small" role="status">{busy}</p>}
       </div>
+      {hasTranslation && (
+        <div className="ctl">
+          <div className="lbl"><span><span className="ai-mark" aria-hidden="true">✦</span> Check with a second AI</span></div>
+          <p className="muted small" style={{ margin: 0 }}>
+            Another AI reads this chapter’s English against the original. What is faithful is marked checked; anything mistranslated or left out is corrected, and each change is shown under its † with the reason.
+          </p>
+          <button
+            className="btn"
+            disabled={!!busy}
+            onClick={async () => {
+              setBusy('Checking…');
+              try {
+                const r = await reviewChapter(book, from.section, (d, t) => setBusy(`Checking… ${d} of ${t} paragraphs`));
+                toast(r.checked + r.corrected ? `${r.checked + r.corrected} paragraphs checked: ${r.checked} confirmed${r.corrected ? `, ${r.corrected} corrected (tap † to see why)` : ''}.` : 'Nothing in this chapter is waiting to be checked.');
+              } catch (e) {
+                toast((e as Error).message);
+              } finally {
+                setBusy(null);
+              }
+            }}
+          >
+            Check this chapter
+          </button>
+        </div>
+      )}
     </>
   );
 }

@@ -294,13 +294,16 @@ function AboutPage() {
 
       <div className="section-title">In this version</div>
       <div className="card small" style={{ display: 'grid', gap: 8 }}>
-        <p><b>Working now:</b> Arabic and Urdu first, Persian too: adding PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI and image files; the original file kept exactly and one tap away (the printed page itself for PDFs); offline text recognition for scans; whole-book English translation with your own AI, with a glossary of terms in Arabic, Urdu and Persian spelling; Ask your books, Explain, Iʿrāb and chapter summaries; your library in your own Google Drive, in step on all your phones; a setup guide with help along the way; one-file backup; reading aloud; the library with folders, covers and reading status; the reader with themes, type controls, contents, bookmarks, highlights, notes, footnotes, printed page numbers and search; search across all books that ignores vowel marks and Urdu and Persian spellings; saved references and copy with citation; Qur’an verses on a tap.</p>
-        <p><b>Not built yet:</b> ḥadīth popups, the dictionary, comparing books, exports, and lock-screen controls for reading aloud. They are left out rather than shown half-finished.</p>
+        <p><b>Reading:</b> Arabic, Urdu, Persian, Pashto, Malay and English books (PDF, EPUB, Kindle, Word, FB2, text, Markdown, OpenITI, images); scanned books shown as printed with their English beneath; the original file kept exactly and one tap away; themes, typefaces (Amiri, Scheherazade, Nastaliq, Gulzar), contents, bookmarks, highlights, notes, footnotes, printed page numbers, search that ignores vowel marks and spellings; reading aloud; Qurʾān verses on a tap.</p>
+        <p><b>With your own AI:</b> whole-book translation; scanned pages read and translated in one go; Explain; iʿrāb with the reason for each case, and Test yourself; Ask your books, with an answer or the arguments for and against, every point cited; chapter summaries.</p>
+        <p><b>Library:</b> folders (sorted for you), the book catalogue (the six books of ḥadīth and their commentaries, Ḥanafī fiqh, works on government, and the constitutions of Muslim countries), a matn opened in its sharḥ at the same place; your own cloud on all your phones; one-file backup; moving to a new phone.</p>
       </div>
 
       <div className="section-title">Sources</div>
       <div className="card small" style={{ display: 'grid', gap: 6 }}>
         <p>Qur’an text: the Uthmani text from QuranEnc (The Noble Qur’an Encyclopedia). English meanings: Saheeh International, via QuranEnc and Tanzil.</p>
+        <p>Book catalogue: texts from the OpenITI corpus (Open Islamicate Texts Initiative), CC BY-NC-SA 4.0. Constitutions: Constitute Project, CC BY-NC 3.0.</p>
+        <p>Typefaces: Amiri, Scheherazade New (SIL), Noto Nastaliq Urdu, Gulzar, Literata and IBM Plex, all under the SIL Open Font License.</p>
         <p>Text recognition: Tesseract, with its Arabic, Urdu, Persian and English data. PDF: pdf.js. Kindle books: foliate-js.</p>
       </div>
 

@@ -63,3 +63,21 @@ describe('splitting long sections', () => {
     expect(sections[toc[0].section].blocks[toc[0].block!].text).toBe('para 650');
   });
 });
+
+describe('very large books without headings (as many OpenITI shurūḥ are)', () => {
+  it('are split by size too, each part named by its printed page, with contents', () => {
+    const para = (v: number, p: number) => ({ t: 'p' as const, text: 'ق'.repeat(3000), printed: `${v}/${p}` });
+    const blocks = Array.from({ length: 200 }, (_, i) => para(1 + Math.floor(i / 100), (i % 100) + 1));
+    const { sections, toc } = splitLargeSections([{ title: 'Text', blocks }], []);
+    expect(sections.length).toBeGreaterThan(4);
+    expect(sections.every((s) => s.blocks.reduce((n, b) => n + b.text.length, 0) <= 120_000)).toBe(true);
+    expect(sections[0].title).toBe('Vol. 1, p. 1');
+    expect(sections.at(-1)!.title).toMatch(/^Vol\. 2, p\. \d+$/);
+    expect(toc).toHaveLength(sections.length);
+    expect(toc[1]).toMatchObject({ section: 1, block: 0 });
+  });
+  it('drop the numbering marks before a quoted matn', () => {
+    const book = parseOpenITI('######OpenITI#\n#META#Header#End#\n# | 1 ( قوله باب كيف كان بدء الوحي )\n~~ قال الشارح هذا باب\n');
+    expect(book.sections[0].blocks[0].text.startsWith('( قوله باب')).toBe(true);
+  });
+});

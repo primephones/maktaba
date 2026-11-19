@@ -188,6 +188,12 @@ async function processBook(book: Book): Promise<void> {
     },
     async patch(update) {
       if (isCancelled()) return;
+      // A book from the catalogue keeps the clear title it was given there.
+      const current = await db.books.get(id);
+      if (current?.catalogueId && !current.catalogueId.startsWith('constitution:') && update.title) {
+        update = { ...update };
+        delete update.title;
+      }
       await db.books.update(id, update);
       Object.assign(book, update);
     },

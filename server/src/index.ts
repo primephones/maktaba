@@ -1,7 +1,7 @@
 import { SEED_GLOSSARY, mergeGlossary, type Term } from './glossary';
 import { DEFAULT_PROVIDERS, FEATURES, type CallEnv, type CallResult, type Feature, type Provider } from './providers';
 import { NoProviderError, nextReset, route, type UsageStore } from './router';
-import { batches, buildMessages, acceptAnswer, parseAnswer, type Paragraph, type SourceLang, type Translated } from './translate';
+import { batches, buildMessages, acceptAnswer, parseAnswer, buildReviewMessages, acceptReview, type Paragraph, type ReviewItem, type SourceLang, type Translated } from './translate';
 import { acceptStudy, featureOf, studyMessages, type StudyTask } from './study';
 
 /**
@@ -301,11 +301,28 @@ async function handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Re
     }
   }
 
+  // A second check of translated paragraphs, by another service than the one that drafted them.
+  if (path === '/v1/review' && req.method === 'POST') {
+    if (await overShare(env, member)) return fail(429, 'Your share of today’s AI allowance is used up.', { retryAt: nextReset() });
+    const b = body as unknown as { lang: SourceLang; items: ReviewItem[]; private?: boolean; avoid?: string };
+    if (!Array.isArray(b.items) || !b.items.length) return fail(400, 'Nothing to check.');
+    if (JSON.stringify(b).length > 60_000) return fail(413, 'Too much text at once.');
+    const all = providersFor(env).map((p) => p.id);
+    const prefer = [...all.filter((id) => id !== b.avoid), ...(b.avoid ? [b.avoid] : [])];
+    try {
+      const routed = await route(providersFor(env), callEnv(env), usageStore(env, member.key_hash), { feature: 'translate', private: !!b.private, prefer }, buildReviewMessages(b.lang, b.items, SEED_GLOSSARY), (text) => acceptReview(b.items, text));
+      return json({ results: routed.value, provider: routed.provider, model: routed.model });
+    } catch (e) {
+      if (e instanceof NoProviderError) return fail(503, 'No free AI service is available right now.', { retryAt: e.retryAt, skipped: e.skipped });
+      throw e;
+    }
+  }
+
   // Study: search words for a question, answers from the reader's passages, explanations, iʿrāb.
   if (path === '/v1/study' && req.method === 'POST') {
     if (await overShare(env, member)) return fail(429, 'Your share of today’s AI allowance is used up.', { retryAt: nextReset() });
     const t = body as unknown as StudyTask & { private?: boolean; prefer?: string[] };
-    if (!['keywords', 'ask', 'explain', 'summarise', 'irab'].includes(t.task)) return fail(400, 'Unknown task.');
+    if (!['keywords', 'ask', 'debate', 'explain', 'summarise', 'quiz', 'irab'].includes(t.task)) return fail(400, 'Unknown task.');
     if (JSON.stringify(t).length > 60_000) return fail(413, 'Too much text at once.');
     try {
       const routed = await route(providersFor(env), callEnv(env), usageStore(env, member.key_hash), { feature: featureOf(t), private: !!t.private, prefer: t.prefer }, studyMessages(t), (text) => acceptStudy(t, text));

@@ -2,6 +2,7 @@
 // and a commentary on it (a stand-in for Tabyīn al-Ḥaqāʾiq, which is large) linked by itself,
 // so "In the commentary" goes from the Kanz's ruling to where the Tabyīn explains it.
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { startServer } from './server.mjs';
 const { chromium } = createRequire(import.meta.url)('playwright');
 
@@ -25,6 +26,7 @@ const TABYIN = `######OpenITI#
 # وفي الشرع النظافة عن الحدث والخبث، وأسبابها كثيرة نذكرها في مواضعها إن شاء الله تعالى.
 # قوله: (فرض الوضوء غسل وجهه وهو من قصاص الشعر إلى أسفل الذقن وإلى شحمتي الأذن) لقوله تعالى: فاغسلوا وجوهكم، والوجه ما يواجه به الإنسان، فيحد بذلك طولا وعرضا.
 # قوله: (ويديه بمرفقيه) أي مع مرفقيه، فالمرفقان داخلان في الغسل عندنا خلافا لزفر.
+${Array.from({ length: 30 }, (_, i) => `# وفي هذا الموضع فوائد أخرى ذكرها الشارح رقم ${i + 1}، ونحن نذكرها في مواضعها إن شاء الله تعالى.`).join('\n')}
 `;
 
 const server = await startServer();
@@ -34,6 +36,11 @@ const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, is
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
+// The constitutions are served from Maktaba's own repository; here, from the checkout.
+await ctx.route('https://raw.githubusercontent.com/primephones/maktaba/HEAD/data/constitutions/**', (r) => {
+  const name = r.request().url().split('/').pop();
+  return r.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'text/plain; charset=utf-8' }, body: readFileSync(new URL(`../data/constitutions/${name}`, import.meta.url), 'utf8') });
+});
 await ctx.route('https://raw.githubusercontent.com/OpenITI/0750AH/**', (r) => r.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'text/plain; charset=utf-8' }, body: TABYIN }));
 const read = (store) =>
   page.evaluate(async (s) => {
@@ -62,7 +69,8 @@ try {
   await page.evaluate(() => { location.hash = '#/'; });
   await page.getByRole('button', { name: /^Book catalogue/ }).click();
   await page.getByRole('heading', { name: 'Book catalogue' }).waitFor();
-  check((await page.locator('.cat-row').count()) === 34, 'the catalogue lists the six books, their commentaries and the Ḥanafī works (34)');
+  await wait(900);
+  check((await page.locator('.cat-row').count()) === 39 + 49, `the catalogue lists the six books, their commentaries, Ḥanafī fiqh, works on government, and 49 constitutions (${await page.locator('.cat-row').count()})`);
   await page.screenshot({ path: `${shots}80-catalogue.png` });
 
   console.log('A real book, from OpenITI');
@@ -81,6 +89,20 @@ try {
   check(await until(async () => (await byCat(TAB))?.import.state === 'ready'), 'Tabyīn al-Ḥaqāʾiq is added');
   const tab = await byCat(TAB);
   check((await byCat(KANZ)).commentaries?.includes(tab.id), 'and linked as the Kanz’s commentary');
+
+  console.log('A constitution, in English and in Arabic');
+  await page.evaluate(() => { location.hash = '#/catalogue'; });
+  await page.getByRole('button', { name: 'Add Pakistan constitution in English' }).click();
+  await page.getByRole('button', { name: 'Add Pakistan constitution in Arabic' }).click();
+  check(await until(async () => (await read('books')).filter((b) => /^constitution:Pakistan/.test(b.catalogueId ?? '') && b.import.state === 'ready').length === 2), 'both are added');
+  const pk = (await read('books')).filter((b) => /^constitution:Pakistan/.test(b.catalogueId ?? ''));
+  const folder = (await read('folders')).find((f) => f.name === 'Constitutions');
+  check(!!folder && pk.every((b) => b.folderId === folder.id), 'into a folder of their own, Constitutions');
+  const en = pk.find((b) => b.catalogueId.endsWith(':en'));
+  const ar = pk.find((b) => b.catalogueId.endsWith(':ar'));
+  check(en.lang === 'en' && /Pakistan's Constitution of 1973/.test(en.title) && ar.lang === 'ar' && ar.title === 'دستور باكستان', `English and Arabic, each with its proper title (${en.title}; ${ar.title})`);
+  check(((en.toc?.length ?? 0) > 50), `with its parts and articles as contents (${en.toc?.length})`);
+  await page.screenshot({ path: `${shots}82-constitutions.png` });
 
   console.log('From the ruling to its explanation');
   await page.evaluate((id) => { location.hash = `#/book/${id}`; }, kanz.id);

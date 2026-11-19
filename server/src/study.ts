@@ -20,9 +20,10 @@ export type StudyTask =
   | { task: 'debate'; question: string; passages: Passage[] }
   | { task: 'explain'; passage: string; en?: string; cite?: string }
   | { task: 'summarise'; passages: Passage[] }
+  | { task: 'quiz'; passages: Passage[] }
   | { task: 'irab'; sentence: string };
 
-export const featureOf = (t: StudyTask): Feature => (t.task === 'irab' ? 'irab' : t.task === 'explain' || t.task === 'summarise' ? 'explain' : 'ask');
+export const featureOf = (t: StudyTask): Feature => (t.task === 'irab' ? 'irab' : t.task === 'explain' || t.task === 'summarise' || t.task === 'quiz' ? 'explain' : 'ask');
 
 type Msg = { role: 'system' | 'user'; content: string };
 
@@ -71,6 +72,20 @@ export function studyMessages(t: StudyTask): Msg[] {
           content: 'You explain a passage of classical Islamic scholarship to a serious student: what it says, its technical terms (transliterated, with meaning), the reasoning, and anything the student needs to follow it. Stay with what the passage says; when you add background that is not in the passage, say clearly that it is background. Answer with JSON only: {"explanation":"…","terms":[{"term":"…","meaning":"…"}]}',
         },
         { role: 'user', content: `${t.cite ? `Source: ${t.cite}\n` : ''}Passage:\n${t.passage}${t.en ? `\n\nEnglish:\n${t.en}` : ''}` },
+      ];
+    case 'quiz':
+      return [
+        {
+          role: 'system',
+          content: [
+            'Write a short quiz to help a serious student check they have understood a chapter of Islamic scholarship, using ONLY the numbered passages given (from the chapter itself).',
+            'Write 5 questions in English about what matters in the chapter: its rulings, definitions, the evidence given, the positions and who holds them. Not trivia.',
+            'Each question has 4 options, one of them right; the wrong ones must be plausible to someone who did not read carefully. Give the index (0–3) of the right one, a one-sentence "why" from the passage, and the ids of the passages it rests on.',
+            'Keep Arabic technical terms in transliteration with their meaning.',
+            'Answer with JSON only: {"questions":[{"q":"…","options":["…","…","…","…"],"answer":0,"why":"…","ids":["p2"]}]}',
+          ].join('\n'),
+        },
+        { role: 'user', content: passagesBlock(t.passages) },
       ];
     case 'summarise':
       return [
@@ -163,6 +178,15 @@ export function acceptStudy(t: StudyTask, raw: string): unknown {
       if (all.some((x) => !x.ids.length)) throw new Error('a point without its source');
       const found = data.found !== false && positions.length > 0;
       return { found, positions: found ? positions : [], note: String(data.note ?? '') };
+    }
+    case 'quiz': {
+      const ids = new Set(t.passages.map((p) => p.id));
+      const questions = (Array.isArray(data.questions) ? data.questions : [])
+        .map((x) => x as Record<string, unknown>)
+        .map((x) => ({ q: String(x.q ?? '').trim(), options: (Array.isArray(x.options) ? x.options : []).map(String), answer: Number(x.answer), why: String(x.why ?? ''), ids: (Array.isArray(x.ids) ? x.ids : []).map(String).filter((i) => ids.has(i)) }))
+        .filter((x) => x.q && x.options.length >= 2 && x.options.length <= 5 && Number.isInteger(x.answer) && x.answer >= 0 && x.answer < x.options.length);
+      if (questions.length < 3) throw new Error('too few usable questions');
+      return { questions };
     }
     case 'summarise': {
       const summary = String(data.summary ?? '').trim();

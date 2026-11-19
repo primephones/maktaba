@@ -839,3 +839,11 @@
   color: var(--rubric);
   font-variant-numeric: tabular-nums;
 }
+.cat-langs {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.cat-langs [lang='ar'] {
+  font-family: var(--font-arabic);
+}

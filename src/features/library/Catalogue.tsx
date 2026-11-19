@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
-import { ATTRIBUTION, CATALOGUE, download, GROUPS, sizeOf, type CatalogueEntry } from '../../library/catalogue';
+import { ATTRIBUTION, CATALOGUE, CONSTITUTION_ATTRIBUTION, CONSTITUTIONS, constitutionKey, download, downloadConstitution, GROUPS, sizeOf, type CatalogueEntry, type Constitution } from '../../library/catalogue';
 import { goBack, navigate } from '../../app/router';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
@@ -30,6 +30,23 @@ export function Catalogue() {
       setBusy((b) => {
         const n = { ...b };
         delete n[e.id];
+        return n;
+      });
+    }
+  };
+
+  const addConstitution = async (c: Constitution, lang: 'en' | 'ar') => {
+    const key = constitutionKey(c, lang);
+    setBusy((b) => ({ ...b, [key]: 0 }));
+    try {
+      await downloadConstitution(c, lang);
+      toast(`The constitution of ${c.short}${lang === 'ar' ? ' (Arabic)' : ''} is in your library, in the folder Constitutions.`);
+    } catch (err) {
+      toast((err as Error).message);
+    } finally {
+      setBusy((b) => {
+        const n = { ...b };
+        delete n[key];
         return n;
       });
     }
@@ -72,6 +89,33 @@ export function Catalogue() {
             </div>
           </div>
         ))}
+        <div className="section-title">Constitutions of Muslim countries</div>
+        <p className="muted small" style={{ marginTop: 0 }}>The current constitution of each Muslim-majority country (and of Nigeria, Lebanon and Bosnia), in English, and in the original Arabic where it is given. With the classical works on government above, they show how each state frames Islam and the law.</p>
+        <div className="list">
+          {CONSTITUTIONS.map((c) => (
+            <div className="row cat-row" key={c.id}>
+              <span className="grow">
+                <span className="title">{c.short}</span>
+                <div className="sub">
+                  {c.year ? `Constitution of ${c.year}` : 'Constitution'}
+                  {c.words ? ` · ${Math.round(c.words / 1000)}k words` : ''}
+                  {!c.inForce && ' · may no longer be in force'}
+                </div>
+              </span>
+              <span className="cat-langs">
+                {c.langs.map((lang) => {
+                  const key = constitutionKey(c, lang);
+                  const book = have.get(key);
+                  const label = lang === 'en' ? 'English' : 'العربية';
+                  if (book) return <button key={lang} className="btn btn--quiet cat-btn" onClick={() => navigate(`/book/${book.id}`)} aria-label={`Open ${c.short} constitution in ${lang === 'en' ? 'English' : 'Arabic'}`}>{label} ›</button>;
+                  if (busy[key] !== undefined) return <span key={lang} className="cat-progress" role="status">…</span>;
+                  return <button key={lang} className="btn cat-btn" lang={lang} onClick={() => void addConstitution(c, lang)} aria-label={`Add ${c.short} constitution in ${lang === 'en' ? 'English' : 'Arabic'}`}>{label}</button>;
+                })}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="muted small">{CONSTITUTION_ATTRIBUTION}</p>
         <p className="muted small">{ATTRIBUTION} Larger works (Fatḥ al-Bārī, Radd al-Muḥtār) take a while to prepare after downloading; reading can begin as soon as they appear.</p>
       </div>
     </div>
