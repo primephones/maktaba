@@ -78,7 +78,7 @@ export async function setServer(cfg: ServerConfig | null): Promise<void> {
 }
 
 /** Requests the reader's own AI can answer on the phone, without a server. */
-const ON_PHONE = /^\/v1\/(status|translate|study|jobs)(\/|$|\?)/;
+const ON_PHONE = /^\/v1\/(status|translate|review|study|jobs)(\/|$|\?)/;
 
 /**
  * Is AI set up on this phone, one way or the other: the reader's own AI account, or a
