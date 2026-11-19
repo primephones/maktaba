@@ -31,7 +31,10 @@ export function ScanPageAction({ book, section, page, read, some }: { book: Book
         toast(read ? 'Nothing left to translate on this page.' : 'The AI found no text on this page.');
         return;
       }
-      await translateNow(book, paras);
+      await translateNow(book, paras, {
+        onProgress: (d, total) => setBusy(total > 1 ? `Translating… ${d} of ${total} paragraphs` : 'Translating…'),
+        onWait: (left) => setBusy(left ? `Your AI is busy (Google’s free models are overloaded). Trying again in ${left} s…` : 'Translating…'),
+      });
     } catch (e) {
       toast((e as Error).message);
     } finally {

@@ -160,7 +160,30 @@ export async function pullAll(): Promise<void> {
  * Translates some paragraphs right away (reading ahead, or a fresh draft from another
  * AI). Returns how many were done; stops at the first failure with its reason.
  */
-export async function translateNow(book: Book, paras: SourceParagraph[], opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void } = {}): Promise<number> {
+/**
+ * Asks again when every AI is busy for a moment (free models are often overloaded for a minute
+ * or two), saying so while it waits, rather than failing at once. Gives up after about four minutes.
+ */
+export async function patiently<T>(ask: () => Promise<T>, onWait?: (seconds: number) => void): Promise<T> {
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await ask();
+    } catch (e) {
+      const busy = e instanceof ServerError && e.status === 503;
+      const retryAt = busy ? Number(e.data.retryAt) || 0 : 0;
+      const wait = Math.min(60_000, Math.max(15_000, retryAt - Date.now()));
+      if (!busy || attempt >= 4 || Date.now() + wait - started > 240_000) throw e;
+      for (let left = Math.round(wait / 1000); left > 0; left--) {
+        onWait?.(left);
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      onWait?.(0);
+    }
+  }
+}
+
+export async function translateNow(book: Book, paras: SourceParagraph[], opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void; onWait?: (seconds: number) => void } = {}): Promise<number> {
   let done = 0;
   opts.onProgress?.(0, paras.length);
   const prefer = opts.prefer ?? (await preferredOrder());
@@ -169,10 +192,14 @@ export async function translateNow(book: Book, paras: SourceParagraph[], opts: {
   const flush = async () => {
     if (!batch.length) return;
     const prev = await db.translations.get(`${book.id}:${batch[0].section}:${batch[0].block - 1}`);
-    const res = await request<{ results: Array<{ id: string; en: string; uncertain: Translation['uncertain']; provider: string; model: string }> }>('/v1/translate', {
-      body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, bookTitle: book.title, chapter: batch[0].chapter, previous: prev?.en, paragraphs: batch.map((p) => ({ id: p.id, text: p.text, kind: p.kind })) },
-      timeoutMs: 120_000,
-    });
+    const res = await patiently(
+      () =>
+        request<{ results: Array<{ id: string; en: string; uncertain: Translation['uncertain']; provider: string; model: string }> }>('/v1/translate', {
+          body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, bookTitle: book.title, chapter: batch[0].chapter, previous: prev?.en, paragraphs: batch.map((p) => ({ id: p.id, text: p.text, kind: p.kind })) },
+          timeoutMs: 120_000,
+        }),
+      opts.onWait,
+    );
     await db.translations.bulkPut(res.results.map((r) => {
       const [section, block] = r.id.split(':').map(Number);
       return { id: `${book.id}:${section}:${block}`, bookId: book.id, section, block, en: r.en, uncertain: r.uncertain, label: 'draft' as const, provider: r.provider, model: r.model, updatedAt: Date.now() };

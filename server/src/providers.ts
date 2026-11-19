@@ -112,7 +112,7 @@ export interface CallEnv {
   fetch: typeof fetch;
 }
 
-const TIMEOUT_MS = 100_000;
+const TIMEOUT_MS = 60_000;
 
 /**
  * What an error answer means. Services put the important part in the body: Gemini says

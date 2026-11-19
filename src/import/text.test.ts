@@ -25,6 +25,32 @@ describe('OpenITI marks left in the text', () => {
   });
 });
 
+describe('Shamela commentaries with the matn marked, and texts with no paragraphs', () => {
+  const page = (n: number) => `# PageV01P00${n}\n# <span class="matn">متن الهداية في الصفحة ${n}\n# </span><span class="matn-hr"> </span>\n### | [فتح القدير]\n# شرح ابن الهمام لهذا الموضع في الصفحة ${n}`;
+  const src = `######OpenITI#\n#META#Header#End#\n# PageV00P000\n### | [خطبة الكتاب]\n${Array.from({ length: 40 }, (_, i) => page(i % 9 + 1)).join('\n')}\n`;
+  const book = parseOpenITI(src);
+  const blocks = book.sections.flatMap((s) => s.blocks);
+  it('keeps the matn as quotations and the commentary as paragraphs, with no HTML', () => {
+    expect(blocks.filter((b) => b.t === 'quote').length).toBe(40);
+    expect(blocks.filter((b) => b.t === 'p').length).toBe(40);
+    expect(blocks.some((b) => /<|span/.test(b.text))).toBe(false);
+  });
+  it('drops the title heading repeated on every page, and page 0', () => {
+    expect(blocks.filter((b) => b.t === 'h').map((b) => b.text)).toEqual(['[خطبة الكتاب]']);
+    expect(blocks.some((b) => b.printed === '0')).toBe(false);
+  });
+  it('ends a paragraph where a page ends when the text has no paragraph marks', () => {
+    const line = 'وهذا كلام الشارح في المسألة على وجه التفصيل والبيان '.repeat(4);
+    const flat = `######OpenITI#\n#META#Header#End#\n# بداية\n${Array.from({ length: 300 }, (_, i) => `~~${line}${i % 10 === 9 ? ` PageV01P${String(i).padStart(3, '0')}` : ''}`).join('\n')}\n`;
+    const longest = Math.max(...parseOpenITI(flat).sections.flatMap((s) => s.blocks).map((b) => b.text.length));
+    expect(longest).toBeLessThanOrEqual(4000);
+  });
+  it('leaves out the corpus tags and a digitiser’s English credit', () => {
+    const t = parseOpenITI('######OpenITI#\n#META#Header#End#\n### | CHECK 1 - كتاب الطهارة\n# نص | عربي $ هنا Islamic Research Centre\n### | 0000 -\n# تتمة\n').sections.flatMap((s) => s.blocks).map((b) => b.text).join(' / ');
+    expect(t).toBe('1 - كتاب الطهارة / نص عربي هنا / تتمة');
+  });
+});
+
 describe('OpenITI import', () => {
   const book = parseOpenITI(OPENITI);
   const all = book.sections.flatMap((s) => s.blocks);

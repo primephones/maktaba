@@ -803,6 +803,7 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
           setBusy(`Translated ${d} of ${total} paragraphs…`);
           workProgress(key, 'Translating', `${book.title}: ${d} of ${total} paragraphs`, d, total);
         },
+        onWait: (left) => setBusy(left ? `Your AI is busy (the free models are overloaded). Trying again in ${left} s…` : `Translated ${done} paragraphs…`),
       });
       const said = `${n} paragraph${n === 1 ? '' : 's'} of “${book.title}” translated.`;
       toast(said);

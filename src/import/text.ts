@@ -168,7 +168,8 @@ export function parseOpenITI(source: string): ParsedBook {
     let out = s;
     out = out.replace(/PageV(\d+)P(\d+)/g, (_m, v: string, p: string) => {
       volume = parseInt(v, 10);
-      printed = String(parseInt(p, 10));
+      // Page 0 is the corpus's mark for "before the first page", not a page.
+      printed = parseInt(p, 10) ? String(parseInt(p, 10)) : '';
       return ' ';
     });
     return out
@@ -179,6 +180,11 @@ export function parseOpenITI(source: string): ParsedBook {
       .replace(/\$[A-Z_]+\$?/g, ' ')
       .replace(/%~%/g, ' ۞ ')
       .replace(/~~/g, ' ')
+      .replace(/<\/?[a-z][^>]*>/gi, ' ') // HTML left in some Shamela texts
+      .replace(/\b(?:EDITOR|PARATEXT)\|\s*=?/g, ' ') // editors' marks on volume headings
+      .replace(/\b[A-Z]{2,}\b/g, ' ') // the corpus's own tags in capitals (CHECK, NO PAGE, a scanner's credit)
+      .replace(/\b[A-Za-z]+(?:\s+[A-Za-z]+)+\b/g, ' ') // a line of English in an Arabic text: a digitiser's credit
+      .replace(/(^|\s)[|$%@]+(?=\s|$)/g, ' ') // line breaks of the printed page (|) and loose markers
       .replace(/(^|\s)#+(?=\s|$)/g, ' ') // a paragraph mark left inside a line where a page broke it
       .replace(/^\s*AUTO\b\s*/, '') // headings made by the corpus's own tools are marked AUTO
       .replace(/\s+/g, ' ')
@@ -192,6 +198,38 @@ export function parseOpenITI(source: string): ParsedBook {
   const flush = () => {
     if (current && current.text) blocks.push(current);
     current = null;
+  };
+
+  // Some Shamela commentaries mark the text commented on (the matn) with
+  // <span class="matn">…</span>: its paragraphs are kept as quotations, set apart from the sharḥ.
+  let inMatn = false;
+  /** Follows the matn marks through a line, and says whether the line's text begins inside the matn. */
+  const matnAt = (text: string): boolean => {
+    let startsIn: boolean | null = null;
+    const re = /<span[^>]*class="matn-hr"[^>]*>\s*<\/span>|<span[^>]*class="matn"[^>]*>|<\/span>|[^<\s]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      if (m[0].startsWith('<span') && !/matn-hr/.test(m[0])) inMatn = true;
+      else if (m[0] === '</span>') inMatn = false;
+      else if (!m[0].startsWith('<') && startsIn === null && !/^[#~|]$/.test(m[0])) startsIn = inMatn;
+    }
+    return startsIn ?? inMatn;
+  };
+
+  /**
+   * Continues the paragraph with a line. Some texts (Tabyīn al-Ḥaqāʾiq, al-Suyūṭī on al-Nasāʾī)
+   * mark almost no paragraphs: a whole volume would be one paragraph, too long for a phone to
+   * lay out. A long paragraph is ended where a printed page ends.
+   */
+  const addRun = (rawText: string, matn: boolean) => {
+    const parts = rawText.split(/(?=PageV\d+P\d+)/);
+    parts.forEach((part, i) => {
+      if (i > 0 && current && current.text.length > 1500) flush();
+      const text = cleanInline(part);
+      if (!text) return;
+      if (current) current.text = `${current.text} ${text}`.trim();
+      else current = stamp({ t: matn ? 'quote' : 'p', text });
+    });
   };
 
   for (const raw of lines) {
@@ -211,7 +249,8 @@ export function parseOpenITI(source: string): ParsedBook {
     if (head) {
       flush();
       const text = cleanInline(head[2]);
-      if (text) blocks.push(stamp({ t: 'h', level: Math.min(6, head[1].length + 1), text }));
+      // A heading with no words ("0000 -", "....") is a numbering left by the corpus.
+      if (text && /\p{L}/u.test(text)) blocks.push(stamp({ t: 'h', level: Math.min(6, head[1].length + 1), text }));
       continue;
     }
     if (/^###\s*\$/.test(line) || /^###\s*@/.test(line)) {
@@ -221,28 +260,55 @@ export function parseOpenITI(source: string): ParsedBook {
       current = stamp({ t: 'p', text });
       continue;
     }
+    const matn = /<\/?span/.test(line) ? matnAt(line) : inMatn;
     if (line.startsWith('# ')) {
       flush();
       // "# | 1 ( قوله … )": a commentary's quotation of its matn, numbered; the marks go.
-      current = stamp({ t: 'p', text: cleanInline(line.slice(2).replace(/^\|\s*\d*\s*/, '')) });
+      current = stamp({ t: matn ? 'quote' : 'p', text: cleanInline(line.slice(2).replace(/^\|\s*\d*\s*/, '')) });
       continue;
     }
     if (line.startsWith('~~')) {
-      const text = cleanInline(line.slice(2));
-      if (current) current.text = `${current.text} ${text}`.trim();
-      else current = stamp({ t: 'p', text });
+      addRun(line.slice(2), matn);
       continue;
     }
     if (/^#+\s*$/.test(line)) continue;
-    const text = cleanInline(line.replace(/^#+\s*/, ''));
-    if (!text) continue;
-    if (current) current.text = `${current.text} ${text}`.trim();
-    else current = stamp({ t: 'p', text });
+    if (!cleanInline(line.replace(/^#+\s*/, '')) && !/PageV\d/.test(line)) continue;
+    addRun(line.replace(/^#+\s*/, ''), matn);
   }
   flush();
 
-  const sections = sectionsFromBlocks(blocks.filter((b) => b.text));
+  // A heading repeated on every page (Shamela puts "[the book's title]" before each page's
+  // commentary) is not a heading: it would cut the book into a section per page.
+  const seen = new Map<string, number>();
+  for (const b of blocks) if (b.t === 'h') seen.set(b.text, (seen.get(b.text) ?? 0) + 1);
+  const kept = blocks.filter((b) => b.text && !(b.t === 'h' && /^\[.*\]$/.test(b.text) && (seen.get(b.text) ?? 0) > 30)).flatMap(splitLong);
+  const sections = sectionsFromBlocks(kept);
   return { title, author, sections, toc: tocFromHeadings(sections) };
+}
+
+/**
+ * A paragraph longer than a phone screen can sensibly hold (a text with no paragraph marks, and
+ * no page marks either) is cut at sentence ends, or failing that between words.
+ */
+export function splitLong(b: Block): Block[] {
+  const LIMIT = 4000;
+  if (b.text.length <= LIMIT || b.t === 'h') return [b];
+  const out: Block[] = [];
+  let rest = b.text;
+  while (rest.length > LIMIT) {
+    const window = rest.slice(1500, LIMIT);
+    let cut = -1;
+    for (const re of [/[.!?؟۔]\s/g, /[:؛]\s/g, /[،,]\s/g, /\s/g]) {
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(window))) cut = 1500 + m.index + m[0].length;
+      if (cut > 0) break;
+    }
+    if (cut <= 0) cut = LIMIT;
+    out.push({ ...b, text: rest.slice(0, cut).trim() });
+    rest = rest.slice(cut);
+  }
+  if (rest.trim()) out.push({ ...b, text: rest.trim() });
+  return out;
 }
 
 /** Groups a flat block list into sections at top-level headings. */
