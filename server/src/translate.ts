@@ -1,4 +1,5 @@
 import { termsIn, type Term } from './glossary';
+import { looksEnglish } from './english';
 
 /**
  * How a passage is put to the AI and how its answer is checked. The rule above all others:
@@ -155,6 +156,8 @@ export function checkAnswer(source: Paragraph[], answer: Translated[]): Problem[
     if (p.text.length > 40 && ratio > 5) problems.push({ id: p.id, problem: 'too long: may contain added explanation' });
     else if (p.text.length > 40 && ratio > 4) problems.push({ id: p.id, problem: 'longer than expected: check nothing was added', soft: true });
     if (/^(here is|translation:|sure[,!])/i.test(a.en) || /as an ai|i cannot/i.test(a.en)) problems.push({ id: p.id, problem: 'chatter instead of translation' });
+    // A transliteration in Latin letters is not a translation.
+    if (/[؀-ۿ]/.test(p.text) && a.en.length > 40 && !looksEnglish(a.en.replace(/†/g, ''))) problems.push({ id: p.id, problem: 'not English: a transliteration, not a translation' });
     // Untranslated Arabic left in the English (beyond a short quoted term).
     const arabicLeft = (a.en.match(/[؀-ۿ]/g) ?? []).length;
     if (arabicLeft > 12) problems.push({ id: p.id, problem: 'untranslated text left in' });

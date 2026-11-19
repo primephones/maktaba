@@ -103,7 +103,9 @@ createServer(async (req, res) => {
   const out = paras.map((p) => {
     const nums = (toAscii(p.text).match(/[0-9]+/g) ?? []).join(' ');
     const words = Math.max(6, Math.round(p.text.length / 5));
-    return { id: p.id, en: `English of paragraph ${p.id}${nums ? ` (numbers ${nums})` : ''}: ${'faithful '.repeat(words).trim()}.`, uncertain: [] };
+    // Real English, with its small words (a run of one word would not pass as a translation).
+    const sentence = 'it is the faithful rendering of what the text says in its own words';
+    return { id: p.id, en: `English of paragraph ${p.id}${nums ? ` (numbers ${nums})` : ''}: ${Array.from({ length: Math.max(1, Math.round(words / 12)) }, () => sentence).join(', and ')}.`, uncertain: [] };
   });
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ paragraphs: out }) } }], usage: { prompt_tokens: 100, completion_tokens: 200 } }));

@@ -117,17 +117,19 @@ try {
   await page.evaluate((id) => { location.hash = `#/book/${id}`; }, scanId);
   await page.locator('.pdfpage').first().waitFor({ timeout: 15000 });
   check(true, 'a scanned book opens on its pages as printed');
-  const act = page.getByRole('button', { name: 'Translate this page' }).first();
-  await act.waitFor({ timeout: 8000 });
-  check(true, 'each page offers to translate it');
-  await act.click();
+  // Pages read in the background are translated as they are read; any left over has a button.
+  const act = page.getByRole('button', { name: /translate this page/i }).first();
+  await page.getByText('Prayer is the pillar of religion.').first().waitFor({ timeout: 4000 }).catch(async () => {
+    await act.click();
+  });
   await page.getByText('Prayer is the pillar of religion.').first().waitFor({ timeout: 20000 });
+  check(true, 'each page has its English, translated as it was read or with one tap');
+  check(translateCalls > 0, 'translated by the reader’s own AI');
   check((await page.locator('.pdfpage').count()) > 0, 'the English appears under the page, and the page stays');
   await page.getByText('Prayer is the pillar of religion.').first().scrollIntoViewIfNeeded();
   await page.evaluate(() => window.scrollBy(0, -260));
   await wait(600);
   await page.screenshot({ path: decodeURIComponent(new URL('./out/shots/50-scan-page-english.png', import.meta.url).pathname) });
-  check(translateCalls > 0, 'translated by the reader’s own AI');
 
   console.log('Nonsense the phone made of Urdu is cleared and read again by the AI');
   await page.evaluate(async (id) => {

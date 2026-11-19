@@ -70,6 +70,8 @@ const cors = { 'access-control-allow-origin': '*', 'content-type': 'application/
 
 // The stand-in Gemini. A scan "contains" the language set in scanLang.
 let scanLang = 'ur';
+/** 'translit': the AI answers with a transliteration; 'slow': reading and translating together fails. */
+let trouble = '';
 const calls = { read: 0, readAndTranslate: 0, translate: 0 };
 await ctx.route('https://generativelanguage.googleapis.com/**', async (route) => {
   const req = route.request();
@@ -82,12 +84,13 @@ await ctx.route('https://generativelanguage.googleapis.com/**', async (route) =>
   if (parts.some((p) => p.inline_data)) {
     const both = /Then translate every block into English/.test(text);
     both ? calls.readAndTranslate++ : calls.read++;
+    if (both && trouble === 'slow') return route.fulfill({ status: 504, headers: cors, body: '{"error":{"message":"Deadline exceeded"}}' });
     const b = BOOKS[scanLang];
     return answer({
       printed: '',
       blocks: [
         { t: 'h', text: b.title, ...(both ? { en: 'On Prayer' } : {}) },
-        ...b.paras.map((p) => ({ t: 'p', text: p, ...(both ? { en: ENGLISH, uncertain: [] } : {}) })),
+        ...b.paras.map((p) => ({ t: 'p', text: p, ...(both ? { en: trouble === 'translit' ? 'Namaz deen ka sutoon hai. Jis ne namaz qaim ki us ne deen ko qaim kiya, aur jis ne namaz chhor di us ne deen ko dha diya.' : ENGLISH, uncertain: [] } : {}) })),
       ],
     });
   }
@@ -269,6 +272,21 @@ try {
     await wait(500);
     await page.screenshot({ path: `${shots}62-scan-${lang}.png` });
   }
+  console.log('When the AI gives a transliteration, or is too slow');
+  for (const t of ['translit', 'slow']) {
+    trouble = t;
+    scanLang = 'ur';
+    const before = { ...calls };
+    await go('#/');
+    const bytes = Buffer.concat([Buffer.from(await scanPdf('ur')), Buffer.from(`\n% ${t}\n`)]);
+    await add(`ur-${t}.pdf`, bytes);
+    const ok = await until(async () => (await book(`ur-${t}`))?.ocr?.state === 'done', 120000);
+    const b = await book(`ur-${t}`);
+    const trs = (await read('translations')).filter((x) => x.bookId === b.id);
+    check(ok && trs.length === 8 && trs.every((x) => !/Namaz deen/.test(x.en)) && trs.filter((x) => x.en === ENGLISH).length >= 6, `${t === 'translit' ? 'a transliteration is not taken for a translation' : 'a page too slow to read and translate at once is read, then translated'}: every paragraph has real English (${trs.length}; ${trs[0]?.en.slice(0, 30)})`);
+    check(calls.translate > before.translate, `  the English came from translating the text (${calls.translate - before.translate} requests)`);
+  }
+  trouble = '';
   check(errors.length === 0, `no errors in the page ${JSON.stringify(errors.slice(0, 2))}`);
 } catch (e) {
   check(false, `stopped: ${e.message.split('\n')[0]}`);

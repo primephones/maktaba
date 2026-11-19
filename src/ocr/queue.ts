@@ -165,6 +165,22 @@ async function savePageEnglish(book: Pick<Book, 'id'>, page: number, r: PageText
   if (rows.length) await db.translations.bulkPut(rows);
 }
 
+/** The paragraphs of a page still without English are translated as text (the one-step reading may have left some). */
+async function translateRest(book: Book, page: number): Promise<void> {
+  const idx = await sectionOfPage(book.id, page);
+  if (idx === null) return;
+  const sec = await db.sections.get(sectionId(book.id, idx));
+  if (!sec) return;
+  const have = new Set((await db.translations.where('bookId').equals(book.id).primaryKeys()).map(String));
+  const paras = sec.blocks
+    .map((b, i) => ({ b, i }))
+    .filter(({ b, i }) => b.ocr && b.page === page && b.text.trim().length > 1 && !have.has(`${book.id}:${idx}:${i}`))
+    .map(({ b, i }) => ({ id: `${idx}:${i}`, section: idx, block: i, text: b.text, kind: (b.t === 'h' ? 'h' : b.t === 'quote' ? 'quote' : 'p') as 'h' | 'quote' | 'p', chapter: sec.title }));
+  if (!paras.length) return;
+  const { translateNow } = await import('../ai/translation');
+  await translateNow((await db.books.get(book.id)) ?? book, paras);
+}
+
 /** Reads one page with the reader's AI now (ahead of the rest of the book), keeping hand corrections. */
 export async function readPageNow(book: Book, page: number): Promise<void> {
   const existing = await db.ocrPages.get(`${book.id}:${page}`);
@@ -222,6 +238,8 @@ async function recognizeBook(book: Book): Promise<void> {
           const r = await recognizeWithAi(aiKey, canvas, lang, page, { translate: translateAsRead(book, lang) });
           await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
           await savePageEnglish(book, page, r);
+          // English the one-step reading did not give (or gave as a transliteration) comes from a text model.
+          if (translateAsRead(book, lang)) await translateRest(book, page).catch((e) => console.warn('Translating the page as text failed', e));
           saved = true;
           aiFailures = 0;
         } catch (e) {

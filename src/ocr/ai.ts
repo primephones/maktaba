@@ -1,5 +1,6 @@
 import type { Block, OcrLang, Uncertain } from '../db/types';
 import { translationRules, type SourceLang } from '../../server/src/translate';
+import { looksEnglish } from '../lib/english';
 import { getMyAi } from '../ai/device';
 import { local, setLocal } from '../sync/sync';
 import { DEFAULT_PROVIDERS, modelsFor } from '../../server/src/providers';
@@ -109,6 +110,7 @@ const prompt = (lang: OcrLang | 'auto', translate: boolean) => {
     readOnly(lang).replace(/Answer with JSON only:[\s\S]*$/, '') +
     `\nThen translate every block into English, for the reader. The translation follows these rules:\n\n${translationRules(src)}\n\n` +
     `The "text" stays exactly as printed (not translated); the English goes in "en", one for each block. A heading's English is a heading.\n` +
+    `"en" is a real English translation of the meaning, in English words: never a transliteration of the ${lang === 'auto' ? 'original' : 'original'} in Latin letters, and never the original copied back.\n` +
     `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "... as printed ...", "en": "... English ...", "uncertain": [{"span": "...", "reason": "..."}], "box": [0,0,0,0]}]}`
   );
 };
@@ -141,20 +143,29 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
   const problems: string[] = [];
   let tried = 0;
   let usedUp = 0;
-  for (const [service, read] of [
-    ['gemini', reader.gemini ? () => viaGemini(reader.gemini!, data, lang, page, translate) : null],
-    ['openrouter', reader.openrouter ? () => viaOpenRouter(reader.openrouter!, data, lang, page, translate) : null],
-  ] as const) {
-    if (!read) continue;
+  // Gemini reads and translates in one go; OpenRouter's free image models only read (they
+  // are slow and weak at translating), and the English then comes from a text model. If the
+  // one-step reading fails or takes too long, the page is read on its own and translated after.
+  const attempts: Array<[string, () => Promise<PageText>]> = [];
+  if (reader.gemini) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, translate)]);
+  if (reader.openrouter) attempts.push(['openrouter', () => viaOpenRouter(reader.openrouter!, data, lang, page, false)]);
+  if (reader.gemini && translate) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, false)]);
+  const exhausted = new Set<string>();
+  for (const [service, read] of attempts) {
+    if (exhausted.has(service)) continue;
     tried++;
     try {
       return await read();
     } catch (e) {
-      if (e instanceof AllowanceUsedUp) usedUp++;
+      if (e instanceof AllowanceUsedUp) {
+        usedUp++;
+        exhausted.add(service);
+      }
       problems.push((e as Error).message);
-      void service;
     }
   }
+  tried = new Set(attempts.map(([s]) => s)).size;
+  usedUp = exhausted.size;
   if (tried && usedUp === tried) throw new AllowanceUsedUp(problems.join(' '));
   throw new Error(problems.join(' ') || 'No AI service could read the page.');
 }
@@ -272,7 +283,7 @@ async function viaOpenRouter(key: string, data: string, lang: OcrLang | 'auto', 
       const ask = (json: boolean) =>
         fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
-          signal: AbortSignal.timeout(120_000),
+          signal: AbortSignal.timeout(90_000),
           headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
           body: JSON.stringify({
             model,
@@ -352,7 +363,8 @@ function toBlocks(a: Answer, page: number): PageText {
       ? (b.uncertain as Array<{ span?: unknown; reason?: unknown }>).filter((u) => typeof u?.span === 'string' && typeof u?.reason === 'string').map((u) => ({ span: String(u.span), reason: String(u.reason) }))
       : [];
     // English that is really the original copied back is no translation.
-    en.push(english && english !== text && !/[\u0600-\u06ff]{20,}/.test(english) ? { en: english, uncertain } : null);
+    // A transliteration, or the original copied back, is no translation: that block is translated again as text.
+    en.push(english && english !== text && looksEnglish(english) ? { en: english, uncertain } : null);
   }
   const printed = (a.printed ?? '').trim() || undefined;
   return { blocks, printed, text: blocks.map((b) => b.text).join('\n\n'), ...(en.some(Boolean) ? { en } : {}) };
