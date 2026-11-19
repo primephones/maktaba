@@ -44,8 +44,11 @@ const LANG_NAME: Record<OcrLang, string> = {
 
 /** When each model was last asked: the free tier's per-minute limit is per model. */
 const lastCall = new Map<string, number>();
-/** Models that cannot answer for now (retired, used up today, overloaded), and until when. */
-const resting = new Map<string, number>();
+/** Models that cannot answer for now (retired, used up today, overloaded), until when, and whether for the day. */
+const resting = new Map<string, { until: number; daily: boolean }>();
+const rest = (model: string, until: number, daily = false) => void resting.set(model, { until, daily });
+// A key added or changed: every model is tried afresh.
+if (typeof window !== 'undefined') window.addEventListener('maktaba:connected', () => resting.clear());
 const tomorrow = () => {
   const d = new Date();
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
@@ -58,10 +61,21 @@ export async function aiReaderFor(book: { private?: boolean }): Promise<PageRead
   const a = await getMyAi();
   const now = Date.now();
   const r: PageReader = {};
+  // A pause for the day set in error (every model only overloaded, in an earlier version) is cleared once.
+  if (!(await local('aiOcrPauseFixed1'))) {
+    await setLocal(PAUSE_KEY, 0);
+    await setLocal(OR_PAUSE_KEY, 0);
+    await setLocal('aiOcrPauseFixed1', true);
+  }
   const restsUntil = async (k: string) => ((await local(k)) as number | undefined) ?? 0;
   if (a.gemini && (await restsUntil(PAUSE_KEY)) <= now) r.gemini = a.gemini;
   if (a.openrouter && (await restsUntil(OR_PAUSE_KEY)) <= now) r.openrouter = a.openrouter;
   return r.gemini || r.openrouter ? r : null;
+}
+
+/** A service that answered just now (Test my AI) can read pages again at once. */
+export async function clearPagePause(service: 'gemini' | 'openrouter'): Promise<void> {
+  await setLocal(service === 'gemini' ? PAUSE_KEY : OR_PAUSE_KEY, 0);
 }
 
 /** When reading with AI comes back, if every connected service has used its day. */
@@ -180,8 +194,16 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
 async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean): Promise<PageText> {
   let lastError = '';
   const noThink = new Set<string>();
-  for (const model of await models(key)) {
-    if ((resting.get(model) ?? 0) > Date.now()) continue;
+  const list = await models(key);
+  /** Models out for the day (used up, or closed to this key): when all are, reading waits for tomorrow. */
+  let outForDay = 0;
+  for (const model of list) {
+    const r = resting.get(model);
+    if (r && r.until > Date.now()) {
+      if (r.daily) outForDay++;
+      else lastError ||= 'Gemini is overloaded right now; it is tried again in a few minutes.';
+      continue;
+    }
     for (let attempt = 0; attempt < 4; attempt++) {
       const gap = (lastCall.get(model) ?? 0) + spacing() - Date.now();
       if (gap > 0) await wait(gap);
@@ -213,7 +235,8 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
         const body = await res.text();
         // A per-minute limit passes; a per-day one does not until tomorrow.
         if (/PerDay|per day|daily/i.test(body)) {
-          resting.set(model, tomorrow());
+          rest(model, tomorrow(), true);
+          outForDay++;
           break;
         }
         const retry = Number(body.match(/"retryDelay":\s*"(\d+)s"/)?.[1] ?? 20);
@@ -229,7 +252,10 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
           continue;
         }
         if (res.status === 400 && /API key/i.test(said)) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');
-        if (res.status === 404) resting.set(model, Date.now() + 24 * 3600_000);
+        if (res.status === 404) {
+          rest(model, Date.now() + 24 * 3600_000, true);
+          outForDay++;
+        }
         break;
       }
       if (res.status === 401 || res.status === 403) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');
@@ -238,7 +264,7 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
         lastError = `Gemini’s ${model} is overloaded right now.`;
         if (attempt >= 1) {
           // Overloaded: the model rests a little. Out of time (504) only says this request was heavy.
-          if (res.status !== 504) resting.set(model, Date.now() + 2 * 60_000);
+          if (res.status !== 504) rest(model, Date.now() + 2 * 60_000);
           break;
         }
         await wait(2000);
@@ -259,13 +285,14 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
       return { ...toBlocks(answer, page), service: 'gemini', model };
     }
   }
-  if (!lastError) {
+  if (outForDay >= list.length) {
     // Every model's daily allowance is used: rest until the allowance renews (midnight in
     // California, when Google resets it), and let the phone carry on meanwhile.
     await setLocal(PAUSE_KEY, nextReset());
     throw new AllowanceUsedUp('The free Gemini allowance for today is used up.');
   }
-  throw new Error(lastError);
+  // Busy or failing, not used up: no pause for the day; the page is tried again soon.
+  throw new Error(lastError || 'Gemini is busy right now; the page is tried again in a few minutes.');
 }
 
 // ------------------------------------------------------------------------------- OpenRouter

@@ -3,7 +3,7 @@ import type { Book, OcrLang } from '../db/types';
 import { detectLang } from '../lib/arabic';
 import { workBegan, workEnded, workProgress } from '../native/work';
 import { recognizePage, releaseEngine, type OcrResult } from './engine';
-import { AllowanceUsedUp, aiReaderFor, recognizeWithAi, type PageText } from './ai';
+import { AllowanceUsedUp, aiReaderFor, aiReaderPausedUntil, recognizeWithAi, type PageText } from './ai';
 import { getMyAi } from '../ai/device';
 import { applyOcrToSection, sectionOfPage } from './merge';
 import { imagePages, pageImage } from './pages';
@@ -79,6 +79,16 @@ export const stopOcr = (bookId: string) => stopped.add(bookId);
 export const PHONE_CAN_READ = new Set<OcrLang>(['ara', 'eng', 'msa']);
 const NEED_AI_NOTE = 'Waiting for your AI: the phone cannot read this script properly. Add a free Gemini key or sign in to OpenRouter (Settings › Your AI) and the pages are read and translated.';
 const PAUSED_NOTE = 'Today’s free AI allowance for reading pages is used up. Reading carries on by itself when it renews.';
+const BUSY_NOTE = 'Your AI is busy right now (Google’s free models are often overloaded for a while). Reading carries on by itself in a few minutes.';
+
+/** The AI could not answer for now (overloaded, dropped), as opposed to a used-up day. */
+class AiBusy extends Error {}
+let retryTimer = 0;
+/** Books waiting on a busy AI are tried again a few minutes later, by themselves. */
+const retrySoon = () => {
+  window.clearTimeout(retryTimer);
+  retryTimer = window.setTimeout(() => void runOcrQueue(), 3 * 60_000);
+};
 
 /** Picks a recognition language for a book whose language is not known yet (null: only the AI can tell). */
 async function chooseLang(book: Book, firstPage: number): Promise<OcrLang | null> {
@@ -96,7 +106,11 @@ async function chooseLang(book: Book, firstPage: number): Promise<OcrLang | null
     if (r && r.conf >= 60 && (seen === 'ar' || seen === 'en')) return seen === 'ar' ? 'ara' : 'eng';
     return null;
   }
-  const text = await recognizeWithAi(key, canvas, 'auto', firstPage).then((r) => r.text);
+  const text = await recognizeWithAi(key, canvas, 'auto', firstPage)
+    .then((r) => r.text)
+    .catch((e: Error) => {
+      throw e instanceof AllowanceUsedUp || /key was refused/.test(e.message) ? e : new AiBusy(e.message);
+    });
   const lang = detectLang(text);
   return LANG_FOR[lang] ?? 'ara';
 }
@@ -188,6 +202,11 @@ export async function readPageNow(book: Book, page: number): Promise<void> {
   const key = await aiReaderFor(book);
   if (!key) {
     if (book.private) throw new Error('This book is marked private, so its pages are not sent to an AI that may learn from them.');
+    const back = await aiReaderPausedUntil();
+    if (back) {
+      const at = new Date(back).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      throw new Error(`Today’s free allowance for reading pages is used up. It comes back at ${at}. Adding a second service (OpenRouter) in Settings › Your AI lets reading carry on meanwhile.`);
+    }
     throw new Error('To read and translate scanned pages, add a free Gemini key or sign in to OpenRouter in Settings › Your AI.');
   }
   const lang = book.ocrLang ?? LANG_FOR[book.lang] ?? 'urd';
@@ -227,6 +246,7 @@ async function recognizeBook(book: Book): Promise<void> {
     }
     await db.books.update(id, { ocrLang: lang, ocr: { state: 'running', done, total }, ...(book.lang === 'other' ? { lang: LANG_OF[lang] } : {}) });
     let aiFailures = 0;
+    let busy = false;
     for (const page of todo) {
       if (stopped.has(id)) return;
       if (!(await db.books.get(id))) return;
@@ -244,6 +264,7 @@ async function recognizeBook(book: Book): Promise<void> {
           aiFailures = 0;
         } catch (e) {
           // The day's allowance is used, or the AI keeps failing: the phone carries on.
+          busy = !(e instanceof AllowanceUsedUp) && !/key was refused/.test((e as Error).message);
           if (e instanceof AllowanceUsedUp || ++aiFailures >= 3 || /key was refused/.test((e as Error).message)) aiKey = null;
         }
       }
@@ -252,7 +273,8 @@ async function recognizeBook(book: Book): Promise<void> {
         canvas.width = 0;
         canvas.height = 0;
         const paused = !book.private && (await getMyAi().then((a) => !!(a.gemini || a.openrouter)));
-        await db.books.update(id, { ocr: { state: 'waiting', done, total, error: paused ? PAUSED_NOTE : NEED_AI_NOTE } });
+        await db.books.update(id, { ocr: { state: 'waiting', done, total, error: busy ? BUSY_NOTE : paused ? PAUSED_NOTE : NEED_AI_NOTE } });
+        if (busy) retrySoon();
         return;
       }
       if (!saved) {
@@ -273,6 +295,11 @@ async function recognizeBook(book: Book): Promise<void> {
     }
     await db.books.update(id, { ocr: { state: 'done', done, total }, scanView: book.scanView ?? 'page' });
   } catch (e) {
+    if (e instanceof AiBusy || e instanceof AllowanceUsedUp) {
+      await db.books.update(id, { ocr: { state: 'waiting', done, total, error: e instanceof AiBusy ? BUSY_NOTE : PAUSED_NOTE }, scanView: book.scanView ?? 'page' });
+      if (e instanceof AiBusy) retrySoon();
+      return;
+    }
     console.error('Text recognition failed', e);
     const error =
       e instanceof Stalled

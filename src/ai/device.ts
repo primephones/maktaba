@@ -187,6 +187,7 @@ export async function testServices(): Promise<ServiceTest[]> {
     try {
       const r = await route([p], env, fresh, { feature: 'translate', private: false }, messages, (text) => acceptAnswer(sample, parseAnswer(text)));
       out.push({ id: p.id, name: NAMES[p.id] ?? p.name, ok: true, model: r.model, message: r.value[0]?.en ?? '', ms: Date.now() - started });
+      if (p.id === 'gemini' || p.id === 'openrouter') await import('../ocr/ai').then((m) => m.clearPagePause(p.id as 'gemini' | 'openrouter')).catch(() => undefined);
       const u = await readUsage();
       for (const k of Object.keys(u.blocks)) if (k === p.id || k.startsWith(`${p.id}|`)) delete u.blocks[k];
       await db.settings.put({ key: 'myAiUsage', value: u });

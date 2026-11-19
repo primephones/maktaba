@@ -32,11 +32,14 @@ const cors = { 'access-control-allow-origin': '*', 'content-type': 'application/
 let geminiCalls = 0;
 let translateCalls = 0;
 let allowanceGone = false;
+/** Every model overloaded (503), as Google's free models often are for a while. */
+let overloaded = false;
 await ctx.route('https://generativelanguage.googleapis.com/**', async (route) => {
   const req = route.request();
   if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...cors, 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, GET' } });
   if (!req.url().includes(':generateContent')) return route.fulfill({ status: 200, headers: cors, body: '{"models":[]}' });
   geminiCalls++;
+  if (overloaded) return route.fulfill({ status: 503, headers: cors, body: JSON.stringify({ error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' } }) });
   if (allowanceGone) return route.fulfill({ status: 429, headers: cors, body: JSON.stringify({ error: { code: 429, message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 250, GenerateRequestsPerDayPerProjectPerModel-FreeTier' } }) });
   const body = JSON.parse(req.postData() ?? '{}');
   const hasImage = !!body.contents?.[0]?.parts?.some((p) => p.inline_data?.data?.length > 1000);
@@ -160,6 +163,64 @@ try {
   check(geminiCalls - before <= 3, `and Gemini is not asked again and again (${geminiCalls - before} tries)`);
   const paused = (await read('settings')).find((x) => x.key === 'aiOcrPausedUntil');
   check(paused?.value > Date.now(), 'Gemini rests until its allowance renews');
+
+  console.log('When every model is only overloaded');
+  allowanceGone = false;
+  overloaded = true;
+  await page.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    await new Promise((r) => {
+      const tx = dbh.transaction('settings', 'readwrite');
+      tx.objectStore('settings').delete('aiOcrPausedUntil');
+      tx.oncomplete = r;
+    });
+    dbh.close();
+    window.dispatchEvent(new Event('maktaba:connected'));
+  });
+  const toasts = [];
+  await page.exposeFunction('__toastSeen', (t) => toasts.push(t)).catch(() => undefined);
+  await page.evaluate(() => new MutationObserver(() => document.querySelectorAll('.toast').forEach((t) => window.__toastSeen?.(t.textContent))).observe(document.body, { childList: true, subtree: true }));
+  // A new scanned book, read while every model is overloaded.
+  await page.evaluate(() => { location.hash = '#/'; });
+  await page.evaluate((b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes, new TextEncoder().encode('\n% busy copy\n')], 'zikr-busy.pdf', { type: 'application/pdf' }));
+    const input = document.querySelector('[data-testid=add-input]');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, readFileSync(fx('makhtut-scan.pdf')).toString('base64'));
+  const callsBefore = geminiCalls;
+  await until(async () => geminiCalls - callsBefore >= 6, 60000);
+  await wait(4000);
+  const busyBook = await book('zikr-busy');
+  check(busyBook?.ocr?.state === 'waiting' && /busy/.test(busyBook.ocr.error ?? ''), `the book waits, saying the AI is busy and that reading carries on by itself (${JSON.stringify(busyBook?.ocr)})`);
+  // As on the reader's phone: Read and translate this page, tapped three times while it is busy.
+  await page.evaluate((id) => { location.hash = `#/book/${id}`; }, busyBook.id);
+  await page.locator('.pdfpage').first().waitFor({ timeout: 15000 });
+  for (let i = 0; i < 3; i++) {
+    await page.getByRole('button', { name: /Read and translate this page/ }).first().click({ timeout: 8000 }).catch(() => undefined);
+    await until(async () => !(await page.locator('.scan-busy').count()), 30000);
+    await wait(500);
+  }
+  const paused2 = (await read('settings')).find((x) => x.key === 'aiOcrPausedUntil');
+  check(!(paused2?.value > Date.now() + 10 * 60_000), 'an overloaded Gemini is not taken for a used-up day: reading is not paused until tomorrow');
+  check(!toasts.some((t) => /add a free Gemini key/.test(t ?? '')), `and the reader is not told to add a key they have already added (${toasts.slice(0, 2).join(' | ')})`);
+  overloaded = false;
+  // Back to a used-up day, for what follows (OpenRouter reads while Gemini rests).
+  allowanceGone = true;
+  await page.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    await new Promise((r) => {
+      const tx = dbh.transaction('settings', 'readwrite');
+      tx.objectStore('settings').put({ key: 'aiOcrPausedUntil', value: Date.now() + 12 * 3600_000 });
+      tx.oncomplete = r;
+    });
+    dbh.close();
+  });
+  await page.evaluate(() => { location.hash = '#/'; });
 
   console.log('Finishing a sign-in by hand');
   await page.route('https://openrouter.ai/api/v1/auth/keys', (r) =>
