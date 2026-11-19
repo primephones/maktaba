@@ -42,7 +42,14 @@ const LANG_NAME: Record<OcrLang, string> = {
   eng: 'English',
 };
 
-let lastCall = 0;
+/** When each model was last asked: the free tier's per-minute limit is per model. */
+const lastCall = new Map<string, number>();
+/** Models that cannot answer for now (retired, used up today, overloaded), and until when. */
+const resting = new Map<string, number>();
+const tomorrow = () => {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+};
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Who can read this book's pages now, or null (private book, no AI, or every allowance used for today). */
@@ -174,10 +181,11 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
   let lastError = '';
   const noThink = new Set<string>();
   for (const model of await models(key)) {
+    if ((resting.get(model) ?? 0) > Date.now()) continue;
     for (let attempt = 0; attempt < 4; attempt++) {
-      const gap = lastCall + spacing() - Date.now();
+      const gap = (lastCall.get(model) ?? 0) + spacing() - Date.now();
       if (gap > 0) await wait(gap);
-      lastCall = Date.now();
+      lastCall.set(model, Date.now());
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 90_000);
       let res: Response;
@@ -204,7 +212,10 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
       if (res.status === 429) {
         const body = await res.text();
         // A per-minute limit passes; a per-day one does not until tomorrow.
-        if (/PerDay|per day|daily/i.test(body)) break;
+        if (/PerDay|per day|daily/i.test(body)) {
+          resting.set(model, tomorrow());
+          break;
+        }
         const retry = Number(body.match(/"retryDelay":\s*"(\d+)s"/)?.[1] ?? 20);
         await wait(Math.min(60, retry + 1) * 1000);
         continue;
@@ -218,13 +229,18 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
           continue;
         }
         if (res.status === 400 && /API key/i.test(said)) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');
+        if (res.status === 404) resting.set(model, Date.now() + 24 * 3600_000);
         break;
       }
       if (res.status === 401 || res.status === 403) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');
       if (res.status >= 500) {
         // This model is overloaded: try the next one rather than wait on it.
         lastError = `Gemini’s ${model} is overloaded right now.`;
-        if (attempt >= 1) break;
+        if (attempt >= 1) {
+          // Overloaded: the model rests a little. Out of time (504) only says this request was heavy.
+          if (res.status !== 504) resting.set(model, Date.now() + 2 * 60_000);
+          break;
+        }
         await wait(2000);
         continue;
       }

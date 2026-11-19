@@ -144,6 +144,37 @@ describe('routing', () => {
     forgetModels('gemini');
   });
 
+  it('with the real list of a new Gemini key (November 2026), a light model comes third at the latest', async () => {
+    forgetModels('gemini');
+    const names = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-preview-tts', 'gemma-4-31b-it', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.1-flash-image', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-3.5-transcribe'];
+    const p = DEFAULT_PROVIDERS.find((x) => x.id === 'gemini')!;
+    const r = await modelsFor(p, 'translate', { secrets: { GEMINI_API_KEY: 'g' }, fetch: (async () => new Response(JSON.stringify({ models: names.map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }))) as unknown as typeof fetch });
+    expect(r.slice(0, 3)).toEqual(['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+    expect(r).toContain('gemini-3.6-flash');
+    forgetModels('gemini');
+  });
+
+  it('when a model is slow, the next is asked as well and the first good answer is taken', async () => {
+    forgetModels('gemini');
+    const usage = memoryUsage();
+    const env = {
+      secrets: { GEMINI_API_KEY: 'g' },
+      fetch: (async (url: string, init?: RequestInit) => {
+        const u = String(url);
+        if (u.includes('/models?')) return new Response(JSON.stringify({ models: ['gemini-3.6-flash', 'gemini-3.5-flash-lite'].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }));
+        if (u.includes('gemini-3.6-flash:'))
+          return new Promise((_r, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+        return gem('{"a":2}');
+      }) as unknown as typeof fetch,
+    };
+    const started = Date.now();
+    const r = await route(DEFAULT_PROVIDERS, env, usage, { feature: 'translate', private: false, hedgeMs: 50 }, messages, (t) => JSON.parse(t));
+    expect(r.model).toBe('gemini-3.5-flash-lite');
+    expect(r.value).toEqual({ a: 2 });
+    expect(Date.now() - started).toBeLessThan(2000);
+    forgetModels('gemini');
+  });
+
   it('thinks little: low on Gemini 3, none on 2.5 Flash, the least on 2.5 Pro', () => {
     expect(thinkingFor('gemini-3.6-flash')).toEqual({ thinkingLevel: 'low' });
     expect(thinkingFor('gemini-2.5-flash-lite')).toEqual({ thinkingBudget: 0 });
@@ -181,7 +212,7 @@ describe('routing', () => {
     forgetModels('openrouter');
     const p = DEFAULT_PROVIDERS.find((x) => x.id === 'openrouter')!;
     const r = await modelsFor(p, 'translate', { secrets: { OPENROUTER_API_KEY: 'x' }, fetch: (async () => new Response(JSON.stringify({ data: ids.map((id) => ({ id })) }))) as unknown as typeof fetch });
-    expect(r).toEqual(['nvidia/nemotron-3-ultra-550b-a55b:free', 'google/gemma-4-31b-it:free', 'google/gemma-4-26b-a4b-it:free', 'nvidia/nemotron-3.5-super-vl:free']);
+    expect(r.slice(0, 4)).toEqual(['nvidia/nemotron-3-ultra-550b-a55b:free', 'google/gemma-4-31b-it:free', 'google/gemma-4-26b-a4b-it:free', 'nvidia/nemotron-3.5-super-vl:free']);
     forgetModels('openrouter');
   });
 

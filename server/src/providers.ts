@@ -112,7 +112,7 @@ export interface CallEnv {
   fetch: typeof fetch;
 }
 
-const TIMEOUT_MS = 90_000;
+const TIMEOUT_MS = 100_000;
 
 /**
  * What an error answer means. Services put the important part in the body: Gemini says
@@ -253,11 +253,27 @@ export async function modelsFor(p: Provider, feature: Feature, env: CallEnv): Pr
     }
   }
   if (!out.length) out.push(configured);
-  return out.slice(0, 4);
+  // A light model, fast when the larger ones are slow or used up, comes third at the latest,
+  // so the reader is never left waiting on a row of busy models.
+  const lite = out.findIndex((m) => /(^|[-_/])(lite|instant|mini)([-_.:]|$)|flash-8b|-20b/i.test(m));
+  if (lite > 2) out.splice(2, 0, ...out.splice(lite, 1));
+  return out.slice(0, 8);
 }
 
-export async function callProvider(p: Provider, model: string, messages: ChatMessage[], env: CallEnv, json = true): Promise<CallResult> {
-  const signal = AbortSignal.timeout(TIMEOUT_MS);
+/** Aborted at the time limit, or when `outer` is (another model answered first). */
+function deadline(outer?: AbortSignal): AbortSignal {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(new DOMException('The operation timed out.', 'TimeoutError')), TIMEOUT_MS);
+  outer?.addEventListener('abort', () => {
+    clearTimeout(t);
+    ctrl.abort(new DOMException('Another model answered first.', 'AbortError'));
+  });
+  ctrl.signal.addEventListener('abort', () => clearTimeout(t));
+  return ctrl.signal;
+}
+
+export async function callProvider(p: Provider, model: string, messages: ChatMessage[], env: CallEnv, json = true, outer?: AbortSignal): Promise<CallResult> {
+  const signal = deadline(outer);
   try {
     if (p.kind === 'workers-ai') {
       if (!env.ai) throw new ProviderError('Workers AI is not connected', 'auth');
@@ -322,6 +338,7 @@ export async function callProvider(p: Provider, model: string, messages: ChatMes
   } catch (e) {
     if (e instanceof ProviderError) throw e;
     const name = (e as Error)?.name;
-    throw new ProviderError(name === 'TimeoutError' ? 'The service took too long' : 'The service could not be reached', 'temporary');
+    const why = signal.aborted ? (signal.reason as Error | undefined)?.name : name;
+    throw new ProviderError(why === 'TimeoutError' ? 'The service took too long' : why === 'AbortError' ? 'another model answered first' : 'The service could not be reached', 'temporary');
   }
 }

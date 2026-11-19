@@ -18,6 +18,8 @@ export interface KeyReading {
 
 const SHAPES: Array<{ service: NonNullable<KeyReading['service']>; re: RegExp; prefix: RegExp; name: string }> = [
   { service: 'gemini', re: /^AIza[0-9A-Za-z_-]{35}$/, prefix: /^AIza/, name: 'Google Gemini' },
+  // Google's newer keys (from 2026): "AQ." and a long line of letters, numbers, _ and -.
+  { service: 'gemini', re: /^AQ\.[0-9A-Za-z_-]{40,}$/, prefix: /^AQ\./, name: 'Google Gemini' },
   { service: 'groq', re: /^gsk_[0-9A-Za-z]{40,64}$/, prefix: /^gsk_/, name: 'Groq' },
   { service: 'openrouter', re: /^sk-or-v1-[0-9a-f]{64}$/, prefix: /^sk-or-/, name: 'OpenRouter' },
   { service: 'anthropic', re: /^sk-ant-[0-9A-Za-z_-]{20,}$/, prefix: /^sk-ant-/, name: 'Anthropic' },

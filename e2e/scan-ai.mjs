@@ -114,6 +114,8 @@ try {
 
   console.log('Reading it: the page as printed, its English beneath');
   await page.keyboard.press('Escape');
+  // Closing the sheet steps back in history; the book is opened once that has happened.
+  await wait(600);
   await page.evaluate((id) => { location.hash = `#/book/${id}`; }, scanId);
   await page.locator('.pdfpage').first().waitFor({ timeout: 15000 });
   check(true, 'a scanned book opens on its pages as printed');

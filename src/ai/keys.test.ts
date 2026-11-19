@@ -9,6 +9,9 @@ describe('reading a pasted key', () => {
   it('recognises each service', () => {
     expect(readKey(gemini)).toEqual({ key: gemini, service: 'gemini' });
     expect(readKey(groq).service).toBe('groq');
+    // Google's newer key format.
+    const newer = 'AQ.' + 'Ab8_x-'.repeat(8);
+    expect(readKey(newer)).toEqual({ key: newer, service: 'gemini' });
     expect(readKey(openrouter).service).toBe('openrouter');
     expect(readKey('sk-proj-' + 'z'.repeat(40)).service).toBe('openai');
   });
