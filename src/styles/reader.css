@@ -1324,3 +1324,31 @@ mark.flash {
   color: var(--rubric);
   font-weight: 700;
 }
+
+/* English › Translate ahead: how far it has got. */
+.ahead-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.ahead-progress progress {
+  flex: 1;
+  height: 8px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  appearance: none;
+  background: var(--surface-2);
+  accent-color: var(--rubric);
+}
+.ahead-progress progress::-webkit-progress-bar {
+  background: var(--surface-2);
+}
+.ahead-progress progress::-webkit-progress-value {
+  background: var(--rubric);
+  transition: width 0.3s ease;
+}
+.ahead-progress progress::-moz-progress-bar {
+  background: var(--rubric);
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classify, DEFAULT_PROVIDERS, forgetModels, modelsFor, type CallResult, type Feature } from '../src/providers';
+import { classify, DEFAULT_PROVIDERS, forgetModels, modelsFor, thinkingFor, type CallResult, type Feature } from '../src/providers';
 import { NoProviderError, route, type UsageStore } from '../src/router';
 
 function memoryUsage(): UsageStore & { calls: string[] } {
@@ -119,6 +119,61 @@ describe('routing', () => {
     expect(r.model).toBe('gemini-3.5-flash');
     expect((await usage.blockedUntil()).gemini).toBeUndefined();
     forgetModels('gemini');
+  });
+
+  it('moves to the next Gemini model when one drops the connection, without shutting out the service', async () => {
+    forgetModels('gemini');
+    const usage = memoryUsage();
+    const bodies: string[] = [];
+    const env = {
+      secrets: { GEMINI_API_KEY: 'g' },
+      fetch: (async (url: string, init?: RequestInit) => {
+        const u = String(url);
+        if (u.includes('/models?')) return new Response(JSON.stringify({ models: ['gemini-3.6-flash', 'gemini-3.5-flash-lite'].map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }));
+        bodies.push(String(init?.body));
+        if (u.includes('gemini-3.6-flash:')) throw new TypeError('Failed to fetch');
+        return gem('{"a":1}');
+      }) as unknown as typeof fetch,
+    };
+    const r = await route(DEFAULT_PROVIDERS, env, usage, { feature: 'translate', private: false }, messages, (t) => JSON.parse(t));
+    expect(r.model).toBe('gemini-3.5-flash-lite');
+    expect((await usage.blockedUntil()).gemini).toBeUndefined();
+    expect(Object.keys(await usage.blockedUntil())).toEqual(['gemini|gemini-3.6-flash']);
+    // Thinking kept short, so a long passage is not cut off by the wait.
+    expect(bodies[0]).toContain('"thinkingLevel":"low"');
+    forgetModels('gemini');
+  });
+
+  it('thinks little: low on Gemini 3, none on 2.5 Flash, the least on 2.5 Pro', () => {
+    expect(thinkingFor('gemini-3.6-flash')).toEqual({ thinkingLevel: 'low' });
+    expect(thinkingFor('gemini-2.5-flash-lite')).toEqual({ thinkingBudget: 0 });
+    expect(thinkingFor('gemini-2.5-pro')).toEqual({ thinkingBudget: 128 });
+    expect(thinkingFor('gemini-flash-latest')).toBeUndefined();
+  });
+
+  it('asks Groq again without JSON mode when its JSON check refuses the answer (400)', async () => {
+    forgetModels('groq');
+    const usage = memoryUsage();
+    const sent: string[] = [];
+    const env = {
+      secrets: { GROQ_API_KEY: 'k' },
+      fetch: (async (url: string, init?: RequestInit) => {
+        if (String(url).endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'openai/gpt-oss-120b' }] }));
+        const body = String(init?.body);
+        sent.push(body);
+        if (body.includes('json_object')) return new Response('{"error":{"message":"Failed to generate JSON. Please adjust your prompt.","type":"invalid_request_error","code":"json_validate_failed"}}', { status: 400 });
+        return ok('{"a":1}');
+      }) as unknown as typeof fetch,
+    };
+    const groqOnly = DEFAULT_PROVIDERS.filter((p) => p.id === 'groq');
+    const r = await route(groqOnly, env, usage, { feature: 'translate', private: false }, messages, (t) => JSON.parse(t));
+    expect(r.provider).toBe('groq');
+    expect(sent.length).toBe(2);
+    forgetModels('groq');
+  });
+
+  it('says what the service said when it refuses a request', () => {
+    expect(classify(400, null, '{"error":{"message":"Please reduce the length of the messages."}}').message).toBe('Service error 400 (Please reduce the length of the messages.)');
   });
 
   it('picks strong free OpenRouter models from the real list (November 2026), not tiny or preview ones', async () => {

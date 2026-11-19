@@ -13,6 +13,7 @@ interface MaktabaNative {
   stopWork(): Promise<void>;
   setPendingWork(o: { text: string }): Promise<void>;
   requestNotifications(): Promise<{ granted: boolean }>;
+  showNotice(o: { title: string; text: string }): Promise<void>;
   setVolumeKeys(o: { enabled: boolean }): Promise<void>;
   keepScreenOn(o: { on: boolean }): Promise<void>;
   setOrientation(o: { orientation: 'auto' | 'portrait' | 'landscape' }): Promise<void>;

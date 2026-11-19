@@ -160,8 +160,9 @@ export async function pullAll(): Promise<void> {
  * Translates some paragraphs right away (reading ahead, or a fresh draft from another
  * AI). Returns how many were done; stops at the first failure with its reason.
  */
-export async function translateNow(book: Book, paras: SourceParagraph[], opts: { prefer?: string[]; fresh?: boolean } = {}): Promise<number> {
+export async function translateNow(book: Book, paras: SourceParagraph[], opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void } = {}): Promise<number> {
   let done = 0;
+  opts.onProgress?.(0, paras.length);
   const prefer = opts.prefer ?? (await preferredOrder());
   let batch: SourceParagraph[] = [];
   let size = 0;
@@ -177,6 +178,7 @@ export async function translateNow(book: Book, paras: SourceParagraph[], opts: {
       return { id: `${book.id}:${section}:${block}`, bookId: book.id, section, block, en: r.en, uncertain: r.uncertain, label: 'draft' as const, provider: r.provider, model: r.model, updatedAt: Date.now() };
     }));
     done += res.results.length;
+    opts.onProgress?.(done, paras.length);
     batch = [];
     size = 0;
   };

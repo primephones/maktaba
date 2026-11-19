@@ -79,6 +79,7 @@ export async function route<T>(
   const candidates = eligible(providers, env, opts);
   /** A service answered, but the answer failed the checks (worth trying again soon, in smaller pieces). */
   let checksFailed = false;
+  const timedOut = new Set<string>();
   if (!candidates.length) {
     const why = opts.private ? 'No service that keeps private books private has a key set.' : 'No AI service has a key set on the server.';
     throw new NoProviderError([{ provider: '-', reason: why }], soonest);
@@ -107,6 +108,7 @@ export async function route<T>(
         continue;
       }
       let next = true;
+      if (timedOut.has(p.id)) break;
       try {
         const r = await callProvider(p, model, messages, env);
         await usage.record(p.id, opts.feature, r);
@@ -133,10 +135,13 @@ export async function route<T>(
           await usage.block(p.id, nextReset(now), 'the key was refused; check it in the server settings');
           next = false;
         } else {
+          // Dropped, too slow, or refused this request: that model rests briefly and the
+          // service's next model is tried (a busy model must not shut out the others). After
+          // one that took too long, the next service is tried, so the reader is not kept waiting.
           const until = err.retryAt && err.retryAt - now < 600_000 ? err.retryAt : now + 2 * 60_000;
-          await usage.block(p.id, until, err.message);
+          await usage.block(mk, until, err.message);
           soonest = Math.min(soonest, until);
-          next = false;
+          if (/took too long/.test(err.message)) timedOut.add(p.id);
         }
       }
       if (!next) break;

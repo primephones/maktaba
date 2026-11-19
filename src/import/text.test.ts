@@ -15,6 +15,16 @@ const OPENITI = `######OpenITI#
 # ومختلفة عند من يجهل لسان العرب. ms002 PageV02P005
 `;
 
+describe('OpenITI marks left in the text', () => {
+  it('drops AUTO from headings and a paragraph mark left inside a line', () => {
+    const book = parseOpenITI('######OpenITI#\n#META#Header#End#\n### | AUTO [مقدمة المؤلف]\n# الحمد لله\n~~ألخص (الوافي) بذكر ما عم وقوعه، وكثر PageV01P137 # وجوده لتكثر فائدته\n');
+    const text = book.sections.flatMap((s) => s.blocks.map((b) => b.text)).join('\n');
+    expect(book.sections[0].title).toBe('[مقدمة المؤلف]');
+    expect(text).not.toMatch(/AUTO|#/);
+    expect(text).toContain('وكثر وجوده');
+  });
+});
+
 describe('OpenITI import', () => {
   const book = parseOpenITI(OPENITI);
   const all = book.sections.flatMap((s) => s.blocks);

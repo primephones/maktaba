@@ -91,6 +91,24 @@ try {
   await page.locator('.test-result[data-ok="true"]').first().waitFor({ timeout: 20000 });
   check((await page.locator('.test-result').first().textContent()).includes('works'), 'Test my AI says plainly that the service works');
 
+  console.log('Translating ahead, with how far it has got');
+  await go('#/library');
+  await page.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
+  await page.waitForSelector('.rd-scroll', { timeout: 15000 });
+  await wait(800);
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.locator('.rd-scroll').click({ position: { x: 200, y: 500 } });
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.evaluate(() => {
+    window.__sawBar = false;
+    new MutationObserver(() => {
+      if (document.querySelector('.ahead-progress progress')) window.__sawBar = true;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  await page.getByRole('button', { name: 'Next 10' }).click();
+  await page.getByText(/paragraphs? of “.*” translated/).waitFor({ timeout: 60000 });
+  check(await page.evaluate(() => window.__sawBar), 'translating ahead shows a bar of how far it has got, and says when it is done');
+  await page.getByRole('button', { name: 'Close' }).click().catch(() => undefined);
+
   console.log('Translating a whole book on the phone');
   await go('#/library');
   await page.getByRole('button', { name: 'Details for مختصر في أصول الفقه' }).click();
@@ -105,7 +123,7 @@ try {
     if (await btn.count()) await btn.click().catch(() => undefined);
     await wait(1500);
   }
-  check(state.t?.state === 'done' && state.n === state.t.total, `the whole book is translated by the reader's own AI (${JSON.stringify(state.t)}, ${state.n} stored)`);
+  check(state.t?.state === 'done' && state.n >= state.t.total, `the whole book is translated by the reader's own AI (${JSON.stringify(state.t)}, ${state.n} stored)`);
   check((await calls()) > 0, `the requests went to the reader's own AI service (${await calls()})`);
   await page.getByRole('button', { name: 'Close' }).click().catch(() => undefined);
 

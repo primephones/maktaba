@@ -183,6 +183,27 @@ public class MaktabaPlugin extends Plugin {
         call.resolve();
     }
 
+    /** A one-off notice: a translation finished, say, while the reader was elsewhere. */
+    @PluginMethod
+    public void showNotice(PluginCall call) {
+        Context ctx = getContext();
+        Notifications.ensureChannels(ctx);
+        String text = call.getString("text", "");
+        androidx.core.app.NotificationCompat.Builder b = new androidx.core.app.NotificationCompat.Builder(ctx, Notifications.CHANNEL_NOTICES)
+            .setSmallIcon(R.drawable.ic_stat_maktaba)
+            .setContentTitle(call.getString("title", "Maktaba"))
+            .setContentText(text)
+            .setStyle(new androidx.core.app.NotificationCompat.BigTextStyle().bigText(text))
+            .setContentIntent(Notifications.openApp(ctx))
+            .setAutoCancel(true);
+        try {
+            androidx.core.app.NotificationManagerCompat.from(ctx).notify(Notifications.ID_DONE, b.build());
+        } catch (SecurityException e) {
+            // Notifications not allowed.
+        }
+        call.resolve();
+    }
+
     /** Remembers, for after a restart, that work was left unfinished (empty text clears it). */
     @PluginMethod
     public void setPendingWork(PluginCall call) {

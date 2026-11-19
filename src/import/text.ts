@@ -179,6 +179,8 @@ export function parseOpenITI(source: string): ParsedBook {
       .replace(/\$[A-Z_]+\$?/g, ' ')
       .replace(/%~%/g, ' ۞ ')
       .replace(/~~/g, ' ')
+      .replace(/(^|\s)#+(?=\s|$)/g, ' ') // a paragraph mark left inside a line where a page broke it
+      .replace(/^\s*AUTO\b\s*/, '') // headings made by the corpus's own tools are marked AUTO
       .replace(/\s+/g, ' ')
       .trim();
   };

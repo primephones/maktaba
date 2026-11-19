@@ -13,6 +13,7 @@ final class Notifications {
     static final String CHANNEL_NOTICES = "notices";
     static final int ID_WORK = 1001;
     static final int ID_RESUME = 1002;
+    static final int ID_DONE = 1003;
 
     private Notifications() {}
 
@@ -25,7 +26,7 @@ final class Notifications {
         work.setShowBadge(false);
         nm.createNotificationChannel(work);
         NotificationChannel notices = new NotificationChannel(CHANNEL_NOTICES, "Reminders", NotificationManager.IMPORTANCE_DEFAULT);
-        notices.setDescription("When unfinished work is waiting for you to open Maktaba.");
+        notices.setDescription("When a translation is finished, or unfinished work is waiting for you to open Maktaba.");
         nm.createNotificationChannel(notices);
     }
 

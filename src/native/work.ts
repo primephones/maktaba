@@ -63,3 +63,17 @@ export async function workEnded(key: string): Promise<void> {
     if (last) void native.call('updateWork', { title: last.title, text: last.text, done: last.done, total: last.total });
   }
 }
+
+/**
+ * Says that work has finished, as a notification when the reader is not looking at
+ * Maktaba (in the app, or in the browser where notifications are allowed).
+ */
+export async function workFinished(title: string, text: string): Promise<void> {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
+  try {
+    if (isAndroidApp()) await native.call('showNotice', { title, text });
+    else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body: text, icon: './icons/icon-192.png' });
+  } catch {
+    // Not allowed: the message in the app is enough.
+  }
+}

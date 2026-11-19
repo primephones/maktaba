@@ -136,7 +136,29 @@ export function classify(status: number, retryAfter: string | null, body = ''): 
   if (status === 401 || status === 403 || /API_KEY_INVALID|API key not valid|invalid[ _]api[ _]key|incorrect api key/i.test(body)) return new ProviderError('The key was refused', 'auth');
   if (status === 404 || (status === 400 && /model/i.test(body) && /not (found|exist|available|supported)|decommission|deprecat|no endpoints|invalid model|unknown model/i.test(body)))
     return new ProviderError('this model is no longer offered', 'model');
-  return new ProviderError(`Service error ${status}`, 'temporary', Number.isFinite(wait) ? now + wait * 1000 : undefined);
+  // The service's own words, short, so a screenshot of the message says what went wrong.
+  let said = '';
+  try {
+    const j = JSON.parse(body) as { error?: { message?: string } | string; message?: string };
+    said = typeof j.error === 'string' ? j.error : j.error?.message ?? j.message ?? '';
+  } catch {
+    said = body.length < 200 ? body : '';
+  }
+  said = said.replace(/\s+/g, ' ').trim().slice(0, 120);
+  return new ProviderError(`Service error ${status}${said ? ` (${said})` : ''}`, 'temporary', Number.isFinite(wait) ? now + wait * 1000 : undefined);
+}
+
+/**
+ * How much a Gemini model thinks before answering. The newer "thinking" models think at
+ * length by default, which on a long passage can take longer than a phone waits; a
+ * translation needs little of it.
+ */
+export function thinkingFor(model: string): Record<string, unknown> | undefined {
+  const v = Number(model.match(/^gemini-(\d+(?:\.\d+)?)/)?.[1] ?? NaN);
+  if (!Number.isFinite(v)) return undefined;
+  if (v >= 3) return { thinkingLevel: 'low' };
+  if (v >= 2.5) return /pro/.test(model) ? { thinkingBudget: 128 } : { thinkingBudget: 0 };
+  return undefined;
 }
 
 const errorOf = async (res: Response) => classify(res.status, res.headers.get('retry-after'), await res.text().catch(() => ''));
@@ -248,16 +270,24 @@ export async function callProvider(p: Provider, model: string, messages: ChatMes
     if (p.kind === 'gemini') {
       const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
       const user = messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n\n');
-      const res = await env.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: user }] }],
-          generationConfig: { temperature: 0.2, ...(json ? { responseMimeType: 'application/json' } : {}) },
-        }),
-        signal,
-      });
+      const thinking = thinkingFor(model);
+      const askGemini = (think: boolean) =>
+        env.fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts: [{ text: user }] }],
+            generationConfig: { temperature: 0.2, ...(json ? { responseMimeType: 'application/json' } : {}), ...(think && thinking ? { thinkingConfig: thinking } : {}) },
+          }),
+          signal,
+        });
+      let res = await askGemini(true);
+      if (!res.ok && res.status === 400 && thinking) {
+        // A model that does not take this thinking setting: ask again with its own.
+        const body = await res.clone().text().catch(() => '');
+        if (/think/i.test(body)) res = await askGemini(false);
+      }
       if (!res.ok) throw await errorOf(res);
       const data = (await res.json()) as {
         candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
@@ -281,9 +311,10 @@ export async function callProvider(p: Provider, model: string, messages: ChatMes
       });
     let res = await ask(json);
     if (!res.ok && res.status === 400 && json) {
-      // Some models do not take "JSON mode": the instructions already ask for JSON, so ask again without it.
+      // Some models do not take "JSON mode", and Groq refuses an answer its JSON check fails
+      // (json_validate_failed). The instructions already ask for JSON, so ask again without it.
       const body = await res.clone().text().catch(() => '');
-      if (/response_format|json_object|json mode|structured output/i.test(body)) res = await ask(false);
+      if (!/API key|api_key|model_not_found|does not exist|decommission/i.test(body)) res = await ask(false);
     }
     if (!res.ok) throw await errorOf(res);
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };

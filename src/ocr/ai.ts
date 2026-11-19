@@ -3,7 +3,7 @@ import { translationRules, type SourceLang } from '../../server/src/translate';
 import { looksEnglish } from '../lib/english';
 import { getMyAi } from '../ai/device';
 import { local, setLocal } from '../sync/sync';
-import { DEFAULT_PROVIDERS, modelsFor } from '../../server/src/providers';
+import { DEFAULT_PROVIDERS, modelsFor, thinkingFor } from '../../server/src/providers';
 
 /**
  * Reading scanned pages with the reader's own AI: Gemini first, then OpenRouter's free
@@ -172,6 +172,7 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
 
 async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean): Promise<PageText> {
   let lastError = '';
+  const noThink = new Set<string>();
   for (const model of await models(key)) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const gap = lastCall + spacing() - Date.now();
@@ -187,12 +188,15 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
           headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt(lang, translate) }, { inline_data: { mime_type: 'image/jpeg', data } }] }],
-            generationConfig: { temperature: 0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
+            generationConfig: { temperature: 0, responseMimeType: 'application/json', ...(thinkingFor(model) && !noThink.has(model) ? { thinkingConfig: thinkingFor(model) } : {}) },
           }),
         });
       } catch (e) {
-        lastError = (e as Error).name === 'AbortError' ? 'Gemini took too long to answer.' : 'Gemini could not be reached.';
-        await wait(3000 * (attempt + 1));
+        const slow = (e as Error).name === 'AbortError';
+        lastError = slow ? 'Gemini took too long to answer.' : 'Gemini could not be reached.';
+        // Too slow: the next model, rather than the same wait again. Dropped: once more, then the next.
+        if (slow || attempt >= 1) break;
+        await wait(3000);
         continue;
       } finally {
         clearTimeout(timer);
@@ -208,7 +212,12 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
       if (res.status === 404 || res.status === 400) {
         // This model is not offered to this key (or not any more): try the next one.
         lastError = `Gemini refused the request (${res.status}).`;
-        if (res.status === 400 && /API key/i.test(await res.clone().text())) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');
+        const said = res.status === 400 ? await res.clone().text() : '';
+        if (/think/i.test(said) && !noThink.has(model)) {
+          noThink.add(model);
+          continue;
+        }
+        if (res.status === 400 && /API key/i.test(said)) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');
         break;
       }
       if (res.status === 401 || res.status === 403) throw new Error('Your Gemini key was refused. Check it in Settings, Your AI.');

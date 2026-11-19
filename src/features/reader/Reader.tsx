@@ -7,7 +7,8 @@ import { detectLang, hasArabicScript, stripTashkilWithMap } from '../../lib/arab
 import { clamp, percent } from '../../lib/util';
 import { closePdf } from '../../lib/pdfjs';
 import { formatCitation } from '../../lib/citation';
-import { native } from '../../native/maktaba';
+import { isAndroidApp, native } from '../../native/maktaba';
+import { workBegan, workEnded, workFinished, workProgress } from '../../native/work';
 import { reviewChapter, sourceParagraphs, translatable, translateNow } from '../../ai/translation';
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
@@ -779,8 +780,13 @@ function ReaderInner({ book }: { book: Book }) {
 /** Reader controls for the English: which language to show, and translating ahead. */
 function TranslationControls({ book, view, hasTranslation, from }: { book: Book; view: 'en' | 'orig' | 'both'; hasTranslation: boolean; from: { section: number; block: number } }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const ahead = async (count: number) => {
     setBusy('Translating…');
+    // Asked while the reader's finger is on the button, so a note can say when it is done.
+    if (!isAndroidApp() && typeof Notification !== 'undefined' && Notification.permission === 'default') void Notification.requestPermission().catch(() => undefined);
+    const key = `ahead:${book.id}`;
+    let done = 0;
     try {
       const have = new Set((await db.translations.where('bookId').equals(book.id).toArray()).map((t) => `${t.section}:${t.block}`));
       const paras = (await sourceParagraphs(book, from)).filter((p) => !have.has(p.id)).slice(0, count);
@@ -788,13 +794,28 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
         toast('The next pages are already translated.');
         return;
       }
-      const n = await translateNow(book, paras);
-      toast(`${n} paragraph${n === 1 ? '' : 's'} translated.`);
+      setProgress({ done: 0, total: paras.length });
+      await workBegan(key, 'Translating', book.title, '');
+      const n = await translateNow(book, paras, {
+        onProgress: (d, total) => {
+          done = d;
+          setProgress({ done: d, total });
+          setBusy(`Translated ${d} of ${total} paragraphs…`);
+          workProgress(key, 'Translating', `${book.title}: ${d} of ${total} paragraphs`, d, total);
+        },
+      });
+      const said = `${n} paragraph${n === 1 ? '' : 's'} of “${book.title}” translated.`;
+      toast(said);
+      void workFinished('Translation ready', said);
       if (!book.view) await db.books.update(book.id, { view: 'en' });
     } catch (e) {
-      toast((e as Error).message);
+      const msg = (e as Error).message;
+      toast(done ? `${done} paragraph${done === 1 ? '' : 's'} translated, then it stopped: ${msg}` : msg);
+      void workFinished('Translation stopped', done ? `${done} paragraphs of “${book.title}” were translated before it stopped.` : msg);
     } finally {
+      await workEnded(key);
       setBusy(null);
+      setProgress(null);
     }
   };
   return (
@@ -816,6 +837,12 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
           <button disabled={!!busy} onClick={() => void ahead(40)}>Next 40</button>
           <button disabled={!!busy} onClick={() => navigate('/library')}>Whole book…</button>
         </div>
+        {progress && (
+          <div className="ahead-progress">
+            <progress max={progress.total} value={progress.done} aria-label="Translation progress" />
+            <span className="muted small">{progress.done} of {progress.total}</span>
+          </div>
+        )}
         {busy && <p className="muted small" role="status">{busy}</p>}
       </div>
       {hasTranslation && (
