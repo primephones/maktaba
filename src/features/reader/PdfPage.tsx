@@ -29,6 +29,13 @@ export async function drawPdfPage(bookId: string, pageNumber: number, canvas: HT
 }
 
 /** One page of a PDF shown as an image: drawn when it nears the screen, released after. */
+/** In page-by-page reading, a tap at either side turns the page, even on a picture of one. */
+export const atPageEdge = (e: { clientX: number; currentTarget: Element }) => {
+  if (!e.currentTarget.closest('.pg')) return false;
+  const x = e.clientX / window.innerWidth;
+  return x < 0.27 || x > 0.73;
+};
+
 export function PdfPage({ bookId, page, label, onZoom }: { bookId: string; page: number; label?: string; onZoom: () => void }) {
   const holder = useRef<HTMLButtonElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -71,7 +78,7 @@ export function PdfPage({ bookId, page, label, onZoom }: { bookId: string; page:
   }, [bookId, page]);
 
   return (
-    <button ref={holder} className="pdfpage" style={{ aspectRatio: String(ratio) }} onClick={onZoom} aria-label={`Page ${label ?? page}. Tap to zoom.`} data-skip>
+    <button ref={holder} className="pdfpage" style={{ aspectRatio: String(ratio) }} onClick={(e) => (atPageEdge(e) ? undefined : onZoom())} aria-label={`Page ${label ?? page}. Tap to zoom.`} data-skip>
       <canvas ref={canvas} />
       {failed ? <span className="pn">Page {label ?? page} could not be shown</span> : <span className="pn" aria-hidden="true">{label ?? page}</span>}
     </button>

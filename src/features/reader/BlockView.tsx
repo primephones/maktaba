@@ -2,7 +2,7 @@ import { memo, useEffect, useState } from 'react';
 import { db } from '../../db/db';
 import type { Block, Lang, Mark, Translation } from '../../db/types';
 import { hasArabicScript, isRtl } from '../../lib/arabic';
-import { PdfPage } from './PdfPage';
+import { atPageEdge, PdfPage } from './PdfPage';
 import { renderBlock } from './segments';
 import { findQuranRefs, type QuranMatch } from '../../quran/refs';
 import type { ZoomSource } from './ZoomViewer';
@@ -55,7 +55,7 @@ function useAssetUrl(bookId: string, name: string | undefined): string | null {
 function AssetImage({ bookId, name, alt, onZoom }: { bookId: string; name: string; alt: string; onZoom: (s: ZoomSource) => void }) {
   const url = useAssetUrl(bookId, name);
   if (!url) return <span className="muted small" data-skip>…</span>;
-  return <img src={url} alt={alt} loading="lazy" decoding="async" onClick={() => onZoom({ kind: 'img', url })} style={{ cursor: 'zoom-in' }} />;
+  return <img src={url} alt={alt} loading="lazy" decoding="async" onClick={(e) => (atPageEdge(e) ? undefined : onZoom({ kind: 'img', url }))} style={{ cursor: 'zoom-in' }} />;
 }
 
 /** Works out which script a block is written in, so each gets its own typeface and direction. */

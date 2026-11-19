@@ -107,7 +107,35 @@ try {
   await page.getByRole('button', { name: 'Next 10' }).click();
   await page.getByText(/paragraphs? of “.*” translated/).waitFor({ timeout: 60000 });
   check(await page.evaluate(() => window.__sawBar), 'translating ahead shows a bar of how far it has got, and says when it is done');
-  await page.getByRole('button', { name: 'Close' }).click().catch(() => undefined);
+  // It carries on when the panel is closed and the page scrolled.
+  const count = async () => (await dbRead('translations')).length;
+  const before = await count();
+  await page.evaluate(() => {
+    window.__sawPill = false;
+    new MutationObserver(() => {
+      if (document.querySelector('.ahead-pill')) window.__sawPill = true;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+  await page.getByRole('button', { name: 'Next 40' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.locator('.rd-scroll').evaluate((el) => el.scrollBy(0, 1500));
+  await page.getByText(/40 paragraphs of “.*” translated/).waitFor({ timeout: 90000 });
+  check((await count()) === before + 40 && (await page.evaluate(() => window.__sawPill)), `translating carries on with the panel closed and the page scrolled, a note at the foot saying how far (${(await count()) - before} more)`);
+  console.log('As I read');
+  await page.locator('.rd-scroll').evaluate((el) => el.scrollBy(0, -400));
+  await wait(600);
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.locator('.rd-scroll').click({ position: { x: 200, y: 500 } });
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByRole('button', { name: 'As I read' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.locator('.rd-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  const total = (await dbRead('sections')).reduce((n, sec) => n + sec.blocks.filter((b) => b.text?.trim().length > 1 && b.t !== 'img').length, 0);
+  let n = 0;
+  for (let i = 0; i < 60 && (n = await count()) < total; i++) await wait(1000);
+  check(n >= total - 2, `As I read keeps translating ahead of the place being read (${n} of ${total})`);
+  await page.getByRole('button', { name: 'Stop translating' }).click().catch(() => undefined);
+  await go('#/library');
+  await wait(500);
 
   console.log('Translating a whole book on the phone');
   await go('#/library');

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { db, sectionId } from '../../db/db';
 import type { Book } from '../../db/types';
-import { translateNow, type SourceParagraph } from '../../ai/translation';
+import type { SourceParagraph } from '../../ai/translation';
+import { translateAhead, useAhead } from '../../ai/ahead';
 import { readPageNow } from '../../ocr/queue';
 import { toast } from '../../ui/toast';
 
@@ -11,6 +12,7 @@ import { toast } from '../../ui/toast';
  */
 export function ScanPageAction({ book, section, page, read, some }: { book: Book; section: number; page: number; read: boolean; some: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
+  const run = useAhead(book.id);
 
   const go = async () => {
     try {
@@ -31,10 +33,9 @@ export function ScanPageAction({ book, section, page, read, some }: { book: Book
         toast(read ? 'Nothing left to translate on this page.' : 'The AI found no text on this page.');
         return;
       }
-      await translateNow(book, paras, {
-        onProgress: (d, total) => setBusy(total > 1 ? `Translating… ${d} of ${total} paragraphs` : 'Translating…'),
-        onWait: (left) => setBusy(left ? `Your AI is busy (Google’s free models are overloaded). Trying again in ${left} s…` : 'Translating…'),
-      });
+      // In the background, so it carries on when the page is scrolled away.
+      setBusy(null);
+      await translateAhead(book, { paras });
     } catch (e) {
       toast((e as Error).message);
     } finally {
@@ -44,10 +45,10 @@ export function ScanPageAction({ book, section, page, read, some }: { book: Book
 
   return (
     <div className="scan-action" data-skip>
-      {busy ? (
+      {busy || run ? (
         <span className="scan-busy" role="status">
           <span className="spinner" aria-hidden="true" />
-          {busy}
+          {busy ?? (run!.waiting ? `Your AI is busy. Trying again in ${run!.waiting} s…` : `Translating ${run!.done} of ${run!.total || '…'}…`)}
         </span>
       ) : (
         <button className="btn btn--quiet" onClick={() => void go()}>

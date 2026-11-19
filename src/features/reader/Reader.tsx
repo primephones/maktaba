@@ -8,8 +8,8 @@ import { clamp, percent } from '../../lib/util';
 import { closePdf } from '../../lib/pdfjs';
 import { formatCitation } from '../../lib/citation';
 import { isAndroidApp, native } from '../../native/maktaba';
-import { workBegan, workEnded, workFinished, workProgress } from '../../native/work';
-import { reviewChapter, sourceParagraphs, translatable, translateNow } from '../../ai/translation';
+import { leaveBook, translateAhead, setReadingPlace, stopAhead, useAhead } from '../../ai/ahead';
+import { reviewChapter, translatable } from '../../ai/translation';
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
 import { StudySheet } from './StudySheet';
@@ -81,6 +81,8 @@ function ReaderInner({ book }: { book: Book }) {
   });
   const [target, setTarget] = useState<Target>({ section: opening.section, block: opening.block, nonce: 0 });
   const [pos, setPos] = useState({ section: target.section, block: target.block });
+  useEffect(() => setReadingPlace(book.id, pos), [book.id, pos]);
+  useEffect(() => () => leaveBook(book.id), [book.id]);
   const [chrome, setChrome] = useState(true);
   const [sheet, setSheet] = useState<null | 'contents' | 'settings' | 'search' | 'summary' | 'english' | 'study' | 'more' | 'sharh' | 'quiz'>(null);
   const [flash, setFlash] = useState<{ section: number; block: number; range: [number, number] } | null>(
@@ -584,6 +586,7 @@ function ReaderInner({ book }: { book: Book }) {
 
   return (
     <div className="rd" ref={root} style={style} data-chrome={chrome && !selection}>
+      <AheadPill bookId={book.id} />
       <View
         key={prefs.mode}
         book={book}
@@ -777,47 +780,35 @@ function ReaderInner({ book }: { book: Book }) {
   );
 }
 
+/** While translating ahead runs, a small note at the foot of the page says how far it has got. */
+function AheadPill({ bookId }: { bookId: string }) {
+  const run = useAhead(bookId);
+  if (!run) return null;
+  return (
+    <div className="ahead-pill" role="status">
+      <span className="ai-mark" aria-hidden="true">✦</span>
+      <span>
+        {run.waiting
+          ? `AI busy · trying again in ${run.waiting} s`
+          : run.total
+            ? `Translating ${run.done} of ${run.total}${run.follow ? ' · as you read' : ''}`
+            : run.follow
+              ? 'Translating as you read'
+              : 'Translating…'}
+      </span>
+      <button onClick={stopAhead} aria-label="Stop translating">Stop</button>
+    </div>
+  );
+}
+
 /** Reader controls for the English: which language to show, and translating ahead. */
 function TranslationControls({ book, view, hasTranslation, from }: { book: Book; view: 'en' | 'orig' | 'both'; hasTranslation: boolean; from: { section: number; block: number } }) {
   const [busy, setBusy] = useState<string | null>(null);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const ahead = async (count: number) => {
-    setBusy('Translating…');
+  const run = useAhead(book.id);
+  const ahead = (count: number) => {
     // Asked while the reader's finger is on the button, so a note can say when it is done.
     if (!isAndroidApp() && typeof Notification !== 'undefined' && Notification.permission === 'default') void Notification.requestPermission().catch(() => undefined);
-    const key = `ahead:${book.id}`;
-    let done = 0;
-    try {
-      const have = new Set((await db.translations.where('bookId').equals(book.id).toArray()).map((t) => `${t.section}:${t.block}`));
-      const paras = (await sourceParagraphs(book, from)).filter((p) => !have.has(p.id)).slice(0, count);
-      if (!paras.length) {
-        toast('The next pages are already translated.');
-        return;
-      }
-      setProgress({ done: 0, total: paras.length });
-      await workBegan(key, 'Translating', book.title, '');
-      const n = await translateNow(book, paras, {
-        onProgress: (d, total) => {
-          done = d;
-          setProgress({ done: d, total });
-          setBusy(`Translated ${d} of ${total} paragraphs…`);
-          workProgress(key, 'Translating', `${book.title}: ${d} of ${total} paragraphs`, d, total);
-        },
-        onWait: (left) => setBusy(left ? `Your AI is busy (the free models are overloaded). Trying again in ${left} s…` : `Translated ${done} paragraphs…`),
-      });
-      const said = `${n} paragraph${n === 1 ? '' : 's'} of “${book.title}” translated.`;
-      toast(said);
-      void workFinished('Translation ready', said);
-      if (!book.view) await db.books.update(book.id, { view: 'en' });
-    } catch (e) {
-      const msg = (e as Error).message;
-      toast(done ? `${done} paragraph${done === 1 ? '' : 's'} translated, then it stopped: ${msg}` : msg);
-      void workFinished('Translation stopped', done ? `${done} paragraphs of “${book.title}” were translated before it stopped.` : msg);
-    } finally {
-      await workEnded(key);
-      setBusy(null);
-      setProgress(null);
-    }
+    void translateAhead(book, { from, count });
   };
   return (
     <>
@@ -834,16 +825,20 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
       <div className="ctl">
         <div className="lbl"><span><span className="ai-mark" aria-hidden="true">✦</span> Translate ahead from here</span><span>about 1 request per 8 paragraphs</span></div>
         <div className="seg" role="group" aria-label="Translate ahead">
-          <button disabled={!!busy} onClick={() => void ahead(10)}>Next 10</button>
-          <button disabled={!!busy} onClick={() => void ahead(40)}>Next 40</button>
-          <button disabled={!!busy} onClick={() => navigate('/library')}>Whole book…</button>
+          <button disabled={!!run} onClick={() => ahead(10)}>Next 10</button>
+          <button disabled={!!run} onClick={() => ahead(40)}>Next 40</button>
+          <button aria-pressed={!!run?.follow} onClick={() => (run?.follow ? stopAhead() : void translateAhead(book, { from, follow: true }))}>As I read</button>
+          <button disabled={!!run} onClick={() => navigate('/library')}>Whole book…</button>
         </div>
-        {progress && (
+        <p className="muted small" style={{ margin: '6px 0 0' }}>It carries on when you close this and read on. <b>As I read</b> keeps the pages ahead of you translated while the book is open.</p>
+        {run && (
           <div className="ahead-progress">
-            <progress max={progress.total} value={progress.done} aria-label="Translation progress" />
-            <span className="muted small">{progress.done} of {progress.total}</span>
+            <progress max={Math.max(1, run.total)} value={run.done} aria-label="Translation progress" />
+            <span className="muted small">{run.total ? `${run.done} of ${run.total}` : '…'}</span>
+            <button className="btn btn--quiet" onClick={stopAhead}>Stop</button>
           </div>
         )}
+        {run?.waiting ? <p className="muted small" role="status">Your AI is busy (the free models are overloaded). Trying again in {run.waiting} s…</p> : null}
         {busy && <p className="muted small" role="status">{busy}</p>}
       </div>
       {hasTranslation && (

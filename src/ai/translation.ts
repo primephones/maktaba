@@ -37,10 +37,10 @@ const worthTranslating = (b: Pick<Book, 'lang'>, text: string) =>
   b.lang === 'ms' || b.lang === 'other' ? hasArabicScript(text) || /\p{L}{3}/u.test(text) : hasArabicScript(text);
 
 /** Every paragraph of the book that has text to translate. */
-export async function sourceParagraphs(book: Book, from?: { section: number; block: number }): Promise<SourceParagraph[]> {
+export async function sourceParagraphs(book: Book, from?: { section: number; block: number }, enough = Infinity): Promise<SourceParagraph[]> {
   const out: SourceParagraph[] = [];
   let chapter = '';
-  for (let s = from?.section ?? 0; s < book.sectionCount; s++) {
+  for (let s = from?.section ?? 0; s < book.sectionCount && out.length < enough; s++) {
     const sec = await db.sections.get(sectionId(book.id, s));
     if (!sec) continue;
     sec.blocks.forEach((b, i) => {

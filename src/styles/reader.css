@@ -1352,3 +1352,38 @@ mark.flash {
 .ahead-progress progress::-moz-progress-bar {
   background: var(--rubric);
 }
+
+/* Translating ahead: a small note at the foot of the page, above the tools when they show. */
+.ahead-pill {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  padding: 6px 6px 6px 14px;
+  border-radius: 999px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--ink-2);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: bottom 0.25s ease;
+}
+.rd[data-chrome='true'] .ahead-pill {
+  bottom: calc(150px + env(safe-area-inset-bottom));
+}
+.ahead-pill button {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+}
