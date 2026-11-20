@@ -60,7 +60,7 @@ try {
   await page.getByLabel('Server address').fill('http://127.0.0.1:8788');
   await page.getByLabel(/Setup code/).fill('test-setup');
   await page.getByRole('button', { name: 'Connect to the server' }).click();
-  await page.getByText('requests left today').waitFor({ timeout: 15000 });
+  await page.getByText(/requests? today|Nothing asked of your AI today/).waitFor({ timeout: 15000 });
   key = await page.locator('.sync-key').first().textContent();
   check(/^HSY(-[A-Z2-9]{4}){5}$/.test(key ?? ''), `the phone makes a private sync key (${key})`);
   check(await page.getByText('Groq', { exact: true }).first().isVisible(), 'the AI services are listed with their privacy notes');
@@ -266,7 +266,7 @@ try {
   await phoneB.getByLabel('Server address').fill('http://127.0.0.1:8788');
   await phoneB.getByLabel(/Your sync key/).fill(key.toLowerCase().replace(/-/g, ' '));
   await phoneB.getByRole('button', { name: 'Connect to the server' }).click();
-  await phoneB.getByText('requests left today').waitFor({ timeout: 15000 });
+  await phoneB.getByText(/requests? today|Nothing asked of your AI today/).waitFor({ timeout: 15000 });
   check(true, 'phone B joins with the key typed in any style');
   await phoneB.screenshot({ path: `${shots}29-phone-b-connected.png`, fullPage: true });
   await phoneB.getByRole('button', { name: 'Sync now' }).click();

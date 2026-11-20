@@ -68,6 +68,7 @@ export function Home() {
           action={
             <>
               <button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add your first book</button>
+              <button className="btn" onClick={() => navigate('/catalogue')}><Icon name="download" size={20} />Book catalogue: classical books, free</button>
               <button className="btn" onClick={() => navigate('/setup')}><Icon name="sparkle" size={20} />Set up Maktaba (2 steps)</button>
             </>
           }
@@ -120,7 +121,8 @@ export function Home() {
           {upNext.length > 0 && (
             <>
               <div className="section-title">Up next</div>
-              <div className="shelf">
+              {/* A new row when the books change: snapping would otherwise keep the old first book in view, scrolled along. */}
+              <div className="shelf" key={upNext.map((b) => b.id).join()}>
                 {upNext.map((b) => <BookTile key={b.id} book={b} onDetails={setDetails} />)}
               </div>
             </>
@@ -129,7 +131,7 @@ export function Home() {
           {recent.length > 0 && (
             <>
               <div className="section-title">Recently added</div>
-              <div className="shelf">
+              <div className="shelf" key={recent.map((b) => b.id).join()}>
                 {recent.map((b) => (
                   <div className="tile" key={b.id}>
                     <button className="tile-cover" onClick={() => openBook(b, setDetails)} aria-label={`Open ${b.title}`}><BookCover book={b} /></button>
@@ -153,12 +155,12 @@ export function Home() {
               <span>{refCount ? `${refCount} saved passage${refCount === 1 ? '' : 's'}` : 'Passages you save while reading'}</span>
             </button>
           </div>
+          <CatalogueCard />
         </>
       )}
 
       <SetupCard />
 
-      <CatalogueCard />
       <BackupReminder hasBooks={books.length > 0} />
       <HomeAllowance />
       <InstallHint />
@@ -255,24 +257,24 @@ function InstallHint() {
  * For someone new (often someone who was sent the link): their own cloud and their own AI,
  * each one tap away. Gone once both are connected, or when dismissed.
  */
-/** The book catalogue, offered on Home until the reader has taken a book from it. */
+/** The book catalogue, always one tap from Home (it used to be found only at the foot of the page). */
 function CatalogueCard() {
-  const used = useLiveQuery(async () => (await db.books.filter((b) => !!b.catalogueId).count()) > 0, []);
-  if (used !== false) return null;
+  const taken = useLiveQuery(() => db.books.filter((b) => !!b.catalogueId).count(), []) ?? 0;
   return (
-    <>
-      <div className="section-title">Classical books, free</div>
-      <div className="list">
-        <button className="row" onClick={() => navigate('/catalogue')}>
-          <Icon name="download" />
-          <span className="grow">
-            <span className="title">Book catalogue</span>
-            <div className="sub">The six books of ḥadīth with their commentaries, classical and Deobandi, and the great works of Ḥanafī fiqh.</div>
-          </span>
-          <Icon name="forward" size={18} />
-        </button>
-      </div>
-    </>
+    <div className="list" style={{ marginTop: 10 }}>
+      <button className="row" onClick={() => navigate('/catalogue')}>
+        <Icon name="download" />
+        <span className="grow">
+          <span className="title">Book catalogue</span>
+          <div className="sub">
+            {taken
+              ? `${taken} taken so far. The six books of ḥadīth and their commentaries, Ḥanafī fiqh, works on government and constitutions.`
+              : 'Classical books, free: the six books of ḥadīth with their commentaries, classical and Deobandi, and the great works of Ḥanafī fiqh.'}
+          </div>
+        </span>
+        <Icon name="forward" size={18} />
+      </button>
+    </div>
   );
 }
 

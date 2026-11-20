@@ -275,6 +275,9 @@ async function status(a: MyAi) {
       dailyLimit: p.dailyRequests,
       blockedUntil: blocks[p.id]?.until ?? null,
       blockedReason: blocks[p.id]?.reason ?? null,
+      resting: Object.entries(blocks)
+        .filter(([k]) => k.startsWith(`${p.id}|`))
+        .map(([k, b]) => ({ model: k.slice(p.id.length + 1), reason: b.reason, until: b.until })),
     })),
     jobs,
   };

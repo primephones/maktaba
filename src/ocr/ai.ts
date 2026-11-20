@@ -158,8 +158,9 @@ export interface PageText {
  * Reads one page with the reader's AI: Gemini, then OpenRouter. Throws AllowanceUsedUp only
  * when every service it could use has used its day.
  */
-export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number, opts: { translate?: boolean } = {}): Promise<PageText> {
+export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number, opts: { translate?: boolean; eager?: boolean } = {}): Promise<PageText> {
   const translate = !!opts.translate;
+  const eager = !!opts.eager;
   const data = await jpeg(image);
   const problems: string[] = [];
   let tried = 0;
@@ -168,9 +169,9 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
   // are slow and weak at translating), and the English then comes from a text model. If the
   // one-step reading fails or takes too long, the page is read on its own and translated after.
   const attempts: Array<[string, () => Promise<PageText>]> = [];
-  if (reader.gemini) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, translate)]);
+  if (reader.gemini) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, translate, eager)]);
   if (reader.openrouter) attempts.push(['openrouter', () => viaOpenRouter(reader.openrouter!, data, lang, page, false)]);
-  if (reader.gemini && translate) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, false)]);
+  if (reader.gemini && translate) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, false, eager)]);
   const exhausted = new Set<string>();
   for (const [service, read] of attempts) {
     if (exhausted.has(service)) continue;
@@ -191,7 +192,11 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
   throw new Error(problems.join(' ') || 'No AI service could read the page.');
 }
 
-async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean): Promise<PageText> {
+/**
+ * `eager`: the reader asked for this page just now (a tap), so a model resting after being
+ * overloaded a moment ago is asked anyway; only models out for the day are passed over.
+ */
+async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean, eager = false): Promise<PageText> {
   let lastError = '';
   const noThink = new Set<string>();
   const list = await models(key);
@@ -199,7 +204,7 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
   let outForDay = 0;
   for (const model of list) {
     const r = resting.get(model);
-    if (r && r.until > Date.now()) {
+    if (r && r.until > Date.now() && (r.daily || !eager)) {
       if (r.daily) outForDay++;
       else lastError ||= 'Gemini is overloaded right now; it is tried again in a few minutes.';
       continue;
@@ -209,7 +214,7 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
       if (gap > 0) await wait(gap);
       lastCall.set(model, Date.now());
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 90_000);
+      const timer = setTimeout(() => ctrl.abort(), 60_000);
       let res: Response;
       try {
         res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -282,6 +287,8 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
         lastError = 'Gemini’s answer could not be read.';
         continue;
       }
+      // It answered: whatever rest it was given after being busy is over.
+      if (!resting.get(model)?.daily) resting.delete(model);
       return { ...toBlocks(answer, page), service: 'gemini', model };
     }
   }

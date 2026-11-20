@@ -84,8 +84,8 @@ try {
   await page.getByLabel('Key', { exact: true }).fill('my-own-key');
   await page.getByLabel('Model', { exact: true }).fill('test-model');
   await page.getByRole('button', { name: 'Add this service' }).click();
-  await page.getByText('No daily limit').waitFor({ timeout: 10000 });
-  check(true, 'once connected, today’s allowance is shown');
+  await page.getByText(/Nothing asked of your AI today|requests? today/).first().waitFor({ timeout: 10000 });
+  check(true, 'once connected, today’s use is shown (what was asked, not a made-up allowance)');
   await shot('41-my-ai');
   await page.getByRole('button', { name: 'Test my AI' }).click();
   await page.locator('.test-result[data-ok="true"]').first().waitFor({ timeout: 20000 });
@@ -130,9 +130,22 @@ try {
   await page.getByRole('button', { name: 'Close' }).click();
   await page.locator('.rd-scroll').evaluate((el) => el.scrollTo(0, el.scrollHeight));
   const total = (await dbRead('sections')).reduce((n, sec) => n + sec.blocks.filter((b) => b.text?.trim().length > 1 && b.t !== 'img').length, 0);
+  // The last forty paragraphs (where the reader now is) come into English; the book is not translated wholesale.
   let n = 0;
   for (let i = 0; i < 60 && (n = await count()) < total; i++) await wait(1000);
-  check(n >= total - 2, `As I read keeps translating ahead of the place being read (${n} of ${total})`);
+  await wait(1500);
+  const trs = await dbRead('translations');
+  const secs = (await dbRead('sections')).sort((a, b) => a.idx - b.idx);
+  const at = (await dbRead('books'))[0].progress ?? { section: 0, block: 0 };
+  // The ten paragraphs from the place being read onwards.
+  const next = [];
+  for (const sec of secs.filter((x) => x.idx >= at.section)) {
+    sec.blocks.forEach((b, i) => {
+      if (next.length < 10 && (sec.idx > at.section || i >= at.block) && b.text?.trim().length > 1 && b.t !== 'img') next.push([sec.idx, i]);
+    });
+  }
+  const missing = next.filter(([sx, bx]) => !trs.some((t) => t.section === sx && t.block === bx));
+  check(next.length > 0 && !missing.length, `As I read keeps the paragraphs ahead of the place being read in English (place ${at.section}:${at.block}; ${missing.length} of the next ${next.length} missing; ${n} of ${total} in the book)`);
   await page.getByRole('button', { name: 'Stop translating' }).click().catch(() => undefined);
   await go('#/library');
   await wait(500);

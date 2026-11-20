@@ -6,7 +6,7 @@ import { readKey } from '../../ai/keys';
 import { isAndroidApp, plugin } from '../../native/maktaba';
 import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
-import { AiAllowance, timeUntil, UNLIMITED } from './AiAllowance';
+import { AiAllowance, timeUntil } from './AiAllowance';
 import { ServerPanel, TranslateOrder } from './AiSettings';
 import { HelpFor } from '../setup/help';
 import { navigate } from '../../app/router';
@@ -232,7 +232,7 @@ export function AiSettings() {
                   <div className="sub">
                     {p.blockedUntil && p.blockedUntil > Date.now()
                       ? `Resting: ${p.blockedReason}. Back ${timeUntil(p.blockedUntil)}.`
-                      : p.dailyLimit >= UNLIMITED ? `${p.usedToday} requests today.` : `${p.usedToday} of ${p.dailyLimit} requests used today.`}
+                      : `${p.usedToday} request${p.usedToday === 1 ? "" : "s"} today.`}
                   </div>
                 </span>
               </div>

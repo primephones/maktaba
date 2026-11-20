@@ -22,6 +22,8 @@ export interface ProviderStatus {
   dailyLimit: number;
   blockedUntil: number | null;
   blockedReason: string | null;
+  /** Models of this service resting now (busy for a moment, or used up for the day), and why. */
+  resting?: Array<{ model: string; reason: string; until: number }>;
 }
 
 export interface JobStatus {

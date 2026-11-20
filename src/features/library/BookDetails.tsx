@@ -17,6 +17,7 @@ import { CHECK_BELOW, rereadWithAi, rerunOcr, runOcrQueue } from '../../ocr/queu
 import { aiReaderFor, aiReaderPausedUntil } from '../../ocr/ai';
 import { aiReady } from '../../ai/client';
 import { cancelBookTranslation, estimateRequests, pullBook, sourceParagraphs, startBookTranslation, translatable } from '../../ai/translation';
+import { translateWholeScan } from '../../ai/ahead';
 import { timeUntil } from '../settings/AiAllowance';
 import { OCR_LANGS } from '../../ocr/engine';
 
@@ -141,14 +142,48 @@ function TranslationCard({ book }: { book: Book }) {
   const start = async () => {
     setBusy(true);
     try {
-      await startBookTranslation(book);
-      toast('Translation started. It carries on on the server, even with Maktaba closed.');
+      if (book.ocr) {
+        await translateWholeScan(book);
+        toast('Every page will be read and translated, from where you are reading. It carries on by itself.');
+      } else {
+        await startBookTranslation(book);
+        toast('Translation started. It carries on by itself in the background.');
+      }
     } catch (e) {
       toast((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
+
+  // A scanned book: its pages are put into English as the AI reads them.
+  if (book.ocr) {
+    const o = book.ocr;
+    const under = o.state === 'queued' || o.state === 'running';
+    return (
+      <div className="card" style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <span className="ai-mark" aria-hidden="true">✦</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600 }}>{o.state === 'done' && !t ? 'English translation' : under ? 'Reading and translating the pages' : 'English translation'}</div>
+            <div className="muted small">
+              {have ? `${have} paragraph${have === 1 ? '' : 's'} in English so far. ` : ''}
+              Each page is read by your AI and put into English in the same step: about one request of your free allowance a page.
+              {o.state === 'waiting' && o.error ? ` ${o.error}` : ''}
+            </div>
+          </div>
+        </div>
+        {connected === false ? (
+          <button className="btn" onClick={() => navigate('/settings/ai')}>Connect your AI first</button>
+        ) : (
+          <button className="btn" disabled={busy || under} onClick={() => void start()}>
+            <span className="ai-mark" aria-hidden="true">✦</span>
+            {busy ? 'Starting…' : under ? `Under way: ${o.done} of ${o.total} pages` : o.state === 'done' ? 'Translate whatever is left' : 'Read and translate every page'}
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="card" style={{ display: 'grid', gap: 10 }}>

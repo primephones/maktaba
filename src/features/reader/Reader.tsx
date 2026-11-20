@@ -8,8 +8,8 @@ import { clamp, percent } from '../../lib/util';
 import { closePdf } from '../../lib/pdfjs';
 import { formatCitation } from '../../lib/citation';
 import { isAndroidApp, native } from '../../native/maktaba';
-import { leaveBook, translateAhead, setReadingPlace, stopAhead, useAhead } from '../../ai/ahead';
-import { reviewChapter, translatable } from '../../ai/translation';
+import { isScanned, leaveBook, translateAhead, translateWholeScan, setReadingPlace, stopAhead, useAhead } from '../../ai/ahead';
+import { reviewChapter, startBookTranslation, translatable } from '../../ai/translation';
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
 import { StudySheet } from './StudySheet';
@@ -25,6 +25,8 @@ import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { BlockView, NO_MARKS } from './BlockView';
+
+const NO_PAGES = new Set<number>();
 import { ScanPageAction } from './ScanPage';
 import { SharhSheet } from './SharhSheet';
 import { QuizSheet } from './QuizSheet';
@@ -439,6 +441,9 @@ function ReaderInner({ book }: { book: Book }) {
   // default), or the text read from them.
   const hasScans = !!book.ocr;
   const scanView = book.scanView ?? 'page';
+  // Pages the AI has read (or that were corrected by hand): a page read and found to hold no
+  // text (a title page, a picture) is not offered for reading again.
+  const aiRead = useLiveQuery(async () => (hasScans ? new Set((await db.ocrPages.where('bookId').equals(book.id).toArray()).filter((r) => r.by === 'ai' || r.edited).map((r) => r.page)) : new Set<number>()), [book.id, hasScans, book.ocr?.done]) ?? NO_PAGES;
 
   const renderSection = useCallback(
     (sec: Section) => {
@@ -447,14 +452,15 @@ function ReaderInner({ book }: { book: Book }) {
       const recognised = new Set(sec.blocks.filter((b) => b.ocr).map((b) => b.page));
       // A short note at the head of a chapter says the English is a machine draft, and by whom.
       const firstTr = view !== 'orig' ? sec.blocks.map((_, i) => translations.get(`${sec.idx}:${i}`)).find(Boolean) : undefined;
-      if (firstTr) {
-        out.push(
-          <div className="tr-label" key="trlabel" data-skip>
-            <span className="ai-mark" aria-hidden="true">✦</span> English: {firstTr.label === 'reviewed' ? 'reviewed by a scholar' : firstTr.label === 'checked' ? 'checked' : 'machine draft'} ({firstTr.model.replace(/^.*\//, '')}).
-            {view === 'en' ? ' Tap a paragraph for the original.' : ''}
-          </div>,
-        );
-      }
+      const label = firstTr ? (
+        <div className="tr-label" key="trlabel" data-skip>
+          <span className="ai-mark" aria-hidden="true">✦</span> English: {firstTr.label === 'reviewed' ? 'reviewed by a scholar' : firstTr.label === 'checked' ? 'checked' : 'machine draft'} ({firstTr.model.replace(/^.*\//, '')}).
+          {view === 'en' ? ' Tap a paragraph for the original.' : ''}
+        </div>
+      ) : null;
+      // Under the chapter's heading when it opens with one (so it is in view with the heading), else at its head.
+      const labelAfter = label && sec.blocks[0]?.t === 'h' ? 0 : -1;
+      if (label && labelAfter < 0) out.push(label);
       sec.blocks.forEach((block, i) => {
         const isPageImage = block.t === 'img' && (/^page:\d+$/.test(block.src ?? '') || block.src === 'page-1');
         if (block.ocr && scanView === 'page') return;
@@ -500,6 +506,7 @@ function ReaderInner({ book }: { book: Book }) {
             onQuran={onQuran}
           />,
         );
+        if (i === labelAfter) out.push(label);
         // Under a scanned page: its English, paragraph by paragraph, and a way to read and
         // translate the page now if that is not done yet.
         if (isPageImage && scanView === 'page' && hasScans && (view !== 'orig' || !hasTranslation)) {
@@ -521,18 +528,20 @@ function ReaderInner({ book }: { book: Book }) {
               />,
             );
           }
-          if (!onPage.length || done.length < onPage.length) {
-            out.push(<ScanPageAction key={`act${i}`} book={book} section={sec.idx} page={p} read={onPage.length > 0} some={done.length > 0} />);
+          if ((!onPage.length && !aiRead.has(p)) || done.length < onPage.length) {
+            out.push(<ScanPageAction key={`act${i}`} book={book} page={p} read={onPage.length > 0 || aiRead.has(p)} some={done.length > 0} />);
           }
         }
       });
       return out;
     },
-    [book, hasScans, hasTranslation, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran],
+    [book, hasScans, hasTranslation, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran, aiRead],
   );
 
-  // Recognised text arrives while the book is open: refresh the chapters on screen.
+  // Recognised text arrives while the book is open (by the background reading, or a page read
+  // for the reader just now): refresh the chapters on screen.
   const ocrDone = book.ocr?.done ?? 0;
+  const ocrStamp = useLiveQuery(() => (hasScans ? db.ocrPages.where('bookId').equals(book.id).count() : 0), [book.id, hasScans]);
   const firstOcr = useRef(true);
   useEffect(() => {
     if (firstOcr.current) {
@@ -544,7 +553,7 @@ function ReaderInner({ book }: { book: Book }) {
       rows.forEach((row, k) => row && cache.current.set(loaded[k], row));
       setVersion((v) => v + 1);
     });
-  }, [ocrDone, book.id]);
+  }, [ocrDone, ocrStamp, book.id]);
 
   const onTap = useCallback(() => setChrome((c) => !c), []);
   const onUserMove = useCallback(() => setChrome(false), []);
@@ -591,7 +600,7 @@ function ReaderInner({ book }: { book: Book }) {
 
   return (
     <div className="rd" ref={root} style={style} data-chrome={chrome && !selection}>
-      <AheadPill bookId={book.id} />
+      <AheadPill book={book} />
       <View
         key={prefs.mode}
         book={book}
@@ -787,22 +796,49 @@ function ReaderInner({ book }: { book: Book }) {
 }
 
 /** While translating ahead runs, a small note at the foot of the page says how far it has got. */
-function AheadPill({ bookId }: { bookId: string }) {
-  const run = useAhead(bookId);
-  if (!run) return null;
+function AheadPill({ book }: { book: Book }) {
+  const run = useAhead(book.id);
+  // A scanned book's pages being read in the background (the whole book) show here too.
+  const ocr = book.ocr;
+  const reading = !run && ocr && (ocr.state === 'running' || ocr.state === 'waiting') && ocr.done < ocr.total;
+  // The whole of a book of text being translated in the background.
+  const t = book.translation;
+  const whole = !run && !reading && t && (t.state === 'queued' || t.state === 'running' || t.state === 'waiting') && t.total > 0;
+  if (!run && !reading && !whole) return null;
+  if (whole) {
+    return (
+      <div className="ahead-pill" role="status">
+        <span className="ai-mark" aria-hidden="true">✦</span>
+        <span className="ahead-pill-text">{t!.state === 'waiting' ? `Whole book: waiting for your AI · ${t!.done} of ${t!.total}` : `Translating the whole book · ${t!.done} of ${t!.total}`}</span>
+      </div>
+    );
+  }
+  const text = run
+    ? run.waiting
+      ? `AI busy · trying again in ${run.waiting} s`
+      : run.unit === 'pages'
+        ? run.page
+          ? `Reading and translating page ${run.page}${run.total > 1 ? ` · ${run.done + 1} of ${run.total}` : ''}${run.follow ? ' · as you read' : ''}`
+          : run.follow
+            ? 'Keeping the next pages read and translated'
+            : 'Reading and translating…'
+        : run.total
+          ? `Translating ${run.done} of ${run.total}${run.follow ? ' · as you read' : ''}`
+          : run.follow
+            ? 'Translating as you read'
+            : 'Translating…'
+    : ocr!.state === 'waiting'
+      ? /busy/i.test(ocr!.error ?? '')
+        ? 'Reading pages: AI busy, carries on in a few minutes'
+        : /used up/i.test(ocr!.error ?? '')
+          ? 'Reading pages: today’s allowance is used up'
+          : 'Reading pages: waiting for your AI'
+      : `Reading and translating pages · ${ocr!.done} of ${ocr!.total}`;
   return (
     <div className="ahead-pill" role="status">
       <span className="ai-mark" aria-hidden="true">✦</span>
-      <span>
-        {run.waiting
-          ? `AI busy · trying again in ${run.waiting} s`
-          : run.total
-            ? `Translating ${run.done} of ${run.total}${run.follow ? ' · as you read' : ''}`
-            : run.follow
-              ? 'Translating as you read'
-              : 'Translating…'}
-      </span>
-      <button onClick={stopAhead} aria-label="Stop translating">Stop</button>
+      <span className="ahead-pill-text">{text}</span>
+      {run && <button onClick={stopAhead} aria-label="Stop translating">Stop</button>}
     </div>
   );
 }
@@ -811,11 +847,34 @@ function AheadPill({ bookId }: { bookId: string }) {
 function TranslationControls({ book, view, hasTranslation, from }: { book: Book; view: 'en' | 'orig' | 'both'; hasTranslation: boolean; from: { section: number; block: number } }) {
   const [busy, setBusy] = useState<string | null>(null);
   const run = useAhead(book.id);
-  const ahead = (count: number) => {
-    // Asked while the reader's finger is on the button, so a note can say when it is done.
+  const scanned = isScanned(book);
+  // Asked while the reader's finger is on the button, so a note can say when it is done.
+  const askToNotify = () => {
     if (!isAndroidApp() && typeof Notification !== 'undefined' && Notification.permission === 'default') void Notification.requestPermission().catch(() => undefined);
+  };
+  const ahead = (count: number) => {
+    askToNotify();
     void translateAhead(book, { from, count });
   };
+  const whole = async () => {
+    askToNotify();
+    setBusy('Starting…');
+    try {
+      if (scanned) {
+        await translateWholeScan(book);
+        toast('Every page will be read and translated, starting here. It carries on by itself.');
+      } else {
+        await startBookTranslation(book);
+        toast('The whole book is being translated. It carries on by itself, even with the book closed.');
+      }
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const t = book.translation;
+  const wholeRunning = scanned ? !!book.ocr && book.ocr.state !== 'done' && book.ocr.state !== 'failed' && book.ocr.state !== 'waiting' : !!t && t.state !== 'done' && t.state !== 'cancelled';
   return (
     <>
       {hasTranslation && (
@@ -829,18 +888,24 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
         </div>
       )}
       <div className="ctl">
-        <div className="lbl"><span><span className="ai-mark" aria-hidden="true">✦</span> Translate ahead from here</span><span>about 1 request per 8 paragraphs</span></div>
-        <div className="seg" role="group" aria-label="Translate ahead">
-          <button disabled={!!run} onClick={() => ahead(10)}>Next 10</button>
-          <button disabled={!!run} onClick={() => ahead(40)}>Next 40</button>
-          <button aria-pressed={!!run?.follow} onClick={() => (run?.follow ? stopAhead() : void translateAhead(book, { from, follow: true }))}>As I read</button>
-          <button disabled={!!run} onClick={() => navigate('/library')}>Whole book…</button>
+        <div className="lbl">
+          <span><span className="ai-mark" aria-hidden="true">✦</span> Translate ahead from here</span>
+          <span>{scanned ? 'each page: read by your AI, then put into English' : 'about 1 request per 8 paragraphs'}</span>
         </div>
-        <p className="muted small" style={{ margin: '6px 0 0' }}>It carries on when you close this and read on. <b>As I read</b> keeps the pages ahead of you translated while the book is open.</p>
+        <div className="ahead-grid" role="group" aria-label="Translate ahead">
+          <button className="btn" disabled={!!run} onClick={() => ahead(scanned ? 3 : 10)}>{scanned ? 'Next 3 pages' : 'Next 10'}</button>
+          <button className="btn" disabled={!!run} onClick={() => ahead(scanned ? 10 : 40)}>{scanned ? 'Next 10 pages' : 'Next 40'}</button>
+          <button className="btn" aria-pressed={!!run?.follow} onClick={() => (run?.follow ? stopAhead() : (askToNotify(), void translateAhead(book, { from, follow: true })))}>{run?.follow ? 'As I read: on' : 'As I read'}</button>
+          <button className="btn" disabled={!!run || !!busy || wholeRunning} onClick={() => void whole()}>{wholeRunning ? 'Whole book: under way' : 'Whole book'}</button>
+        </div>
+        <p className="muted small" style={{ margin: '6px 0 0' }}>
+          It carries on when you close this and read on. <b>As I read</b> keeps {scanned ? 'the next pages' : 'the pages ahead of you'} translated while the book is open.
+          {scanned ? ' Each page is about one request of your free allowance.' : ''}
+        </p>
         {run && (
           <div className="ahead-progress">
             <progress max={Math.max(1, run.total)} value={run.done} aria-label="Translation progress" />
-            <span className="muted small">{run.total ? `${run.done} of ${run.total}` : '…'}</span>
+            <span className="muted small">{run.total ? `${run.done} of ${run.total}${run.unit === 'pages' ? ' pages' : ''}` : '…'}</span>
             <button className="btn btn--quiet" onClick={stopAhead}>Stop</button>
           </div>
         )}

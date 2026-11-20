@@ -54,6 +54,9 @@
   scroll-margin-top: calc(var(--rd-top) + 4px);
   text-align: start;
 }
+.rd-scroll section[data-section] {
+  scroll-margin-top: var(--rd-top);
+}
 .bk[lang='ar'], .bk[lang='fa'], .bk[lang='ps'] {
   font-family: var(--rd-ar-font);
   font-size: 1.24em;
@@ -811,15 +814,25 @@ mark.flash {
   cursor: pointer;
 }
 .bk--en .unc {
+  /* A footnote-like mark against the word, with a finger-sized target around it. */
   display: inline-block;
-  margin: 0 1px;
-  padding: 0 4px;
-  min-width: 22px;
+  position: relative;
+  margin: 0 -2px 0 0;
+  padding: 0 6px 0 1px;
+  border: 0;
+  background: none;
   color: var(--rubric);
+  font: inherit;
+  font-size: 0.72em;
   font-weight: 700;
+  line-height: 1;
+  vertical-align: super;
   border-radius: 6px;
-  vertical-align: baseline;
-  line-height: 1.2;
+}
+.bk--en .unc::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
 }
 .bk--en .unc:active {
   background: color-mix(in srgb, var(--rubric) 14%, transparent);
@@ -1410,4 +1423,25 @@ mark.flash {
 }
 .define-meanings li {
   margin: 2px 0;
+}
+
+/* English › Translate ahead: four choices, two by two, none squeezed. */
+.ahead-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.ahead-grid .btn {
+  min-height: 44px;
+  padding: 8px 10px;
+  font-size: 0.92rem;
+}
+.ahead-grid .btn[aria-pressed='true'] {
+  background: var(--rubric);
+  color: var(--on-rubric);
+  border-color: var(--rubric);
+}
+.ahead-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

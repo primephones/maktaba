@@ -63,6 +63,8 @@ jobs:
         run: node e2e/scan-ai.mjs
       - name: Every language (Arabic, Urdu, Persian, Pashto, Malay, English), as text and as scans
         run: node e2e/languages.mjs
+      - name: A scanned Urdu book translated page by page (Next pages, As I read, the button under a page, Whole book, a busy AI)
+        run: node e2e/scan-urdu.mjs
       - name: From a matn to its sharḥ
         run: node e2e/sharh.mjs
       - name: The book catalogue (a real OpenITI download) and the constitutions

@@ -253,7 +253,9 @@ try {
       check(b?.lang === lang, `${lang} scan: recognised as ${lang} (${b?.lang})`);
       const pages = (await read('ocrPages')).filter((p) => p.bookId === b.id);
       check(pages.length === 2 && pages.every((p) => p.by === 'ai'), `${lang} scan: read by the AI, never by the phone`);
-      check(calls.readAndTranslate - before.readAndTranslate === 2 && calls.translate === before.translate, `${lang} scan: each page read and translated in one request (${calls.readAndTranslate - before.readAndTranslate} requests)`);
+      // The first page is read once to learn the language (and kept, its English then given as text); the rest are read and translated in one request each.
+      const reads = calls.read + calls.readAndTranslate - before.read - before.readAndTranslate;
+      check(reads === 2 && calls.readAndTranslate - before.readAndTranslate === 1 && calls.translate - before.translate <= 1, `${lang} scan: each page sent to the AI once, never twice (${reads} page requests, ${calls.translate - before.translate} text)`);
       const trs = (await read('translations')).filter((t) => t.bookId === b.id);
       check(trs.length === 8, `${lang} scan: every paragraph has its English (${trs.length} of 8)`);
     }

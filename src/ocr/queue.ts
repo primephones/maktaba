@@ -72,6 +72,49 @@ const stopped = new Set<string>();
 export const stopOcr = (bookId: string) => stopped.add(bookId);
 
 /**
+ * Pages being read right now, by the background queue or for the reader (Next pages, As I
+ * read, the button under a page): one page is never sent to the AI twice at once.
+ */
+const reading = new Map<string, Promise<void>>();
+function readOnce(bookId: string, page: number, work: () => Promise<void>): Promise<void> {
+  const k = `${bookId}:${page}`;
+  const under = reading.get(k);
+  if (under) return under;
+  const p = work().finally(() => reading.delete(k));
+  reading.set(k, p);
+  return p;
+}
+
+/** Whether a page has been read by the AI (or corrected by hand), so it need not be read again. */
+export async function pageIsRead(bookId: string, page: number): Promise<boolean> {
+  const row = await db.ocrPages.get(`${bookId}:${page}`);
+  return !!row && (row.by === 'ai' || !!row.edited);
+}
+
+/** The page (of a book's page pictures) at a place in the book: the page being read. */
+export async function pageAt(bookId: string, at: { section: number; block: number }): Promise<number | null> {
+  const sec = await db.sections.get(sectionId(bookId, at.section));
+  if (!sec?.blocks.length) return null;
+  const pageOf = (b: import('../db/types').Block) => {
+    if (b.t === 'img') {
+      const m = b.src?.match(/^page:(\d+)$/);
+      return m ? Number(m[1]) : b.src === 'page-1' ? 1 : null;
+    }
+    return b.ocr && b.page ? b.page : null;
+  };
+  const from = Math.max(0, Math.min(at.block, sec.blocks.length - 1));
+  for (let i = from; i >= 0; i--) {
+    const p = pageOf(sec.blocks[i]);
+    if (p) return p;
+  }
+  for (let i = from + 1; i < sec.blocks.length; i++) {
+    const p = pageOf(sec.blocks[i]);
+    if (p) return p;
+  }
+  return null;
+}
+
+/**
  * The phone's own engine reads clean Arabic (Naskh) and Latin print fairly; Urdu, Persian
  * and Pashto are set in Nastaliq and similar hands, which it turns into nonsense. Those
  * are read only by the reader's AI, and wait for it.
@@ -106,17 +149,19 @@ async function chooseLang(book: Book, firstPage: number): Promise<OcrLang | null
     if (r && r.conf >= 60 && (seen === 'ar' || seen === 'en')) return seen === 'ar' ? 'ara' : 'eng';
     return null;
   }
-  const text = await recognizeWithAi(key, canvas, 'auto', firstPage)
-    .then((r) => r.text)
-    .catch((e: Error) => {
-      throw e instanceof AllowanceUsedUp || /key was refused/.test(e.message) ? e : new AiBusy(e.message);
-    });
-  const lang = detectLang(text);
-  return LANG_FOR[lang] ?? 'ara';
+  const r = await recognizeWithAi(key, canvas, 'auto', firstPage).catch((e: Error) => {
+    throw e instanceof AllowanceUsedUp || /key was refused/.test(e.message) ? e : new AiBusy(e.message);
+  });
+  const lang = LANG_FOR[detectLang(r.text)] ?? 'ara';
+  // The page read to tell the language is kept (its English follows as text), not read twice.
+  if (lang !== 'eng') await savePage(book, firstPage, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
+  return lang;
 }
 
 export async function runOcrQueue(): Promise<void> {
   if (running) return;
+  // Tests hold the background reading to look at what the reader's own taps do.
+  if ((globalThis as { __maktabaHoldReading?: boolean }).__maktabaHoldReading) return;
   const { importBusy } = await import('../import');
   if (importBusy()) return;
   running = true;
@@ -127,7 +172,9 @@ export async function runOcrQueue(): Promise<void> {
       if (await aiReaderFor(b)) await db.books.update(b.id, { ocr: { ...b.ocr!, state: 'queued', error: undefined } });
     }
     for (;;) {
-      const book = await db.books.filter((b) => b.import.state === 'ready' && (b.ocr?.state === 'queued' || b.ocr?.state === 'running')).first();
+      // The book opened most recently first: the one being read is never kept waiting behind another.
+      const waiting = await db.books.filter((b) => b.import.state === 'ready' && (b.ocr?.state === 'queued' || b.ocr?.state === 'running')).toArray();
+      const book = waiting.sort((a, b) => (b.openedAt ?? 0) - (a.openedAt ?? 0) || a.addedAt - b.addedAt)[0];
       if (!book) break;
       await recognizeBook(book);
       if (importBusy()) break;
@@ -197,8 +244,12 @@ async function translateRest(book: Book, page: number): Promise<void> {
 
 /** Reads one page with the reader's AI now (ahead of the rest of the book), keeping hand corrections. */
 export async function readPageNow(book: Book, page: number): Promise<void> {
-  const existing = await db.ocrPages.get(`${book.id}:${page}`);
-  if (existing && (existing.by === 'ai' || existing.edited)) return;
+  if (await pageIsRead(book.id, page)) return;
+  return readOnce(book.id, page, () => readPageWithAi(book, page));
+}
+
+async function readPageWithAi(book: Book, page: number): Promise<void> {
+  if (await pageIsRead(book.id, page)) return;
   const key = await aiReaderFor(book);
   if (!key) {
     if (book.private) throw new Error('This book is marked private, so its pages are not sent to an AI that may learn from them.');
@@ -209,13 +260,29 @@ export async function readPageNow(book: Book, page: number): Promise<void> {
     }
     throw new Error('To read and translate scanned pages, add a free Gemini key or sign in to OpenRouter in Settings › Your AI.');
   }
-  const lang = book.ocrLang ?? LANG_FOR[book.lang] ?? 'urd';
-  const canvas = await inTime(pageImage(book, page), PAGE_LIMIT_MS);
+  const fresh = (await db.books.get(book.id)) ?? book;
+  // A book whose language is not known yet: the page is read as it is, and its language kept.
+  const known = fresh.ocrLang ?? LANG_FOR[fresh.lang];
+  const canvas = await inTime(pageImage(fresh, page), PAGE_LIMIT_MS);
   try {
-    const r = await recognizeWithAi(key, canvas, lang, page, { translate: translateAsRead(book, lang) });
-    await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
-    await savePageEnglish(book, page, r);
-    if (book.lang === 'other') await db.books.update(book.id, { lang: LANG_OF[lang] });
+    const r = await recognizeWithAi(key, canvas, known ?? 'auto', page, { translate: !!known && translateAsRead(fresh, known), eager: true });
+    const lang = known ?? LANG_FOR[detectLang(r.text)] ?? 'ara';
+    if (!known) await db.books.update(book.id, { ocrLang: lang, ...(fresh.lang === 'other' ? { lang: LANG_OF[lang] } : {}) });
+    if (lang === 'eng' && !known) return;
+    await savePage(fresh, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
+    await savePageEnglish(fresh, page, r);
+    // The book's count of pages read follows (its details, and the background reading, see it).
+    const now = await db.books.get(book.id);
+    if (now?.ocr) {
+      const done = await db.ocrPages.where('bookId').equals(book.id).count();
+      // The AI answers again: the background reading, if it was waiting on a busy AI, goes on now.
+      const wasBusy = now.ocr.state === 'waiting' && now.ocr.error === BUSY_NOTE;
+      await db.books.update(book.id, { ocr: { ...now.ocr, done, ...(done >= now.ocr.total ? { state: 'done' as const, error: undefined } : wasBusy ? { state: 'queued' as const, error: undefined } : {}) } });
+      if (wasBusy && done < now.ocr.total) {
+        window.clearTimeout(retryTimer);
+        setTimeout(() => void runOcrQueue(), 0);
+      }
+    }
   } finally {
     canvas.width = 0;
     canvas.height = 0;
@@ -227,7 +294,9 @@ async function recognizeBook(book: Book): Promise<void> {
   const key = `ocr:${id}`;
   const pages = await imagePages(id);
   const doneRows = new Set((await db.ocrPages.where('bookId').equals(id).toArray()).map((r) => r.page));
-  const todo = pages.filter((p) => !doneRows.has(p));
+  // From the page being read onwards first, then the pages before it.
+  const here = book.progress ? ((await pageAt(id, book.progress)) ?? 0) : 0;
+  const todo = pages.filter((p) => !doneRows.has(p)).sort((a, b) => (a >= here ? a - here : 1e6 + a) - (b >= here ? b - here : 1e6 + b));
   let done = pages.length - todo.length;
   const total = pages.length;
   await workBegan(key, `Recognising ${book.title}`, `Page ${done + 1} of ${total}`, `Text recognition for “${book.title}” was not finished.`);
@@ -250,14 +319,27 @@ async function recognizeBook(book: Book): Promise<void> {
     for (const page of todo) {
       if (stopped.has(id)) return;
       if (!(await db.books.get(id))) return;
+      // Read meanwhile for the reader (or being read now): not again.
+      const under = reading.get(`${id}:${page}`);
+      if (under) await under.catch(() => undefined);
+      if (await db.ocrPages.get(`${id}:${page}`)) {
+        // Its English, if the reading that found it gave none.
+        if (translateAsRead(book, lang)) await translateRest(book, page).catch((e) => console.warn('Translating the page as text failed', e));
+        done++;
+        await db.books.update(id, { ocr: { state: 'running', done, total } });
+        continue;
+      }
       if (!aiKey && aiFailures < 3 && (done - pages.length + todo.length) % 10 === 0) aiKey = await aiReaderFor(book);
       const canvas = await inTime(pageImage(book, page), PAGE_LIMIT_MS);
       let saved = false;
       if (aiKey) {
         try {
-          const r = await recognizeWithAi(aiKey, canvas, lang, page, { translate: translateAsRead(book, lang) });
-          await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
-          await savePageEnglish(book, page, r);
+          const reader = aiKey;
+          await readOnce(id, page, async () => {
+            const r = await recognizeWithAi(reader, canvas, lang, page, { translate: translateAsRead(book, lang) });
+            await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
+            await savePageEnglish(book, page, r);
+          });
           // English the one-step reading did not give (or gave as a transliteration) comes from a text model.
           if (translateAsRead(book, lang)) await translateRest(book, page).catch((e) => console.warn('Translating the page as text failed', e));
           saved = true;
@@ -289,6 +371,13 @@ async function recognizeBook(book: Book): Promise<void> {
       const { importBusy } = await import('../import');
       // New books come first; recognition resumes after them.
       if (importBusy()) {
+        await db.books.update(id, { ocr: { state: 'queued', done, total } });
+        return;
+      }
+      // Another scanned book opened since: its pages come first, this one resumes after.
+      const mine = (await db.books.get(id))?.openedAt ?? 0;
+      const newer = await db.books.filter((b) => b.id !== id && b.import.state === 'ready' && (b.ocr?.state === 'queued' || b.ocr?.state === 'running') && (b.openedAt ?? 0) > mine).count();
+      if (newer) {
         await db.books.update(id, { ocr: { state: 'queued', done, total } });
         return;
       }

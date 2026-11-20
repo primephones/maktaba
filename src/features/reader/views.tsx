@@ -115,7 +115,9 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
       if (!sec) return;
       const node = find(t.section, clamp(t.block, 0, Math.max(0, sec.blocks.length - 1)));
       if (node) {
-        node.scrollIntoView({ block: 'start' });
+        // At the head of a chapter, its very top shows (the note on its English included).
+        const head = t.block <= 0 ? el.querySelector<HTMLElement>(`section[data-section="${t.section}"]`) : null;
+        (head ?? node).scrollIntoView({ block: 'start' });
         pending.current = null;
         anchor.current = null;
         settled.current = true;

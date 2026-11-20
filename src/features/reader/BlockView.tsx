@@ -104,7 +104,8 @@ function English({ tr, onUncertain, onQuran, heading, section, index, onFlip }: 
     >
       {parts.map((part, i) => (
         <span key={i}>
-          {linkVerses(part, onQuran)}
+          {/* The mark sits against the word it qualifies, like a footnote mark. */}
+          {linkVerses(i < parts.length - 1 ? part.replace(/\s+$/, '') : part, onQuran)}
           {i < parts.length - 1 && (
             <button
               className="unc"

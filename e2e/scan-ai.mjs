@@ -112,8 +112,8 @@ try {
   await page.getByRole('button', { name: 'Details for makhtut-scan' }).click();
   await page.getByText(/Your AI reads each page/).waitFor({ timeout: 8000 });
   check(true, 'the details say the AI reads the pages');
-  await page.getByRole('button', { name: /Translate the whole book/ }).waitFor({ timeout: 8000 });
-  check(true, 'and translation is offered for the scanned book');
+  await page.getByRole('button', { name: /Translate whatever is left|Read and translate every page|Under way/ }).waitFor({ timeout: 8000 });
+  check((await page.getByText(/read by your AI and put into English in the same step/).count()) > 0, 'and its translation is offered page by page (each page read and put into English in one step)');
 
   console.log('Reading it: the page as printed, its English beneath');
   await page.keyboard.press('Escape');
