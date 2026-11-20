@@ -113,3 +113,18 @@ describe('second check', () => {
     expect(sys).toMatch(/fa-in qīla/);
   });
 });
+
+describe('words that are technical terms only sometimes', () => {
+  it('tells the AI the ordinary meaning of a glossary word, to use the term only in its technical sense', () => {
+    const m = buildMessages({ lang: 'ur', paragraphs: [{ id: '1', text: 'یہ بات صحیح ہے کہ عام لوگ اس موضوع پر توجہ نہیں دیتے۔', kind: 'p' }], glossary: SEED_GLOSSARY });
+    expect(m[1].content).toMatch(/موضوع → mawḍūʿ \(fabricated\), only in this technical sense\. As an ordinary word \(.*topic.*\) it is put in plain English/);
+    expect(m[1].content).toMatch(/صحيح → ṣaḥīḥ .*correct, right/);
+    expect(m[0].content).toMatch(/add nothing in brackets/);
+  });
+  it('knows سنة can be a year, and المسجد الحرام the Sacred Mosque', () => {
+    const m = buildMessages({ lang: 'ar', paragraphs: [{ id: '1', text: 'وكان ذلك في سنة تسع وعشرين عند المسجد الحرام.', kind: 'p' }], glossary: SEED_GLOSSARY });
+    expect(m[1].content).toMatch(/سَنَة 'year'/);
+    expect(m[1].content).toMatch(/the Sacred Mosque/);
+  });
+});
+

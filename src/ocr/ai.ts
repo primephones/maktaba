@@ -1,5 +1,6 @@
 import type { Block, OcrLang, Uncertain } from '../db/types';
-import { translationRules, type SourceLang } from '../../server/src/translate';
+import { checkAnswer, translationRules, type SourceLang } from '../../server/src/translate';
+import { SEED_GLOSSARY } from '../../server/src/glossary';
 import { looksEnglish } from '../lib/english';
 import { getMyAi } from '../ai/device';
 import { local, setLocal } from '../sync/sync';
@@ -123,6 +124,9 @@ const readOnly = (lang: OcrLang | 'auto') =>
   `- Do not translate, explain, correct or complete anything. If a word cannot be read, write […].\n` +
   `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "...", "box": [0,0,0,0]}]}`;
 
+/** The glossary for a page translated as it is read (the page's words are not known before it is read). */
+const GLOSSARY_LINES = SEED_GLOSSARY.map((t) => `- ${[t.ar, ...(t.forms ?? []).slice(0, 2)].join(' / ')} → ${t.tr} (${t.en})${t.plain ? `; only in this technical sense. As an ordinary word (${t.plain}) it is put in plain English, with no transliteration in brackets` : ''}`).join('\n');
+
 /** Reading and translating in one go: the page's own text, and the English of each block. */
 const prompt = (lang: OcrLang | 'auto', translate: boolean) => {
   const src = lang === 'auto' ? undefined : SOURCE[lang];
@@ -130,6 +134,7 @@ const prompt = (lang: OcrLang | 'auto', translate: boolean) => {
   return (
     readOnly(lang).replace(/Answer with JSON only:[\s\S]*$/, '') +
     `\nThen translate every block into English, for the reader. The translation follows these rules:\n\n${translationRules(src)}\n\n` +
+    `Glossary (rule 3): when one of these terms appears in its technical sense, in any of its spellings, write it this way (an ordinary word with the same letters is translated plainly):\n${GLOSSARY_LINES}\n\n` +
     `The "text" stays exactly as printed (not translated); the English goes in "en", one for each block. A heading's English is a heading.\n` +
     `"en" is a real English translation of the meaning, in English words: never a transliteration of the ${lang === 'auto' ? 'original' : 'original'} in Latin letters, and never the original copied back.\n` +
     `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "... as printed ...", "en": "... English ...", "uncertain": [{"span": "...", "reason": "..."}], "box": [0,0,0,0]}]}`
@@ -424,6 +429,23 @@ function toBlocks(a: Answer, page: number): PageText {
     // English that is really the original copied back is no translation.
     // A transliteration, or the original copied back, is no translation: that block is translated again as text.
     en.push(english && english !== text && looksEnglish(english) ? { en: english, uncertain } : null);
+  }
+  // The English given with the page goes through the same checks as any translation: one with
+  // parts missing, padded out, or with untranslated text left in is put into English again as
+  // text (with the glossary and the checks); a doubt is kept with it, marked †.
+  const given = en.map((e, i) => (e ? { id: String(i), en: e.en, uncertain: e.uncertain } : null)).filter((x): x is NonNullable<typeof x> => !!x);
+  if (given.length) {
+    const problems = checkAnswer(
+      given.map((g) => ({ id: g.id, text: blocks[Number(g.id)].text, kind: blocks[Number(g.id)].t === 'h' ? ('h' as const) : blocks[Number(g.id)].t === 'quote' ? ('quote' as const) : ('p' as const) })),
+      given,
+    );
+    for (const pr of problems) {
+      const i = Number(pr.id);
+      const e = en[i];
+      if (!e) continue;
+      if (!pr.soft) en[i] = null;
+      else en[i] = { en: /†\s*$/.test(e.en) ? e.en : `${e.en} †`, uncertain: [...e.uncertain, { span: '', reason: pr.problem }] };
+    }
   }
   const printed = (a.printed ?? '').trim() || undefined;
   return { blocks, printed, text: blocks.map((b) => b.text).join('\n\n'), ...(en.some(Boolean) ? { en } : {}) };
