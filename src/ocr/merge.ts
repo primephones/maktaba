@@ -3,7 +3,7 @@ import type { Block } from '../db/types';
 import { sectionChars } from '../import/sections';
 
 /** A key for a block that survives the text of other pages changing around it. */
-function keysFor(blocks: Block[]): string[] {
+export function keysFor(blocks: Block[]): string[] {
   const perPage = new Map<number, number>();
   let plain = 0;
   return blocks.map((b) => {

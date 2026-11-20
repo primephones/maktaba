@@ -42,7 +42,7 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
   const scroller = useRef<HTMLDivElement>(null);
   const [range, setRange] = useState<[number, number]>([target.section, target.section]);
   const pending = useRef<Target | null>(target);
-  const anchor = useRef<{ s: number; b: number; top: number } | null>(null);
+  const anchor = useRef<{ s: number; b: number; top: number; node?: HTMLElement } | null>(null);
   const [tick, setTick] = useState(0);
   const last = book.sectionCount - 1;
   const raf = useRef(0);
@@ -78,8 +78,19 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
 
   const holdPlace = useCallback(() => {
     const b = topBlock();
-    if (b) anchor.current = { s: Number(b.dataset.s), b: Number(b.dataset.b), top: b.getBoundingClientRect().top };
+    if (b) anchor.current = { s: Number(b.dataset.s), b: Number(b.dataset.b), top: b.getBoundingClientRect().top, node: b };
   }, [topBlock]);
+
+  // A chapter's content changes while it is read (English arriving, a scanned page's text read
+  // in the background): what is at the top of the screen stays where it is. Taken here, from
+  // the screen as it still is, before the change is laid out.
+  const seenVersion = useRef(version);
+  const seenRender = useRef(renderSection);
+  if (version !== seenVersion.current || renderSection !== seenRender.current) {
+    seenVersion.current = version;
+    seenRender.current = renderSection;
+    if (!pending.current && settled.current && !anchor.current) holdPlace();
+  }
 
   const allLoaded = useCallback(() => {
     for (let i = range[0]; i <= range[1]; i++) if (!get(i)) return false;
@@ -124,12 +135,16 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
       }
     } else if (anchor.current) {
       const a = anchor.current;
-      const node = find(a.s, a.b);
-      if (node) el.scrollTop += node.getBoundingClientRect().top - a.top;
+      // The same element when it is still on screen (paragraph numbers can shift when a page's
+      // text is put in before it), else the paragraph at the same place.
+      const node = a.node?.isConnected ? a.node : find(a.s, a.b);
+      // Only when something did move: setting the scroll would stop a fling under the finger.
+      const moved = node ? node.getBoundingClientRect().top - a.top : 0;
+      if (Math.abs(moved) >= 1) el.scrollTop += moved;
       anchor.current = null;
     }
     extend();
-  }, [range, tick, version, get, extend]);
+  }, [range, tick, version, get, extend, renderSection]);
 
   // A change of type size or margins reflows everything: keep the same paragraph in view.
   const firstLayout = useRef(true);

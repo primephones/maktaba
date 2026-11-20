@@ -71,6 +71,19 @@ const RULES: Array<{ test: RegExp; help: Help }> = [
     },
   },
   {
+    // Busy, not used up: the free models are overloaded for a while (Google's often are).
+    test: /^(?!.*(?:allowance (?:is )?used up|used up|quota exceeded)).*(?:overloaded|high demand|busy for a moment|took too long|could not be reached;|service error 5\d\d)/i,
+    help: {
+      title: 'The free AI models are busy right now',
+      steps: [
+        'Google’s free models are often overloaded for a few minutes at a time. Nothing is wrong with your key.',
+        'Translating ahead and the pages of scanned books wait and ask again by themselves. For anything else, try again in a minute or two.',
+        'A second free service (OpenRouter or Groq) lets Maktaba carry on with that one meanwhile.',
+      ],
+      action: { label: 'Add another AI service', to: '/setup/ai' },
+    },
+  },
+  {
     test: /allowance (is )?used up|allowance used up|no free ai service|not available right now|429|rate.?limit|quota exceeded for/i,
     help: {
       title: 'Today’s free allowance has run out',

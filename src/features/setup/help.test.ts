@@ -5,6 +5,8 @@ describe('help for each problem', () => {
   const cases: Array<[string, RegExp]> = [
     ['The service refused this key. Check you copied all of it.', /did not accept the key/],
     ['Your AI is not available right now.', /allowance has run out/],
+    ['Your AI is not available right now. Gemini: gemini-3.6-flash: this model is overloaded right now; Groq: openai/gpt-oss-20b: busy for a moment (too many requests).', /busy right now/],
+    ['Your AI is not available right now. Gemini: gemini-3.8-flash: today’s allowance is used up.', /allowance has run out/],
     ['No service that keeps private books private has a key set.', /marked private/],
     ['Connect your AI first, in Settings › AI.', /No AI is connected/],
     ['Request had insufficient authentication scopes.', /Drive access was not given/],

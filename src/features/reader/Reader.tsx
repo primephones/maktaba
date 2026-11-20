@@ -29,6 +29,7 @@ import { BlockView, NO_MARKS } from './BlockView';
 
 const NO_PAGES = new Set<number>();
 import { ScanPageAction } from './ScanPage';
+import { keysFor } from '../../ocr/merge';
 import { SharhSheet } from './SharhSheet';
 import { QuizSheet } from './QuizSheet';
 import { BookSearch } from './BookSearch';
@@ -473,6 +474,10 @@ function ReaderInner({ book }: { book: Book }) {
       // Under the chapter's heading when it opens with one (so it is in view with the heading), else at its head.
       const labelAfter = label && sec.blocks[0]?.t === 'h' ? 0 : -1;
       if (label && labelAfter < 0) out.push(label);
+      // Keys that stay with a block when the text of an earlier page is put in before it, so
+      // what is on screen is not redrawn as something else (and the place held stays put).
+      const keys = hasScans ? keysFor(sec.blocks) : null;
+      const keyOf = (i: number) => (keys ? keys[i] : String(i));
       sec.blocks.forEach((block, i) => {
         const isPageImage = block.t === 'img' && (/^page:\d+$/.test(block.src ?? '') || block.src === 'page-1');
         if (block.ocr && scanView === 'page') return;
@@ -480,7 +485,7 @@ function ReaderInner({ book }: { book: Book }) {
         // Mark where the printed page turns, so a passage can be cited by page.
         const pageNo = block.t === 'img' ? undefined : block.printed ?? (block.page ? String(block.page) : undefined);
         if (pageNo && pageNo !== lastPage) {
-          out.push(<div className="pgmark" key={`p${i}`} role="note" aria-label={`Page ${pageNo}`}>{pageNo}</div>);
+          out.push(<div className="pgmark" key={`p${keyOf(i)}`} role="note" aria-label={`Page ${pageNo}`}>{pageNo}</div>);
         }
         if (pageNo) lastPage = pageNo;
         const blockProps = {
@@ -498,7 +503,7 @@ function ReaderInner({ book }: { book: Book }) {
         };
         out.push(
           <BlockView
-            key={i}
+            key={keyOf(i)}
             bookId={book.id}
             bookLang={book.lang}
             section={sec.idx}
@@ -528,7 +533,7 @@ function ReaderInner({ book }: { book: Book }) {
           for (const j of done) {
             out.push(
               <BlockView
-                key={`en${j}`}
+                key={`en${keyOf(j)}`}
                 {...blockProps}
                 index={j}
                 block={sec.blocks[j]}
@@ -541,7 +546,7 @@ function ReaderInner({ book }: { book: Book }) {
             );
           }
           if ((!onPage.length && !aiRead.has(p)) || done.length < onPage.length) {
-            out.push(<ScanPageAction key={`act${i}`} book={book} page={p} read={onPage.length > 0 || aiRead.has(p)} some={done.length > 0} />);
+            out.push(<ScanPageAction key={`act${keyOf(i)}`} book={book} page={p} read={onPage.length > 0 || aiRead.has(p)} some={done.length > 0} />);
           }
         }
       });

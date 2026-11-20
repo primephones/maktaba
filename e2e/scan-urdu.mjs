@@ -188,6 +188,11 @@ try {
   check((await theBook()).asIRead === false, 'Stop switches it off for the book');
 
   console.log('Whole book');
+  // The reader holds still while page 1 (above) is read and translated in the background.
+  await page.locator('.pdfpage').nth(3).evaluate((el) => el.scrollIntoView({ block: 'start' }));
+  await wait(1000);
+  const before = await page.locator('.pdfpage').nth(3).evaluate((el) => el.getBoundingClientRect().top);
+  const page1Before = (await aiPages(b.id)).includes(1);
   await page.evaluate(() => { globalThis.__maktabaHoldReading = false; });
   await tools();
   await page.getByRole('button', { name: 'English', exact: true }).click();
@@ -200,6 +205,9 @@ try {
   else await page.evaluate(() => window.dispatchEvent(new Event('maktaba:connected')));
   await page.getByRole('button', { name: 'Close' }).last().click();
   check(await until(async () => (await aiPages(b.id)).length === 5, 90000), `Whole book reads every page that is left (${(await aiPages(b.id)).join(',')})`);
+  await wait(2500);
+  const after = await page.locator('.pdfpage').nth(3).evaluate((el) => el.getBoundingClientRect().top);
+  check(page1Before || Math.abs(after - before) <= 3, `the page being read holds still while the text and English of an earlier page arrive (moved ${Math.round(after - before)} px)`);
   const all = (await read('translations')).filter((t) => t.bookId === b.id).length;
   const paras = (await read('sections')).filter((s) => s.bookId === b.id).flatMap((s) => s.blocks).filter((x) => x.ocr && x.text.trim().length > 1).length;
   check(await until(async () => (await read('translations')).filter((t) => t.bookId === b.id).length >= paras, 60000), `and every paragraph of the book is in English (${all} → ${(await read('translations')).filter((t) => t.bookId === b.id).length} of ${paras})`);

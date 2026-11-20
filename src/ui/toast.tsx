@@ -19,8 +19,11 @@ const emit = () => listeners.forEach((l) => l());
 
 /** A short message, with up to two buttons (one action, or a list of them). */
 export function toast(text: string, action?: Action | Action[], ms = 4200) {
-  const id = ++seq;
   const actions = action ? (Array.isArray(action) ? action : [action]) : [];
+  // The same message again (a button tapped twice) is not stacked: the one showing stays a little longer.
+  const same = toasts.find((t) => t.text === text);
+  if (same) toasts = toasts.filter((t) => t !== same);
+  const id = ++seq;
   toasts = [...toasts.slice(-2), { id, text, actions }];
   emit();
   window.setTimeout(() => {
