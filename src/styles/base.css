@@ -1396,3 +1396,10 @@ details.finish-by-hand textarea {
   line-height: 1.5;
   font-size: 0.95rem;
 }
+
+/* A search match found in a book's English translation. */
+.hit-en {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: var(--ink-3);
+}

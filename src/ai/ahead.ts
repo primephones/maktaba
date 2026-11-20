@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { db, sectionId } from '../db/db';
 import type { Book } from '../db/types';
-import { sourceParagraphs, translateNow, type SourceParagraph } from './translation';
+import { SomeLeftInOriginal, sourceParagraphs, translateNow, type SourceParagraph } from './translation';
 import { workBegan, workEnded, workFinished, workProgress } from '../native/work';
 import { toast } from '../ui/toast';
 
@@ -69,14 +69,33 @@ export const leaveBook = (bookId: string) => {
 
 /** Pages asked for while a run is going (Read and translate this page, under another page): taken next. */
 const extra: number[] = [];
+/**
+ * Paragraphs (ids) and pages the AI's answers failed for in this run: not asked again and
+ * again (As I read would otherwise return to them every few seconds). A later run tries again.
+ */
+const skipIds = new Set<string>();
+const skipPages = new Set<number>();
+let leftInOriginal = 0;
 
 /** A book with page pictures read by the AI: translated page by page. */
 export const isScanned = (book: Pick<Book, 'ocr'>) => !!book.ocr;
 
 const untranslatedWithin = async (book: Book, from: { section: number; block: number }, within: number, take: number) => {
   const have = new Set((await db.translations.where('bookId').equals(book.id).primaryKeys()).map(String));
-  return (await sourceParagraphs(book, from, within)).slice(0, within).filter((p) => !have.has(`${book.id}:${p.id}`)).slice(0, take);
+  return (await sourceParagraphs(book, from, within)).slice(0, within).filter((p) => !have.has(`${book.id}:${p.id}`) && !skipIds.has(p.id)).slice(0, take);
 };
+
+/** Translates, keeping count of paragraphs whose English would not come right (left in the original). */
+async function translateKeeping(book: Book, paras: SourceParagraph[], opts: Parameters<typeof translateNow>[2]): Promise<number> {
+  try {
+    return await translateNow(book, paras, opts);
+  } catch (e) {
+    if (!(e instanceof SomeLeftInOriginal)) throw e;
+    for (const id of e.ids) skipIds.add(id);
+    leftInOriginal += e.ids.length;
+    return e.done;
+  }
+}
 
 /** The paragraphs read from one scanned page that have no English yet. */
 async function pageLeftovers(book: Book, page: number): Promise<SourceParagraph[]> {
@@ -123,7 +142,7 @@ async function pagesAhead(book: Book, from: { section: number; block: number }, 
   const { pageAt } = await import('../ocr/queue');
   const { all, notDone } = await pagesNotDone(book.id);
   const here = (await pageAt(book.id, from)) ?? all[0] ?? 1;
-  return all.filter((x) => x >= here).slice(0, within).filter((p) => notDone.has(p)).slice(0, count);
+  return all.filter((x) => x >= here).slice(0, within).filter((p) => notDone.has(p) && !skipPages.has(p)).slice(0, count);
 }
 
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -154,7 +173,8 @@ async function readAndTranslatePage(book: Book, page: number): Promise<number> {
     }
   }
   const rest = await pageLeftovers((await db.books.get(book.id)) ?? book, page);
-  if (rest.length) await translateNow((await db.books.get(book.id)) ?? book, rest, { onWait: (left) => patch({ waiting: left }) });
+  if (rest.length) await translateKeeping((await db.books.get(book.id)) ?? book, rest, { onWait: (left) => patch({ waiting: left }) });
+  if (rest.some((p) => skipIds.has(p.id))) skipPages.add(page);
   return rest.length;
 }
 
@@ -178,6 +198,9 @@ export async function translateAhead(
   }
   stopWanted = false;
   extra.length = 0;
+  skipIds.clear();
+  skipPages.clear();
+  leftInOriginal = 0;
   if (!opts.paras && isScanned(book)) return aheadByPages(book, opts);
   const key = `ahead:${book.id}`;
   let total = 0;
@@ -196,7 +219,7 @@ export async function translateAhead(
         total += paras.length;
         const base = done;
         patch({ total });
-        done += await translateNow(book, paras, {
+        done += await translateKeeping(book, paras, {
           onProgress: (d) => {
             if (stopWanted) throw new Error('stopped');
             patch({ done: base + d, total, waiting: 0 });
@@ -212,8 +235,8 @@ export async function translateAhead(
       if (!current()?.follow || stopWanted) break;
       paras = await untranslatedWithin(book, place(), 40, 10);
     }
-    if (done && !current()?.follow) {
-      const said = `${done} paragraph${done === 1 ? '' : 's'} of “${book.title}” translated.`;
+    if ((done || leftInOriginal) && !current()?.follow) {
+      const said = `${done} paragraph${done === 1 ? '' : 's'} of “${book.title}” translated.${leftInOriginal ? ` ${leftInOriginal} could not be put into English this time and ${leftInOriginal === 1 ? 'stays' : 'stay'} in the original; translating again later usually works.` : ''}`;
       toast(said);
       void workFinished('Translation ready', said);
     }
@@ -262,7 +285,7 @@ async function aheadByPages(book: Book, opts: { from?: { section: number; block:
       if (queue.length) patch({ pages: [...(current()?.pages ?? []), ...queue], total: (current()?.total ?? 0) + queue.length });
     }
     if (done && !current()?.follow) {
-      const said = `${done} page${done === 1 ? '' : 's'} of “${book.title}” read and translated.`;
+      const said = `${done} page${done === 1 ? '' : 's'} of “${book.title}” read and translated.${leftInOriginal ? ` ${leftInOriginal} paragraph${leftInOriginal === 1 ? '' : 's'} could not be put into English this time and ${leftInOriginal === 1 ? 'stays' : 'stay'} in the original; translating again later usually works.` : ''}`;
       toast(said);
       void workFinished('Translation ready', said);
     }

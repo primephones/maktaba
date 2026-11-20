@@ -691,7 +691,7 @@ function ReaderInner({ book }: { book: Book }) {
       )}
       {sheet === 'summary' && <SummarySheet book={book} at={pos} onGo={(s, b) => goTo(s, b)} onClose={() => setSheet(null)} />}
       {sheet === 'search' && (
-        <BookSearch book={book} onGo={(h) => goTo(h.section, h.block, [h.start, h.end])} onClose={() => setSheet(null)} />
+        <BookSearch book={book} onGo={(h) => goTo(h.section, h.block, h.en ? undefined : [h.start, h.end])} onClose={() => setSheet(null)} />
       )}
       {sheet === 'settings' && (
         <Sheet title="Text" onClose={() => setSheet(null)}>

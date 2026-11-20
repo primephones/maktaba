@@ -14,6 +14,8 @@ export interface TextHit {
   after: string;
   sectionTitle: string;
   printed?: string;
+  /** Found in the paragraph's English translation, not in the original. */
+  en?: boolean;
 }
 
 const CONTEXT = 60;
@@ -42,6 +44,9 @@ export async function searchBook(
   const hits: TextHit[] = [];
   if (norm.length < 2) return hits;
   const BATCH = 8;
+  // The English of the book is searched too: a reader of Urdu or Arabic in English finds a
+  // passage by the English words they read it in.
+  const english = new Map((await db.translations.where('bookId').equals(book.id).toArray()).map((t) => [`${t.section}:${t.block}`, t.en.replace(/†/g, '')]));
   for (let from = 0; from < book.sectionCount && hits.length < limit; from += BATCH) {
     if (opts.signal?.aborted) return hits;
     const ids = Array.from({ length: Math.min(BATCH, book.sectionCount - from) }, (_, i) => `${book.id}:${from + i}`);
@@ -55,6 +60,13 @@ export async function searchBook(
         for (const [start, end] of findAll(b.text, norm, 5)) {
           found.push({ bookId: book.id, section: sec.idx, block: bi, start, end, sectionTitle: sec.title, printed: b.printed ?? (b.page ? String(b.page) : undefined), ...snippet(b.text, start, end) });
           if (hits.length + found.length >= limit) break;
+        }
+        const en = english.get(`${sec.idx}:${bi}`);
+        if (en && hits.length + found.length < limit) {
+          for (const [start, end] of findAll(en, norm, 3)) {
+            found.push({ bookId: book.id, section: sec.idx, block: bi, start, end, en: true, sectionTitle: sec.title, printed: b.printed ?? (b.page ? String(b.page) : undefined), ...snippet(en, start, end) });
+            if (hits.length + found.length >= limit) break;
+          }
         }
       }
     }

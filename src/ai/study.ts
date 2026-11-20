@@ -3,6 +3,7 @@ import type { Book } from '../db/types';
 import { findAll, normalizeForSearch } from '../lib/arabic';
 import { formatCitation } from '../lib/citation';
 import { getSetting } from '../app/settings';
+import { patiently } from './translation';
 import { request } from './client';
 
 /**
@@ -33,10 +34,16 @@ export interface Answer {
 
 async function study<T>(body: Record<string, unknown>, isPrivate: boolean, feature: 'ask' | 'explain' | 'irab'): Promise<{ result: T; provider: string; model: string }> {
   const ai = await getSetting('ai');
-  return request<{ result: T; provider: string; model: string }>('/v1/study', {
-    body: { ...body, private: isPrivate, prefer: ai.prefer[feature] ?? ai.prefer.translate },
-    timeoutMs: 120_000,
-  });
+  // Every model busy for a moment: asked once more after a short wait, rather than failing at once.
+  return patiently(
+    () =>
+      request<{ result: T; provider: string; model: string }>('/v1/study', {
+        body: { ...body, private: isPrivate, prefer: ai.prefer[feature] ?? ai.prefer.translate },
+        timeoutMs: 120_000,
+      }),
+    undefined,
+    2,
+  );
 }
 
 const MAX_SOURCES = 14;

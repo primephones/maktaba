@@ -164,7 +164,7 @@ export async function pullAll(): Promise<void> {
  * Asks again when every AI is busy for a moment (free models are often overloaded for a minute
  * or two), saying so while it waits, rather than failing at once. Gives up after about four minutes.
  */
-export async function patiently<T>(ask: () => Promise<T>, onWait?: (seconds: number) => void): Promise<T> {
+export async function patiently<T>(ask: () => Promise<T>, onWait?: (seconds: number) => void, tries = 5): Promise<T> {
   const started = Date.now();
   for (let attempt = 0; ; attempt++) {
     try {
@@ -172,8 +172,10 @@ export async function patiently<T>(ask: () => Promise<T>, onWait?: (seconds: num
     } catch (e) {
       const busy = e instanceof ServerError && e.status === 503;
       const retryAt = busy ? Number(e.data.retryAt) || 0 : 0;
+      // Back within minutes (a busy model) is worth waiting for; a day's allowance used up is not.
+      if (busy && retryAt - Date.now() > 10 * 60_000) throw e;
       const wait = Math.min(60_000, Math.max(15_000, retryAt - Date.now()));
-      if (!busy || attempt >= 4 || Date.now() + wait - started > 240_000) throw e;
+      if (!busy || attempt >= tries - 1 || Date.now() + wait - started > 240_000) throw e;
       for (let left = Math.round(wait / 1000); left > 0; left--) {
         onWait?.(left);
         await new Promise((r) => setTimeout(r, 1000));
@@ -183,19 +185,24 @@ export async function patiently<T>(ask: () => Promise<T>, onWait?: (seconds: num
   }
 }
 
+/** Paragraphs the AI could not put into English this time (its answers failed the checks). */
+export class SomeLeftInOriginal extends Error {
+  constructor(readonly done: number, readonly ids: string[]) {
+    super(`${ids.length} paragraph${ids.length === 1 ? '' : 's'} could not be put into English this time (the AI’s answers failed the checks) and ${ids.length === 1 ? 'stays' : 'stay'} in the original. Translating again later usually works.`);
+  }
+}
+
 export async function translateNow(book: Book, paras: SourceParagraph[], opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void; onWait?: (seconds: number) => void } = {}): Promise<number> {
   let done = 0;
+  const left: string[] = [];
   opts.onProgress?.(0, paras.length);
   const prefer = opts.prefer ?? (await preferredOrder());
-  let batch: SourceParagraph[] = [];
-  let size = 0;
-  const flush = async () => {
-    if (!batch.length) return;
-    const prev = await db.translations.get(`${book.id}:${batch[0].section}:${batch[0].block - 1}`);
+  const ask = async (part: SourceParagraph[]) => {
+    const prev = await db.translations.get(`${book.id}:${part[0].section}:${part[0].block - 1}`);
     const res = await patiently(
       () =>
         request<{ results: Array<{ id: string; en: string; uncertain: Translation['uncertain']; provider: string; model: string }> }>('/v1/translate', {
-          body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, bookTitle: book.title, chapter: batch[0].chapter, previous: prev?.en, paragraphs: batch.map((p) => ({ id: p.id, text: p.text, kind: p.kind })) },
+          body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, bookTitle: book.title, chapter: part[0].chapter, previous: prev?.en, paragraphs: part.map((p) => ({ id: p.id, text: p.text, kind: p.kind })) },
           timeoutMs: 120_000,
         }),
       opts.onWait,
@@ -206,15 +213,37 @@ export async function translateNow(book: Book, paras: SourceParagraph[], opts: {
     }));
     done += res.results.length;
     opts.onProgress?.(done, paras.length);
-    batch = [];
-    size = 0;
   };
+  /** The AI's answers for these paragraphs failed the checks (merged, dropped, left untranslated). */
+  const rejected = (e: unknown) => e instanceof ServerError && e.status === 502;
+  const flush = async (part: SourceParagraph[]) => {
+    if (!part.length) return;
+    try {
+      await ask(part);
+    } catch (e) {
+      if (!rejected(e)) throw e;
+      if (part.length === 1) {
+        // This one paragraph will not come right now: it stays in the original, and the rest go on.
+        left.push(part[0].id);
+        return;
+      }
+      // Asked again a paragraph at a time: one awkward paragraph cannot hold up the others.
+      for (const one of part) await flush([one]);
+    }
+  };
+  let batch: SourceParagraph[] = [];
+  let size = 0;
   for (const p of paras) {
-    if (batch.length && (size + p.text.length > 3200 || batch.length >= 10)) await flush();
+    if (batch.length && (size + p.text.length > 3200 || batch.length >= 10)) {
+      await flush(batch);
+      batch = [];
+      size = 0;
+    }
     batch.push(p);
     size += p.text.length;
   }
-  await flush();
+  await flush(batch);
+  if (left.length) throw new SomeLeftInOriginal(done, left);
   return done;
 }
 

@@ -72,8 +72,9 @@ export function Search() {
     [refs, norm],
   );
   const bookById = useMemo(() => new Map((books ?? []).map((b) => [b.id, b] as const)), [books]);
-  const open = (h: { bookId: string; section: number; block: number; start?: number; end?: number }) => {
-    setJump(h.bookId, { section: h.section, block: h.block, flash: h.start !== undefined && h.end !== undefined ? [h.start, h.end] : undefined });
+  const open = (h: { bookId: string; section: number; block: number; start?: number; end?: number; en?: boolean }) => {
+    // A match in the English opens at its paragraph (the characters lit up are the original's).
+    setJump(h.bookId, { section: h.section, block: h.block, flash: !h.en && h.start !== undefined && h.end !== undefined ? [h.start, h.end] : undefined });
     navigate(`/book/${h.bookId}`);
   };
 
@@ -119,7 +120,7 @@ export function Search() {
 
           {!q && (
             <p className="muted small" style={{ marginTop: 14 }}>
-              Type a word or phrase in Arabic, Urdu, Persian or English. Arabic search ignores vowel marks and spelling variants such as أ / ا, ة / ه and ى / ي.
+              Type a word or phrase in Arabic, Urdu, Persian or English: the English of translated books is searched too. Arabic search ignores vowel marks and spelling variants such as أ / ا, ة / ه and ى / ي.
             </p>
           )}
           {q && norm.length < 2 && <p className="muted small" style={{ marginTop: 14 }}>Type at least two letters.</p>}
@@ -175,7 +176,7 @@ export function Search() {
                   {shown.map((h, i) => (
                     <button className="row" key={i} onClick={() => open(h)}>
                       <span className="grow">
-                        <span className="hit-text" dir="auto">{h.before}<mark>{h.match}</mark>{h.after}</span>
+                        <span className="hit-text" dir="auto">{h.en && <span className="hit-en">English · </span>}{h.before}<mark>{h.match}</mark>{h.after}</span>
                         <div className="sub" dir="auto">{h.sectionTitle}{h.printed ? `, p. ${h.printed}` : ''}</div>
                       </span>
                     </button>

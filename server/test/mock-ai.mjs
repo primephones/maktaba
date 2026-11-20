@@ -101,7 +101,12 @@ createServer(async (req, res) => {
   const part = user.slice(user.indexOf('Translate these paragraphs:'));
   const paras = [...part.matchAll(/\[([^\]]+)\][^\n]*\n([^\n]+)/g)].map((m) => ({ id: m[1], text: m[2] }));
   const toAscii = (s) => s.replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-  const out = paras.map((p) => {
+  // Trouble on request, as real models give it: in a batch, a paragraph marked MERGE is run
+  // into the one after it (that one goes missing); one marked NEVER always comes back as a
+  // transliteration. Asked alone, MERGE comes right.
+  const troubled = paras.filter((p, i) => !(paras.length > 1 && i > 0 && /MERGE/.test(paras[i - 1].text)));
+  const out = troubled.map((p) => {
+    if (/NEVER/.test(p.text)) return { id: p.id, en: 'Namaz deen ka sutoon hai aur jis ne namaz qaim ki us ne deen ko qaim kiya aur jis ne chhor di us ne deen dha diya', uncertain: [] };
     const nums = (toAscii(p.text).match(/[0-9]+/g) ?? []).join(' ');
     const words = Math.max(6, Math.round(p.text.length / 5));
     // Real English, with its small words (a run of one word would not pass as a translation).

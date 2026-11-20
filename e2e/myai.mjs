@@ -278,6 +278,50 @@ try {
   check(await page.locator('.bk[lang="ur"]').first().isVisible().catch(() => false), 'and a tap shows the Urdu original');
   await page.screenshot({ path: `${shots}42-urdu-in-english.png` });
 
+  console.log('Searching the English');
+  await go('#/search');
+  await page.getByLabel('Search or ask your books').fill('faithful rendering');
+  await page.locator('.hit-en').first().waitFor({ timeout: 15000 });
+  check((await page.locator('.hit-en').count()) > 0, 'search finds words in the English of translated books, marked as English');
+  await go('#/library');
+
+  console.log('When the AI runs paragraphs together, or will not translate one');
+  const awkward = [
+    '# باب سوم',
+    'پہلا پیراگراف: علم دین سیکھنا ہر مسلمان پر فرض ہے اور اس کی بڑی فضیلت ہے۔',
+    'دوسرا پیراگراف MERGE: اس کے بعد مصنف نے اجماع کی بحث تفصیل سے بیان کی ہے۔',
+    'تیسرا پیراگراف: قیاس کی تعریف اور اس کی شرائط یہاں ذکر کی گئی ہیں۔',
+    'چوتھا پیراگراف NEVER: یہ پیراگراف کبھی صحیح ترجمہ نہیں ہوتا اور ہمیشہ نقل حرفی آتی ہے۔',
+    'پانچواں پیراگراف: آخر میں مصنف نے مخالفین کے اعتراضات کا جواب دیا ہے۔',
+  ].join('\n\n');
+  await page.evaluate((text) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([text], 'مشکل باب.md', { type: 'text/markdown' }));
+    const input = document.querySelector('[data-testid=add-input]');
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, awkward);
+  await wait(3000);
+  const hardBook = (await dbRead('books')).sort((a, b) => b.addedAt - a.addedAt)[0];
+  const hardId = hardBook.id;
+  await go(`#/book/${hardId}`);
+  await page.waitForSelector('.rd-scroll', { timeout: 15000 });
+  await wait(800);
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.locator('.rd-scroll').click({ position: { x: 200, y: 500 } });
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByRole('button', { name: 'Next 10' }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.getByText(new RegExp(`paragraphs? of “${hardBook.title}” translated`)).waitFor({ timeout: 60000 });
+  const said = await page.locator('.toast').filter({ hasText: hardBook.title }).first().textContent();
+  const hardTrs = (await dbRead('translations')).filter((t) => t.bookId === hardId);
+  const hardSec = (await dbRead('sections')).find((x) => x.bookId === hardId);
+  const never = hardSec.blocks.findIndex((x) => /NEVER/.test(x.text));
+  const others = hardSec.blocks.map((x, i) => i).filter((i) => i !== never && hardSec.blocks[i].text.trim().length > 1);
+  check(others.every((i) => hardTrs.some((t) => t.block === i)), `paragraphs the AI ran together are asked again one at a time and all come into English (${hardTrs.length} of ${others.length + 1})`);
+  check(!hardTrs.some((t) => t.block === never), 'the one it will not translate (only a transliteration) is left in the original');
+  check(/1 could not be put into English this time and stays in the original/.test(said ?? ''), `the run carries on, and says one paragraph stays in the original (${said})`);
+  await go('#/library');
+
   console.log('Keys stay on this phone');
   check(serverCalls.length === 0, `no request went to any Maktaba server (${serverCalls.length})`);
   await go('#/settings/backup');
