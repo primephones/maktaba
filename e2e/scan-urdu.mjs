@@ -130,6 +130,8 @@ try {
   await page.getByRole('button', { name: 'English', exact: true }).click();
   await page.getByRole('button', { name: 'Next 3 pages' }).waitFor({ timeout: 5000 });
   check(true, 'a scanned book is translated by pages (Next 3 pages, Next 10 pages)');
+  await wait(500);
+  await page.screenshot({ path: `${shots}72-urdu-scan-english-panel.png` });
   await page.getByRole('button', { name: 'Next 3 pages' }).click();
   await page.getByRole('button', { name: 'Close' }).last().click();
   await page.locator('.rd-scroll').evaluate((el) => el.scrollBy(0, 400));
@@ -173,8 +175,17 @@ try {
   await page.getByRole('button', { name: 'As I read' }).click();
   await page.getByRole('button', { name: 'Close' }).last().click();
   check(await until(async () => (await aiPages(b.id)).includes(3), 60000), `As I read reads the page being read and the ones after it (${(await aiPages(b.id)).join(',')})`);
+  // Left on: it starts again by itself when the book is opened again.
+  await page.evaluate(() => { location.hash = '#/library'; });
+  await wait(1500);
+  check((await theBook()).asIRead === true, 'As I read stays on for the book');
+  await page.evaluate((id) => { location.hash = `#/book/${id}`; }, b.id);
+  await page.locator('.pdfpage').first().waitFor({ timeout: 20000 });
+  await watchToasts();
+  check(await until(async () => (await page.evaluate(() => window.__pill)).some((t) => /as you read|Keeping the next pages/.test(t)), 15000), `and starts again by itself when the book is opened again (${(await page.evaluate(() => window.__pill)).slice(0, 3).join(' | ')})`);
   await page.getByRole('button', { name: 'Stop translating' }).click().catch(() => undefined);
   await wait(800);
+  check((await theBook()).asIRead === false, 'Stop switches it off for the book');
 
   console.log('Whole book');
   await page.evaluate(() => { globalThis.__maktabaHoldReading = false; });
@@ -193,6 +204,29 @@ try {
   const paras = (await read('sections')).filter((s) => s.bookId === b.id).flatMap((s) => s.blocks).filter((x) => x.ocr && x.text.trim().length > 1).length;
   check(await until(async () => (await read('translations')).filter((t) => t.bookId === b.id).length >= paras, 60000), `and every paragraph of the book is in English (${all} → ${(await read('translations')).filter((t) => t.bookId === b.id).length} of ${paras})`);
   check(calls.page <= 5 + 2, `each page was sent to the AI once (${calls.page} page requests for 5 pages)`);
+
+  console.log('Reading it in English, like a book');
+  await tools();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByRole('button', { name: 'English only' }).click();
+  await page.getByRole('button', { name: 'Close' }).last().click();
+  await wait(1200);
+  check((await page.locator('.pdfpage').count()) === 0 && (await page.locator('.bk--en').count()) >= 10, `English only: the English runs on as a book's text, without the page pictures (${await page.locator('.pdfpage').count()} pictures, ${await page.locator('.bk--en').count()} English paragraphs)`);
+  await page.locator('.rd-scroll').evaluate((el) => el.scrollTo(0, 0));
+  await wait(600);
+  await page.screenshot({ path: `${shots}74-urdu-scan-english-only.png` });
+  await tools();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByRole('button', { name: 'Page + English' }).click();
+  await page.getByRole('button', { name: 'Close' }).last().click();
+  await wait(1200);
+  check((await page.locator('.pdfpage').count()) > 0, 'Page + English brings the printed pages back');
+  await page.evaluate(() => { location.hash = '#/library'; });
+  await page.getByRole('button', { name: 'Details for IslamAurSiyasat' }).click();
+  await page.getByText(/read by your AI and put into English in the same step/).waitFor({ timeout: 8000 });
+  await page.getByText(/read by your AI and put into English in the same step/).scrollIntoViewIfNeeded();
+  await wait(600);
+  await page.screenshot({ path: `${shots}73-urdu-scan-details.png` });
   check(errors.length === 0, `no errors in the page ${JSON.stringify(errors.slice(0, 2))}`);
 } catch (e) {
   check(false, `stopped: ${e.message.split('\n')[0]}`);

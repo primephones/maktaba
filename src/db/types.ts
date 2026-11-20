@@ -122,6 +122,8 @@ export interface Book {
   catalogueId?: string;
   /** Books in the library that are commentaries (shurūḥ) on this one. */
   commentaries?: string[];
+  /** "As I read" left on: the pages ahead are kept in English whenever the book is open. */
+  asIRead?: boolean;
   coverStyle?: CoverStyle;
   hasCover: boolean;
   /** Series name and volume number when the title names one, so volumes group together. */

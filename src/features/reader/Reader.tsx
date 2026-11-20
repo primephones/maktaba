@@ -10,6 +10,7 @@ import { formatCitation } from '../../lib/citation';
 import { isAndroidApp, native } from '../../native/maktaba';
 import { isScanned, leaveBook, translateAhead, translateWholeScan, setReadingPlace, stopAhead, useAhead } from '../../ai/ahead';
 import { reviewChapter, startBookTranslation, translatable } from '../../ai/translation';
+import { aiReady } from '../../ai/client';
 import type { QuranMatch } from '../../quran/refs';
 import { QuranSheet } from '../quran/QuranSheet';
 import { StudySheet } from './StudySheet';
@@ -122,7 +123,18 @@ function ReaderInner({ book }: { book: Book }) {
   // ----- Opening and closing -----
   useEffect(() => {
     void db.books.update(book.id, { openedAt: Date.now(), ...(book.status === 'want' ? { status: 'reading' as const } : {}) });
-    return () => closePdf(book.id);
+    // As I read, left on for this book: the pages ahead are kept in English again (once the place is known).
+    const resume = book.asIRead
+      ? window.setTimeout(() => {
+          void aiReady().then((ok) => {
+            if (ok) void translateAhead(book, { follow: true });
+          });
+        }, 1500)
+      : 0;
+    return () => {
+      window.clearTimeout(resume);
+      closePdf(book.id);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book.id]);
 
@@ -877,13 +889,23 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
   const wholeRunning = scanned ? !!book.ocr && book.ocr.state !== 'done' && book.ocr.state !== 'failed' && book.ocr.state !== 'waiting' : !!t && t.state !== 'done' && t.state !== 'cancelled';
   return (
     <>
-      {hasTranslation && (
+      {hasTranslation && !scanned && (
         <div className="ctl">
           <div className="lbl"><span>Show</span></div>
           <div className="seg" role="group" aria-label="Language to show">
             <button aria-pressed={view === 'en'} onClick={() => void db.books.update(book.id, { view: 'en' })}>English</button>
             <button aria-pressed={view === 'orig'} onClick={() => void db.books.update(book.id, { view: 'orig' })}>Original</button>
             <button aria-pressed={view === 'both'} onClick={() => void db.books.update(book.id, { view: 'both' })}>Both</button>
+          </div>
+        </div>
+      )}
+      {hasTranslation && scanned && (
+        <div className="ctl">
+          <div className="lbl"><span>Show</span><span>{(book.scanView ?? 'page') === 'page' ? 'each printed page, its English beneath' : view === 'both' ? 'the text read, with its English' : 'the English as running text, like a book'}</span></div>
+          <div className="seg" role="group" aria-label="What to show">
+            <button aria-pressed={(book.scanView ?? 'page') === 'page'} onClick={() => void db.books.update(book.id, { scanView: 'page', view: 'en' })}>Page + English</button>
+            <button aria-pressed={book.scanView === 'text' && view === 'en'} onClick={() => void db.books.update(book.id, { scanView: 'text', view: 'en' })}>English only</button>
+            <button aria-pressed={book.scanView === 'text' && view === 'both'} onClick={() => void db.books.update(book.id, { scanView: 'text', view: 'both' })}>Both</button>
           </div>
         </div>
       )}

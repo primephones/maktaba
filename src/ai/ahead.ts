@@ -59,6 +59,8 @@ const places = new Map<string, { section: number; block: number }>();
 export const setReadingPlace = (bookId: string, at: { section: number; block: number }) => void places.set(bookId, at);
 export const stopAhead = () => {
   stopWanted = true;
+  // As I read switched off: it stays off for this book.
+  if (state?.follow) void db.books.update(state.bookId, { asIRead: false });
   patch({ follow: false });
 };
 
@@ -187,6 +189,8 @@ export async function translateAhead(
   book: Book,
   opts: { from?: { section: number; block: number }; count?: number; paras?: SourceParagraph[]; pages?: number[]; follow?: boolean },
 ): Promise<void> {
+  // As I read stays on for the book (it starts again whenever the book is opened) until switched off.
+  if (opts.follow && !book.asIRead) void db.books.update(book.id, { asIRead: true });
   if (state) {
     if (state.bookId === book.id && opts.follow) patch({ follow: true });
     else if (state.bookId === book.id && opts.pages?.length && state.unit === 'pages') {

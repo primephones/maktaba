@@ -131,6 +131,11 @@ function TranslationCard({ book }: { book: Book }) {
   const [estimate, setEstimate] = useState<{ paras: number; requests: number } | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
   const have = useLiveQuery(() => db.translations.where('bookId').equals(book.id).count(), [book.id]) ?? 0;
+  // A scanned book: how many paragraphs have been read from its pages (each wants its English).
+  const scanParas = useLiveQuery(
+    async () => (book.ocr ? (await db.sections.where('bookId').equals(book.id).toArray()).reduce((n, s) => n + s.blocks.filter((b) => b.ocr && b.text.trim().length > 1).length, 0) : 0),
+    [book.id, book.ocr?.done],
+  ) ?? 0;
 
   useEffect(() => {
     void aiReady().then((c) => setConnected(!!c));
@@ -175,10 +180,12 @@ function TranslationCard({ book }: { book: Book }) {
         </div>
         {connected === false ? (
           <button className="btn" onClick={() => navigate('/settings/ai')}>Connect your AI first</button>
+        ) : o.state === 'done' && have >= scanParas ? (
+          <p className="muted small" style={{ margin: 0 }}>✓ Every page is read and in English.</p>
         ) : (
           <button className="btn" disabled={busy || under} onClick={() => void start()}>
             <span className="ai-mark" aria-hidden="true">✦</span>
-            {busy ? 'Starting…' : under ? `Under way: ${o.done} of ${o.total} pages` : o.state === 'done' ? 'Translate whatever is left' : 'Read and translate every page'}
+            {busy ? 'Starting…' : under ? `Under way: ${o.done} of ${o.total} pages` : o.state === 'done' ? `Translate what is left (${Math.max(0, scanParas - have)} paragraph${scanParas - have === 1 ? '' : 's'})` : 'Read and translate every page'}
           </button>
         )}
       </div>
