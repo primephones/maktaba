@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classify, DEFAULT_PROVIDERS, forgetModels, modelsFor, thinkingFor, type CallResult, type Feature } from '../src/providers';
+import { classify, DEFAULT_PROVIDERS, forgetModels, lightThird, modelsFor, thinkingFor, type CallResult, type Feature } from '../src/providers';
 import { NoProviderError, route, type UsageStore } from '../src/router';
 
 function memoryUsage(): UsageStore & { calls: string[] } {
@@ -144,14 +144,23 @@ describe('routing', () => {
     forgetModels('gemini');
   });
 
-  it('with the real list of a new Gemini key (November 2026), a light model comes third at the latest', async () => {
+  it('with the real list of a new Gemini key (November 2026), Gemini 4 comes first, and a light model third when the reader waits', async () => {
     forgetModels('gemini');
-    const names = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-preview-tts', 'gemma-4-31b-it', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.1-flash-image', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-3.5-transcribe'];
+    const names = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-preview-tts', 'gemma-4-31b-it', 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-3.1-flash-image', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.8-flash', 'gemini-3.8-flash-tts', 'gemini-3.5-transcribe', 'gemini-4-hydrogen', 'gemini-4-argon', 'gemini-3.1-pro-preview'];
     const p = DEFAULT_PROVIDERS.find((x) => x.id === 'gemini')!;
     const r = await modelsFor(p, 'translate', { secrets: { GEMINI_API_KEY: 'g' }, fetch: (async () => new Response(JSON.stringify({ models: names.map((n) => ({ name: `models/${n}`, supportedGenerationMethods: ['generateContent'] })) }))) as unknown as typeof fetch });
-    expect(r.slice(0, 3)).toEqual(['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite']);
-    expect(r).toContain('gemini-3.6-flash');
+    expect(r.slice(0, 3)).toEqual(['gemini-2.5-flash', 'gemini-4-argon', 'gemini-4-hydrogen']);
+    expect(r.indexOf('gemini-4-hydrogen')).toBeLessThan(r.indexOf('gemini-3.8-flash'));
+    expect(r).not.toContain('gemini-3.1-pro-preview');
+    // With the dead ones resting, and the reader waiting: the light model is third.
+    expect(lightThird(['gemini-4-hydrogen', 'gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'])[2]).toBe('gemini-3.5-flash-lite');
     forgetModels('gemini');
+  });
+
+  it('reads "limit: 0" as a model a free key may not use (resting a day), not a busy minute', () => {
+    const e = classify(429, null, '{"error":{"code":429,"message":"You exceeded your current quota. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-3.1-pro"}}');
+    expect(e.kind).toBe('model');
+    expect(classify(429, null, '{"error":{"message":"Quota exceeded for metric: generate_content_free_tier_requests, limit: 20, GenerateRequestsPerDayPerProjectPerModel-FreeTier"}}').kind).toBe('limit');
   });
 
   it('when a model is slow, the next is asked as well and the first good answer is taken', async () => {

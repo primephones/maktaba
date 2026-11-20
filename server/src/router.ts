@@ -1,4 +1,4 @@
-import { callProvider, forgetModels, modelsFor, ProviderError, type CallEnv, type CallResult, type ChatMessage, type Feature, type Provider } from './providers';
+import { callProvider, forgetModels, lightThird, modelsFor, ProviderError, type CallEnv, type CallResult, type ChatMessage, type Feature, type Provider } from './providers';
 
 /**
  * Chooses which AI service answers a request, and falls back to the next one when a
@@ -22,6 +22,13 @@ export interface RouteOptions {
   prefer?: string[];
   /** How long a model may take before the next one is asked as well. */
   hedgeMs?: number;
+  /**
+   * Work in the background (As I read, a whole book): the strongest model is given time, a
+   * light model is not moved forward, and a second model is asked only after a long wait.
+   */
+  quality?: boolean;
+  /** How long one model may take to answer (larger batches take longer). */
+  timeoutMs?: number;
 }
 
 /** How long a model may take before the next one is asked as well (a paragraph or eight usually takes 5 to 15 s). */
@@ -113,6 +120,7 @@ export async function route<T>(
         soonest = Math.min(soonest, mb.until);
       } else live.push(model);
     }
+    const order = opts.quality ? live : lightThird(live);
     const won = await new Promise<Routed<T> | null>((resolve) => {
       let i = 0;
       let running = 0;
@@ -129,11 +137,11 @@ export async function route<T>(
       };
       const launch = () => {
         if (settled) return;
-        if (stop || i >= live.length) {
+        if (stop || i >= order.length) {
           if (running === 0) finish(null);
           return;
         }
-        const model = live[i++];
+        const model = order[i++];
         const mk = `${p.id}|${model}`;
         const ctrl = new AbortController();
         ctrls.push(ctrl);
@@ -142,12 +150,12 @@ export async function route<T>(
         const hedge = setTimeout(() => {
           hedged = true;
           launch();
-        }, opts.hedgeMs ?? HEDGE_MS);
+        }, opts.hedgeMs ?? (opts.quality ? 60_000 : HEDGE_MS));
         timers.push(hedge);
         void (async () => {
           let next = true;
           try {
-            const r = await callProvider(p, model, messages, env, true, ctrl.signal);
+            const r = await callProvider(p, model, messages, env, true, ctrl.signal, opts.timeoutMs);
             if (settled) return;
             await usage.record(p.id, opts.feature, r);
             try {
@@ -189,7 +197,7 @@ export async function route<T>(
           if (!next) stop = true;
           // Failed: the next model now, unless one was already started in its place.
           if (!hedged) launch();
-          else if (running === 0 && (stop || i >= live.length)) finish(null);
+          else if (running === 0 && (stop || i >= order.length)) finish(null);
         })();
       };
       launch();

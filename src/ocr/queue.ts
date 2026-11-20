@@ -5,6 +5,7 @@ import { workBegan, workEnded, workProgress } from '../native/work';
 import { recognizePage, releaseEngine, type OcrResult } from './engine';
 import { AllowanceUsedUp, aiReaderFor, aiReaderPausedUntil, recognizeWithAi, type PageText } from './ai';
 import { getMyAi } from '../ai/device';
+import { addMemory, getMemory, getStyle } from '../ai/context';
 import { applyOcrToSection, sectionOfPage } from './merge';
 import { imagePages, pageImage } from './pages';
 
@@ -207,6 +208,12 @@ async function leaveAsPrinted(book: Book): Promise<void> {
   await db.books.update(book.id, { ocr: undefined, ocrLang: 'eng', scanView: 'page', ...(book.lang === 'other' ? { lang: 'en' } : {}) });
 }
 
+/** The reader's style and the book's memory of names, for a page translated as it is read. */
+async function pageContext(book: Pick<Book, 'hash'>) {
+  const [style, memory] = await Promise.all([getStyle(), getMemory(book.hash)]);
+  return { style, memory };
+}
+
 /** Scans not in English are translated as they are read: one request gives both. */
 const translateAsRead = (book: Book, lang: OcrLang) => lang !== 'eng' && book.lang !== 'en';
 
@@ -239,7 +246,7 @@ async function translateRest(book: Book, page: number): Promise<void> {
     .map(({ b, i }) => ({ id: `${idx}:${i}`, section: idx, block: i, text: b.text, kind: (b.t === 'h' ? 'h' : b.t === 'quote' ? 'quote' : 'p') as 'h' | 'quote' | 'p', chapter: sec.title }));
   if (!paras.length) return;
   const { translateNow } = await import('../ai/translation');
-  await translateNow((await db.books.get(book.id)) ?? book, paras);
+  await translateNow((await db.books.get(book.id)) ?? book, paras, { quality: true });
 }
 
 /** Reads one page with the reader's AI now (ahead of the rest of the book), keeping hand corrections. */
@@ -265,7 +272,8 @@ async function readPageWithAi(book: Book, page: number): Promise<void> {
   const known = fresh.ocrLang ?? LANG_FOR[fresh.lang];
   const canvas = await inTime(pageImage(fresh, page), PAGE_LIMIT_MS);
   try {
-    const r = await recognizeWithAi(key, canvas, known ?? 'auto', page, { translate: !!known && translateAsRead(fresh, known), eager: true });
+    const r = await recognizeWithAi(key, canvas, known ?? 'auto', page, { translate: !!known && translateAsRead(fresh, known), eager: true, context: await pageContext(fresh) });
+    if (r.names?.length) await addMemory(fresh.hash, r.names).catch(() => undefined);
     const lang = known ?? LANG_FOR[detectLang(r.text)] ?? 'ara';
     if (!known) await db.books.update(book.id, { ocrLang: lang, ...(fresh.lang === 'other' ? { lang: LANG_OF[lang] } : {}) });
     if (lang === 'eng' && !known) return;
@@ -335,8 +343,10 @@ async function recognizeBook(book: Book): Promise<void> {
       if (aiKey) {
         try {
           const reader = aiKey;
+          const context = await pageContext(book);
           await readOnce(id, page, async () => {
-            const r = await recognizeWithAi(reader, canvas, lang, page, { translate: translateAsRead(book, lang) });
+            const r = await recognizeWithAi(reader, canvas, lang, page, { translate: translateAsRead(book, lang), context });
+            if (r.names?.length) await addMemory(book.hash, r.names).catch(() => undefined);
             await savePage(book, page, { blocks: r.blocks, conf: 95, printed: r.printed, lang, by: 'ai' });
             await savePageEnglish(book, page, r);
           });

@@ -124,6 +124,9 @@ export function classify(status: number, retryAfter: string | null, body = ''): 
   const hinted = Number(body.match(/"retryDelay":\s*"(\d+(?:\.\d+)?)s"/)?.[1] ?? body.match(/retry (?:in|after) (\d+(?:\.\d+)?)\s*s/i)?.[1] ?? NaN);
   const header = retryAfter && Number(retryAfter) > 0 ? Number(retryAfter) : NaN;
   const wait = Number.isFinite(hinted) ? hinted : header;
+  // A free key that may not use the model at all ("limit: 0"): not a busy moment, so that model
+  // rests a day rather than being asked again every minute.
+  if (status === 429 && /limit:\s*0\b/.test(body)) return new ProviderError('not offered to free keys', 'model');
   if (status === 429 || status === 402) {
     const daily = status === 402 || /PerDay|per[- ]day|daily|free-models-per-day|insufficient credits|quota exceeded for quota metric.*day/i.test(body);
     // The service may still say when it comes back (a short wait is honoured; otherwise tomorrow).
@@ -172,7 +175,9 @@ const errorOf = async (res: Response) => classify(res.status, res.headers.get('r
  * model first while it is offered.
  */
 const PREFER: Record<string, RegExp[]> = {
-  gemini: [/^gemini-\d+(?:\.\d+)?-flash$/, /^gemini-flash-latest$/, /^gemini-\d+(?:\.\d+)?-flash-lite$/, /^gemini-flash-lite-latest$/, /^gemini-\d+(?:\.\d+)?-flash/],
+  // Gemini 4 first (on a free key in November 2026, gemini-4-hydrogen answered best and fast;
+  // the others of its kind said "limit: 0" and are passed over for the day), then Flash, then Lite.
+  gemini: [/^gemini-\d+-[a-z]+$/, /^gemini-\d+(?:\.\d+)?-flash$/, /^gemini-flash-latest$/, /^gemini-\d+(?:\.\d+)?-flash-lite$/, /^gemini-flash-lite-latest$/, /^gemini-\d+(?:\.\d+)?-flash/],
   groq: [/^openai\/gpt-oss-120b$/, /^llama-3\.3-70b-versatile$/, /^moonshotai\/kimi-k2/, /^meta-llama\/llama-4-maverick/, /^qwen\/qwen3-32b$/, /^openai\/gpt-oss-20b$/, /70b|120b|235b/],
   openrouter: [
     /^deepseek\/deepseek-(chat|v\d)[^/]*:free$/,
@@ -253,17 +258,28 @@ export async function modelsFor(p: Provider, feature: Feature, env: CallEnv): Pr
     }
   }
   if (!out.length) out.push(configured);
-  // A light model, fast when the larger ones are slow or used up, comes third at the latest,
-  // so the reader is never left waiting on a row of busy models.
-  const lite = out.findIndex((m) => /(^|[-_/])(lite|instant|mini)([-_.:]|$)|flash-8b|-20b/i.test(m));
+  return out.slice(0, 10);
+}
+
+/** A light model: fast when the larger ones are slow or busy, a little less exact. */
+export const isLight = (m: string) => /(^|[-_/])(lite|instant|mini)([-_.:]|$)|flash-8b|-20b/i.test(m);
+
+/**
+ * With the reader waiting, a light model comes third at the latest among the models that can
+ * answer now, so nobody waits on a row of busy models. (Not for work in the background, where
+ * the better English is worth the wait.)
+ */
+export function lightThird(models: string[]): string[] {
+  const out = [...models];
+  const lite = out.findIndex(isLight);
   if (lite > 2) out.splice(2, 0, ...out.splice(lite, 1));
-  return out.slice(0, 8);
+  return out;
 }
 
 /** Aborted at the time limit, or when `outer` is (another model answered first). */
-function deadline(outer?: AbortSignal): AbortSignal {
+function deadline(outer?: AbortSignal, ms = TIMEOUT_MS): AbortSignal {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(new DOMException('The operation timed out.', 'TimeoutError')), TIMEOUT_MS);
+  const t = setTimeout(() => ctrl.abort(new DOMException('The operation timed out.', 'TimeoutError')), ms);
   outer?.addEventListener('abort', () => {
     clearTimeout(t);
     ctrl.abort(new DOMException('Another model answered first.', 'AbortError'));
@@ -272,8 +288,8 @@ function deadline(outer?: AbortSignal): AbortSignal {
   return ctrl.signal;
 }
 
-export async function callProvider(p: Provider, model: string, messages: ChatMessage[], env: CallEnv, json = true, outer?: AbortSignal): Promise<CallResult> {
-  const signal = deadline(outer);
+export async function callProvider(p: Provider, model: string, messages: ChatMessage[], env: CallEnv, json = true, outer?: AbortSignal, timeoutMs?: number): Promise<CallResult> {
+  const signal = deadline(outer, timeoutMs);
   try {
     if (p.kind === 'workers-ai') {
       if (!env.ai) throw new ProviderError('Workers AI is not connected', 'auth');

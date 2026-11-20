@@ -1,10 +1,10 @@
 import type { Block, OcrLang, Uncertain } from '../db/types';
-import { checkAnswer, translationRules, type SourceLang } from '../../server/src/translate';
+import { checkAnswer, parseNames, translationRules, type MemoryItem, type SourceLang, type TranslateStyle } from '../../server/src/translate';
 import { SEED_GLOSSARY } from '../../server/src/glossary';
 import { looksEnglish } from '../lib/english';
 import { getMyAi } from '../ai/device';
 import { local, setLocal } from '../sync/sync';
-import { DEFAULT_PROVIDERS, modelsFor, thinkingFor } from '../../server/src/providers';
+import { DEFAULT_PROVIDERS, lightThird, modelsFor, thinkingFor } from '../../server/src/providers';
 
 /**
  * Reading scanned pages with the reader's own AI: Gemini first, then OpenRouter's free
@@ -127,17 +127,25 @@ const readOnly = (lang: OcrLang | 'auto') =>
 /** The glossary for a page translated as it is read (the page's words are not known before it is read). */
 const GLOSSARY_LINES = SEED_GLOSSARY.map((t) => `- ${[t.ar, ...(t.forms ?? []).slice(0, 2)].join(' / ')} → ${t.tr} (${t.en})${t.plain ? `; only in this technical sense. As an ordinary word (${t.plain}) it is put in plain English, with no transliteration in brackets` : ''}`).join('\n');
 
+/** What a page's translation is given besides the page: the reader's style and the book's memory of names. */
+export interface PageContext {
+  style?: TranslateStyle;
+  memory?: MemoryItem[];
+}
+
 /** Reading and translating in one go: the page's own text, and the English of each block. */
-const prompt = (lang: OcrLang | 'auto', translate: boolean) => {
+const prompt = (lang: OcrLang | 'auto', translate: boolean, ctx: PageContext = {}) => {
   const src = lang === 'auto' ? undefined : SOURCE[lang];
   if (!translate || !src) return readOnly(lang);
+  const memory = (ctx.memory ?? []).slice(0, 60);
   return (
     readOnly(lang).replace(/Answer with JSON only:[\s\S]*$/, '') +
-    `\nThen translate every block into English, for the reader. The translation follows these rules:\n\n${translationRules(src)}\n\n` +
+    `\nThen translate every block into English, for the reader. The translation follows these rules:\n\n${translationRules(src, ctx.style)}\n\n` +
+    (memory.length ? `Names and terms already used in this book (write them the same way):\n${memory.map((m) => `- ${m.source} → ${m.en}`).join('\n')}\n\n` : '') +
     `Glossary (rule 3): when one of these terms appears in its technical sense, in any of its spellings, write it this way (an ordinary word with the same letters is translated plainly):\n${GLOSSARY_LINES}\n\n` +
     `The "text" stays exactly as printed (not translated); the English goes in "en", one for each block. A heading's English is a heading.\n` +
     `"en" is a real English translation of the meaning, in English words: never a transliteration of the ${lang === 'auto' ? 'original' : 'original'} in Latin letters, and never the original copied back.\n` +
-    `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "... as printed ...", "en": "... English ...", "uncertain": [{"span": "...", "reason": "..."}], "box": [0,0,0,0]}]}`
+    `Answer with JSON only: {"printed": "page number as printed, or empty", "blocks": [{"t": "p", "text": "... as printed ...", "en": "... English ...", "uncertain": [{"span": "...", "reason": "..."}], "box": [0,0,0,0]}], "names": [{"source": "...", "en": "..."}]}`
   );
 };
 
@@ -157,15 +165,18 @@ export interface PageText {
   /** Who read it. */
   service?: string;
   model?: string;
+  /** Names and special terms the AI rendered on the page, for the book's memory. */
+  names?: MemoryItem[];
 }
 
 /**
  * Reads one page with the reader's AI: Gemini, then OpenRouter. Throws AllowanceUsedUp only
  * when every service it could use has used its day.
  */
-export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number, opts: { translate?: boolean; eager?: boolean } = {}): Promise<PageText> {
+export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasElement, lang: OcrLang | 'auto', page: number, opts: { translate?: boolean; eager?: boolean; context?: PageContext } = {}): Promise<PageText> {
   const translate = !!opts.translate;
   const eager = !!opts.eager;
+  const ctx = opts.context ?? {};
   const data = await jpeg(image);
   const problems: string[] = [];
   let tried = 0;
@@ -174,9 +185,9 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
   // are slow and weak at translating), and the English then comes from a text model. If the
   // one-step reading fails or takes too long, the page is read on its own and translated after.
   const attempts: Array<[string, () => Promise<PageText>]> = [];
-  if (reader.gemini) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, translate, eager)]);
+  if (reader.gemini) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, translate, eager, ctx)]);
   if (reader.openrouter) attempts.push(['openrouter', () => viaOpenRouter(reader.openrouter!, data, lang, page, false)]);
-  if (reader.gemini && translate) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, false, eager)]);
+  if (reader.gemini && translate) attempts.push(['gemini', () => viaGemini(reader.gemini!, data, lang, page, false, eager, ctx)]);
   const exhausted = new Set<string>();
   for (const [service, read] of attempts) {
     if (exhausted.has(service)) continue;
@@ -201,19 +212,23 @@ export async function recognizeWithAi(reader: PageReader, image: HTMLCanvasEleme
  * `eager`: the reader asked for this page just now (a tap), so a model resting after being
  * overloaded a moment ago is asked anyway; only models out for the day are passed over.
  */
-async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean, eager = false): Promise<PageText> {
+async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page: number, translate: boolean, eager = false, ctx: PageContext = {}): Promise<PageText> {
   let lastError = '';
   const noThink = new Set<string>();
   const list = await models(key);
   /** Models out for the day (used up, or closed to this key): when all are, reading waits for tomorrow. */
   let outForDay = 0;
+  const live: string[] = [];
   for (const model of list) {
     const r = resting.get(model);
     if (r && r.until > Date.now() && (r.daily || !eager)) {
       if (r.daily) outForDay++;
       else lastError ||= 'Gemini is overloaded right now; it is tried again in a few minutes.';
-      continue;
-    }
+    } else live.push(model);
+  }
+  // The reader waiting on this page: a light model third at the latest; in the background the
+  // strongest model is given its time.
+  for (const model of eager ? lightThird(live) : live) {
     for (let attempt = 0; attempt < 4; attempt++) {
       const gap = (lastCall.get(model) ?? 0) + spacing() - Date.now();
       if (gap > 0) await wait(gap);
@@ -227,7 +242,7 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
           signal: ctrl.signal,
           headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt(lang, translate) }, { inline_data: { mime_type: 'image/jpeg', data } }] }],
+            contents: [{ role: 'user', parts: [{ text: prompt(lang, translate, ctx) }, { inline_data: { mime_type: 'image/jpeg', data } }] }],
             generationConfig: { temperature: 0, responseMimeType: 'application/json', ...(thinkingFor(model) && !noThink.has(model) ? { thinkingConfig: thinkingFor(model) } : {}) },
           }),
         });
@@ -243,8 +258,9 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
       }
       if (res.status === 429) {
         const body = await res.text();
-        // A per-minute limit passes; a per-day one does not until tomorrow.
-        if (/PerDay|per day|daily/i.test(body)) {
+        // A per-minute limit passes; a per-day one does not until tomorrow; "limit: 0" is a model
+        // this key may not use at all.
+        if (/PerDay|per day|daily|limit:\s*0\b/i.test(body)) {
           rest(model, tomorrow(), true);
           outForDay++;
           break;
@@ -294,7 +310,7 @@ async function viaGemini(key: string, data: string, lang: OcrLang | 'auto', page
       }
       // It answered: whatever rest it was given after being busy is over.
       if (!resting.get(model)?.daily) resting.delete(model);
-      return { ...toBlocks(answer, page), service: 'gemini', model };
+      return { ...toBlocks(answer, page), service: 'gemini', model, ...(translate ? { names: parseNames(raw) } : {}) };
     }
   }
   if (outForDay >= list.length) {

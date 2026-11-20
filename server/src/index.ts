@@ -1,7 +1,7 @@
 import { SEED_GLOSSARY, mergeGlossary, type Term } from './glossary';
 import { DEFAULT_PROVIDERS, FEATURES, type CallEnv, type CallResult, type Feature, type Provider } from './providers';
 import { NoProviderError, nextReset, route, type UsageStore } from './router';
-import { batches, buildMessages, acceptAnswer, parseAnswer, buildReviewMessages, acceptReview, type Paragraph, type ReviewItem, type SourceLang, type Translated } from './translate';
+import { batches, buildMessages, acceptAnswer, parseAnswer, parseNames, buildReviewMessages, acceptReview, styleOf, type MemoryItem, type Paragraph, type ReviewItem, type SourceLang, type Translated, type TranslateStyle, type VerseNote } from './translate';
 import { acceptStudy, featureOf, studyMessages, type StudyTask } from './study';
 
 /**
@@ -109,8 +109,9 @@ async function overShare(env: Env, m: Member): Promise<boolean> {
 
 // ------------------------------------------------------------------------------- translation
 
-const cacheKey = (lang: string, text: string, glossary: Term[]) =>
-  sha256(`${lang}\u0000${text}\u0000${glossary.map((t) => `${t.ar}=${t.tr}`).join('|')}`);
+// The reader's style is part of the key: the same paragraph with "God" is not the one with "Allah".
+const cacheKey = (lang: string, text: string, glossary: Term[], style?: TranslateStyle) =>
+  sha256(`${lang}\u0000${text}\u0000${glossary.map((t) => `${t.ar}=${t.tr}`).join('|')}\u0000${JSON.stringify(styleOf(style))}`);
 
 export interface TranslateBody {
   lang: SourceLang;
@@ -123,11 +124,19 @@ export interface TranslateBody {
   previous?: string;
   /** Re-draft: skip the stored translation and ask again. */
   fresh?: boolean;
+  /** Background work: the strongest model is given its time. */
+  quality?: boolean;
+  bookKey?: string;
+  style?: TranslateStyle;
+  memory?: MemoryItem[];
+  verses?: VerseNote[];
 }
 
 interface TranslateOutcome {
   results: Array<Translated & { provider: string; model: string; cached: boolean }>;
   skipped: Array<{ provider: string; reason: string }>;
+  /** Names and special terms the AI rendered, for the book's memory on the reader's phone. */
+  names?: MemoryItem[];
 }
 
 /** Translates up to one batch, using stored translations where the same text was done before. */
@@ -137,7 +146,7 @@ async function translateBatch(env: Env, member: string, body: TranslateBody): Pr
   const todo: Paragraph[] = [];
   const hashes = new Map<string, string>();
   for (const p of body.paragraphs) {
-    const h = await cacheKey(body.lang, p.text, glossary);
+    const h = await cacheKey(body.lang, p.text, glossary, body.style);
     hashes.set(p.id, h);
     const hit = body.fresh ? null : await env.DB.prepare('SELECT * FROM cache WHERE hash = ?').bind(h).first<{ en: string; uncertain: string; provider: string; model: string }>();
     if (hit) results.push({ id: p.id, en: hit.en, uncertain: JSON.parse(hit.uncertain), provider: hit.provider, model: hit.model, cached: true });
@@ -145,9 +154,12 @@ async function translateBatch(env: Env, member: string, body: TranslateBody): Pr
   }
   if (!todo.length) return { results, skipped: [] };
 
-  const messages = buildMessages({ lang: body.lang, paragraphs: todo, glossary, bookTitle: body.bookTitle, chapter: body.chapter, previous: body.previous });
-  const routed = await route(providersFor(env), callEnv(env), usageStore(env, member), { feature: 'translate', private: !!body.private, prefer: body.prefer }, messages, (text) => {
-    return acceptAnswer(todo, parseAnswer(text));
+  const messages = buildMessages({ lang: body.lang, paragraphs: todo, glossary, bookTitle: body.bookTitle, chapter: body.chapter, previous: body.previous, style: body.style, memory: body.memory, verses: body.verses?.filter((v) => todo.some((p) => p.id === v.id)) });
+  let names: MemoryItem[] = [];
+  const routed = await route(providersFor(env), callEnv(env), usageStore(env, member), { feature: 'translate', private: !!body.private, prefer: body.prefer, quality: !!body.quality, timeoutMs: body.quality ? 120_000 : undefined }, messages, (text) => {
+    const accepted = acceptAnswer(todo, parseAnswer(text));
+    names = parseNames(text);
+    return accepted;
   });
   const now = Date.now();
   for (const a of routed.value) {
@@ -156,7 +168,7 @@ async function translateBatch(env: Env, member: string, body: TranslateBody): Pr
     await env.DB.prepare('INSERT OR REPLACE INTO cache (hash, en, uncertain, provider, model, created_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(hashes.get(src.id)!, a.en, JSON.stringify(a.uncertain), routed.provider, routed.model, now).run();
   }
-  return { results, skipped: routed.skipped };
+  return { results, skipped: routed.skipped, names };
 }
 
 // ------------------------------------------------------------------------------- whole books

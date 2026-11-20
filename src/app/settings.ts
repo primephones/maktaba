@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { CoverStyle } from '../db/types';
+import type { TranslateStyle } from '../../server/src/translate';
 
 export type ThemeName = 'auto' | 'paper' | 'sepia' | 'lamp' | 'black';
 export type ReadMode = 'scroll' | 'paged';
@@ -51,6 +52,8 @@ export interface Settings {
   shelving: 'ask' | 'auto' | 'off';
   lastBackupAt: number;
   backupReminder: 'off' | 'weekly' | 'monthly';
+  /** How the English reads: Allah or God, honorifics, technical terms. */
+  translationStyle: Required<TranslateStyle>;
 }
 
 export const DEFAULTS: Settings = {
@@ -76,6 +79,7 @@ export const DEFAULTS: Settings = {
   shelving: 'ask',
   lastBackupAt: 0,
   backupReminder: 'monthly',
+  translationStyle: { god: 'Allah', honorifics: 'words', terms: 'transliterated' },
 };
 
 export async function getSetting<K extends keyof Settings>(key: K): Promise<Settings[K]> {

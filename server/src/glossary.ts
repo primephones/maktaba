@@ -106,7 +106,7 @@ export interface GlossaryHit {
 }
 
 /** Folds spelling differences away: vowel marks, hamza seats, and the Urdu and Persian letters. */
-const fold = (s: string) =>
+export const fold = (s: string) =>
   s
     .replace(/[\u200c\u200d]/g, '')
     .replace(/[\u0610-\u061a\u064b-\u065f\u0670\u0640]/g, '')

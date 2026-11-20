@@ -3,6 +3,9 @@ import type { Book, Translation } from '../db/types';
 import { detectLang, hasArabicScript } from '../lib/arabic';
 import { getSetting } from '../app/settings';
 import { request, ServerError, type JobStatus } from './client';
+import { addMemory, translationContext } from './context';
+import { fold } from '../../server/src/glossary';
+import type { MemoryItem } from '../../server/src/translate';
 
 /**
  * Whole-book translation. The book's paragraphs are handed to the private server, which
@@ -192,21 +195,32 @@ export class SomeLeftInOriginal extends Error {
   }
 }
 
-export async function translateNow(book: Book, paras: SourceParagraph[], opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void; onWait?: (seconds: number) => void } = {}): Promise<number> {
+export async function translateNow(
+  book: Book,
+  paras: SourceParagraph[],
+  opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void; onWait?: (seconds: number) => void; quality?: boolean } = {},
+): Promise<number> {
   let done = 0;
   const left: string[] = [];
   opts.onProgress?.(0, paras.length);
   const prefer = opts.prefer ?? (await preferredOrder());
   const ask = async (part: SourceParagraph[]) => {
     const prev = await db.translations.get(`${book.id}:${part[0].section}:${part[0].block - 1}`);
+    const paragraphs = part.map((p) => ({ id: p.id, text: p.text, kind: p.kind }));
+    // The reader's style, the names and terms this book has used so far, and the Qur'an verses
+    // these paragraphs quote (with their standard English): the AI writes them the same way.
+    const ctx = await translationContext(book.hash, paragraphs);
+    const here = fold(part.map((p) => p.text).join(' '));
+    const memory = ctx.memory.filter((m) => here.includes(fold(m.source))).slice(0, 40);
     const res = await patiently(
       () =>
-        request<{ results: Array<{ id: string; en: string; uncertain: Translation['uncertain']; provider: string; model: string }> }>('/v1/translate', {
-          body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, bookTitle: book.title, chapter: part[0].chapter, previous: prev?.en, paragraphs: part.map((p) => ({ id: p.id, text: p.text, kind: p.kind })) },
-          timeoutMs: 120_000,
+        request<{ results: Array<{ id: string; en: string; uncertain: Translation['uncertain']; provider: string; model: string }>; names?: MemoryItem[] }>('/v1/translate', {
+          body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, quality: opts.quality, bookTitle: book.title, chapter: part[0].chapter, previous: prev?.en, paragraphs, bookKey: book.hash, style: ctx.style, memory, verses: ctx.verses },
+          timeoutMs: opts.quality ? 300_000 : 120_000,
         }),
       opts.onWait,
     );
+    if (res.names?.length) await addMemory(book.hash, res.names).catch(() => undefined);
     await db.translations.bulkPut(res.results.map((r) => {
       const [section, block] = r.id.split(':').map(Number);
       return { id: `${book.id}:${section}:${block}`, bookId: book.id, section, block, en: r.en, uncertain: r.uncertain, label: 'draft' as const, provider: r.provider, model: r.model, updatedAt: Date.now() };
@@ -233,8 +247,10 @@ export async function translateNow(book: Book, paras: SourceParagraph[], opts: {
   };
   let batch: SourceParagraph[] = [];
   let size = 0;
+  // In the background, larger batches: more of the chapter for the AI to see at once, fewer requests.
+  const [maxChars, maxItems] = opts.quality ? [5200, 16] : [3200, 10];
   for (const p of paras) {
-    if (batch.length && (size + p.text.length > 3200 || batch.length >= 10)) {
+    if (batch.length && (size + p.text.length > maxChars || batch.length >= maxItems)) {
       await flush(batch);
       batch = [];
       size = 0;

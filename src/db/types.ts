@@ -290,6 +290,8 @@ export interface SettingRecord {
 /** A whole-book translation worked through on the phone with the reader's own AI. */
 export interface AiJob {
   id: string;
+  /** The book's file hash: its memory of names and terms. */
+  bookKey?: string;
   title: string;
   lang: 'ar' | 'ur' | 'fa' | 'ps' | 'ms';
   private: boolean;

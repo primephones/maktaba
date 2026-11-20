@@ -2,7 +2,8 @@ import { db, uid } from '../db/db';
 import type { AiJob, AiJobItem } from '../db/types';
 import { DEFAULT_PROVIDERS, FEATURES, type CallEnv, type CallResult, type Feature, type Provider } from '../../server/src/providers';
 import { AnswerRejected, NoProviderError, nextReset, route, type UsageStore } from '../../server/src/router';
-import { batches, buildMessages, acceptAnswer, parseAnswer, buildReviewMessages, acceptReview, type Paragraph, type ReviewItem, type SourceLang } from '../../server/src/translate';
+import { batches, buildMessages, acceptAnswer, parseAnswer, parseNames, buildReviewMessages, acceptReview, type MemoryItem, type Paragraph, type ReviewItem, type SourceLang, type TranslateStyle, type VerseNote } from '../../server/src/translate';
+import { addMemory, translationContext } from './context';
 import { mergeGlossary, SEED_GLOSSARY, type Term } from '../../server/src/glossary';
 import { acceptStudy, featureOf, studyMessages, type StudyTask } from '../../server/src/study';
 import { workBegan, workEnded, workProgress } from '../native/work';
@@ -127,15 +128,28 @@ interface TranslateBody {
   bookTitle?: string;
   chapter?: string;
   previous?: string;
+  /** Background work: the strongest model is given its time (see RouteOptions.quality). */
+  quality?: boolean;
+  /** The book (its file hash), for its memory of names and terms. */
+  bookKey?: string;
+  style?: TranslateStyle;
+  memory?: MemoryItem[];
+  verses?: VerseNote[];
 }
 
 async function translateBatch(a: MyAi, body: TranslateBody) {
   const glossary = mergeGlossary(SEED_GLOSSARY, body.glossary ?? []);
-  const messages = buildMessages({ lang: body.lang, paragraphs: body.paragraphs, glossary, bookTitle: body.bookTitle, chapter: body.chapter, previous: body.previous });
-  const routed = await route(providers(a), callEnv(a), usage, { feature: 'translate', private: !!body.private, prefer: preferFor(a, body.prefer) }, messages, (text) => {
-    return acceptAnswer(body.paragraphs, parseAnswer(text));
+  // The reader's style, the book's memory and the verses quoted: sent by the reader's screen, or
+  // gathered here for work in the background.
+  const ctx = body.style ? { style: body.style, memory: body.memory ?? [], verses: body.verses ?? [] } : await translationContext(body.bookKey, body.paragraphs);
+  const messages = buildMessages({ lang: body.lang, paragraphs: body.paragraphs, glossary, bookTitle: body.bookTitle, chapter: body.chapter, previous: body.previous, ...ctx });
+  let names: MemoryItem[] = [];
+  const routed = await route(providers(a), callEnv(a), usage, { feature: 'translate', private: !!body.private, prefer: preferFor(a, body.prefer), quality: !!body.quality, timeoutMs: body.quality ? 120_000 : undefined }, messages, (text) => {
+    const accepted = acceptAnswer(body.paragraphs, parseAnswer(text));
+    names = parseNames(text);
+    return accepted;
   });
-  return { results: routed.value.map((r) => ({ ...r, provider: routed.provider, model: routed.model, cached: false })), skipped: routed.skipped, provider: routed.provider };
+  return { results: routed.value.map((r) => ({ ...r, provider: routed.provider, model: routed.model, cached: false })), skipped: routed.skipped, provider: routed.provider, names };
 }
 
 /** The reader's own service, if they added one, comes first. */
@@ -292,6 +306,7 @@ async function createJob(body: Record<string, unknown>) {
   const now = Date.now();
   const job: AiJob = {
     id,
+    bookKey: body.bookKey ? String(body.bookKey) : undefined,
     title: String(body.title ?? ''),
     lang: (body.lang as AiJob['lang']) ?? 'ar',
     private: !!body.private,
@@ -367,6 +382,8 @@ async function work() {
       const started = Date.now();
       try {
         const out = await translateBatch(a, {
+          quality: true,
+          bookKey: due.bookKey,
           lang: due.lang,
           paragraphs: batch,
           glossary: due.glossary,
@@ -384,6 +401,7 @@ async function work() {
           const job = await db.aiJobs.get(due.id);
           if (job && job.state !== 'cancelled') await db.aiJobs.update(due.id, { state: 'running', done: job.done + out.results.length, last_error: null, updated_at: now });
         });
+        if (due.bookKey && out.names.length) await addMemory(due.bookKey, out.names).catch(() => undefined);
         const job = await db.aiJobs.get(due.id);
         if (job) workProgress(key, 'Translating', job.title, job.done, job.total);
         // The English goes into the book at once (not at the next check), so it shows as it comes.

@@ -175,7 +175,7 @@ async function readAndTranslatePage(book: Book, page: number): Promise<number> {
     }
   }
   const rest = await pageLeftovers((await db.books.get(book.id)) ?? book, page);
-  if (rest.length) await translateKeeping((await db.books.get(book.id)) ?? book, rest, { onWait: (left) => patch({ waiting: left }) });
+  if (rest.length) await translateKeeping((await db.books.get(book.id)) ?? book, rest, { onWait: (left) => patch({ waiting: left }), quality: !!current()?.follow });
   if (rest.some((p) => skipIds.has(p.id))) skipPages.add(page);
   return rest.length;
 }
@@ -224,6 +224,8 @@ export async function translateAhead(
         const base = done;
         patch({ total });
         done += await translateKeeping(book, paras, {
+          // As I read works ahead of the reader: the better English is worth the wait.
+          quality: !!current()?.follow,
           onProgress: (d) => {
             if (stopWanted) throw new Error('stopped');
             patch({ done: base + d, total, waiting: 0 });

@@ -1,4 +1,4 @@
-import { termsIn, type Term } from './glossary';
+import { fold, termsIn, type Term } from './glossary';
 import { looksEnglish } from './english';
 
 /**
@@ -28,6 +28,31 @@ export interface Translated {
   uncertain: Uncertain[];
 }
 
+/** How the reader likes the English: set once in Settings, used for every translation. */
+export interface TranslateStyle {
+  /** How God (الله, اللہ, خدا) is named. */
+  god?: 'Allah' | 'God';
+  /** Honorifics written out, or in the short forms English Islamic books use (ﷺ, (ra), (rh)…). */
+  honorifics?: 'words' | 'short';
+  /** Technical terms transliterated with their English (ijmāʿ (consensus)), or in plain English only. */
+  terms?: 'transliterated' | 'plain';
+}
+
+/** A name or special term already rendered in this book, kept so the whole book says it the same way. */
+export interface MemoryItem {
+  source: string;
+  en: string;
+}
+
+/** A Qur'an verse quoted in a paragraph, with its standard English (Saheeh International, in the app). */
+export interface VerseNote {
+  /** The paragraph's id. */
+  id: string;
+  /** e.g. "4:58" or "2:255-256". */
+  ref: string;
+  en: string;
+}
+
 export interface TranslateRequest {
   lang: SourceLang;
   paragraphs: Paragraph[];
@@ -37,23 +62,35 @@ export interface TranslateRequest {
   chapter?: string;
   /** The English of the paragraph just before this batch, so the voice stays continuous. */
   previous?: string;
+  style?: TranslateStyle;
+  memory?: MemoryItem[];
+  verses?: VerseNote[];
 }
+
+/** The reader's style, with its defaults filled in (Allah; honorifics written out; terms transliterated). */
+export const styleOf = (s?: TranslateStyle): Required<TranslateStyle> => ({ god: s?.god ?? 'Allah', honorifics: s?.honorifics ?? 'words', terms: s?.terms ?? 'transliterated' });
 
 const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urdu', fa: 'Persian (Fārsī)', ps: 'Pashto', ms: 'Malay (in Latin script or Jawi)' };
 
 const SHORT_NAME: Record<SourceLang, string> = { ar: 'Arabic', ur: 'Urdu', fa: 'Persian', ps: 'Pashto', ms: 'Malay' };
 
 /** The rules every translation follows (also used when a scanned page is read and translated in one go). */
-export function translationRules(lang: SourceLang): string {
+export function translationRules(lang: SourceLang, style?: TranslateStyle): string {
+  const st = styleOf(style);
+  const name = st.god === 'Allah' ? 'Allah' : 'God';
   return [
     `You translate ${LANG_NAME[lang]} works of Islamic scholarship (fiqh, uṣūl, ḥadīth, tafsīr, ʿaqīda, history) into English for a serious student.`,
     '',
     'Rules, in order of importance:',
     '1. Be faithful. Translate what the text says and nothing more. Do not add explanations, do not merge or drop clauses, do not soften or modernise the meaning. If a sentence is elliptical, keep it elliptical rather than guessing.',
     '2. Mark real uncertainty, and only that. Put † immediately after the English words concerned and list it under "uncertain" with a short reason when a word cannot be read or looks corrupt or misprinted, when a phrase can be read two ways that change the meaning, or when a name, place or term is unknown to you (for example: "the printed word is unclear", "could also mean …", "unknown place name"). Do not mark ordinary choices between near-synonyms, or set expressions whose sense is settled: an author\'s humble self-reference (احقر, راقم, بندہ, العبد الضعيف → "this humble writer"), customary prayers and honorifics, standard formulas. A reader stops at every †, so each must matter.',
-    '3. Use the glossary for technical terms. Write each listed term in its transliteration followed by the English in brackets the first time it appears in a paragraph, e.g. "ijmāʿ (consensus)", and the transliteration alone after that. Keep transliteration consistent with the glossary exactly. But use a glossary term only where the word carries that technical sense: where the same letters are an ordinary word (the glossary notes the common ones, e.g. Urdu صحیح "correct", عام "common", خاص "special", موضوع "topic", مذہب "religion"; Arabic سنة "year", المسجد الحرام "the Sacred Mosque"), translate the ordinary word in plain English and add nothing in brackets (write "It is correct", not "It is correct (ṣaḥīḥ)"). Do not transliterate ordinary Urdu, Persian or Arabic words and phrases; only technical terms and names are transliterated.',
-    '4. Qurʾān: translate the meaning of quoted verses and keep the surah:verse reference if the text gives one. Ḥadīth: translate the chain of narrators as "So-and-so narrated to us from So-and-so…" with names transliterated.',
-    '5. Names of people and places are transliterated (with ʿ, ʾ and macrons). Honorifics are kept, in every spelling and abbreviation: ﷺ, ؐ, صلى الله عليه وسلم, صلی اللہ علیہ وسلم, (ص) → "(may God bless him and grant him peace)"; ؑ, عليه السلام, علیہ السلام, (ع) → "(peace be upon him)"; ؓ, رضي الله عنه, رضی اللہ عنہ, (رض) → "(may God be pleased with him)" (or "her"/"them" as the form shows); ؒ, رحمه الله, رحمۃ اللہ علیہ, رحمہ اللہ, (ره) → "(may God have mercy on him)"; ﷻ, جل جلاله, عز وجل → "(Mighty and Majestic)"; تعالى, تعالیٰ → "the Exalted".',
+    st.terms === 'plain'
+      ? '3. Technical terms in plain English. The reader asked for plain English: give the English meaning of each technical term (consensus, analogical reasoning, ritual purity), adding the transliteration in brackets only where English has no fair equivalent, the first time it appears. Use the glossary for the meaning. Where the same letters are an ordinary word (the glossary notes the common ones, e.g. Urdu صحیح "correct", عام "common", موضوع "topic"; Arabic سنة "year"), translate the ordinary word. Names are transliterated.'
+      : '3. Use the glossary for technical terms. Write each listed term in its transliteration followed by the English in brackets the first time it appears in a paragraph, e.g. "ijmāʿ (consensus)", and the transliteration alone after that. Keep transliteration consistent with the glossary exactly. But use a glossary term only where the word carries that technical sense: where the same letters are an ordinary word (the glossary notes the common ones, e.g. Urdu صحیح "correct", عام "common", خاص "special", موضوع "topic", مذہب "religion"; Arabic سنة "year", المسجد الحرام "the Sacred Mosque"), translate the ordinary word in plain English and add nothing in brackets (write "It is correct", not "It is correct (ṣaḥīḥ)"). Do not transliterate ordinary Urdu, Persian or Arabic words and phrases; only technical terms and names are transliterated.',
+    '4. Qurʾān: translate the meaning of quoted verses and give the sūra:verse reference in square brackets, e.g. [4:58]. Where the standard English of a verse is given below with the passage, use it (adapting only what the sentence around it needs). Ḥadīth: translate the chain of narrators as "So-and-so narrated to us from So-and-so…" with names transliterated.',
+    st.honorifics === 'short'
+      ? `5. Names of people and places are transliterated (with ʿ, ʾ and macrons). Honorifics are kept, in the short forms English Islamic books use, in every spelling and abbreviation of the original: ﷺ, ؐ, صلى الله عليه وسلم, صلی اللہ علیہ وسلم, (ص) → "ﷺ"; ؑ, عليه السلام, علیہ السلام, (ع) → "(as)"; ؓ, رضي الله عنه, رضی اللہ عنہ, (رض) → "(ra)"; ؒ, رحمه الله, رحمۃ اللہ علیہ, رحمہ اللہ, (ره) → "(rh)"; ﷻ, جل جلاله, عز وجل → "ﷻ"; تعالى, تعالیٰ → "the Exalted". ${name === 'Allah' ? 'God (الله, اللہ, خدا) is "Allah", always.' : 'God (الله, اللہ, خدا) is "God", always.'}`
+      : `5. Names of people and places are transliterated (with ʿ, ʾ and macrons). Honorifics are kept, in every spelling and abbreviation: ﷺ, ؐ, صلى الله عليه وسلم, صلی اللہ علیہ وسلم, (ص) → "(may ${name} bless him and grant him peace)"; ؑ, عليه السلام, علیہ السلام, (ع) → "(peace be upon him)"; ؓ, رضي الله عنه, رضی اللہ عنہ, (رض) → "(may ${name} be pleased with him)" (or "her"/"them" as the form shows); ؒ, رحمه الله, رحمۃ اللہ علیہ, رحمہ اللہ, (ره) → "(may ${name} have mercy on him)"; ﷻ, جل جلاله, عز وجل → "(Mighty and Majestic)"; تعالى, تعالیٰ → "the Exalted". ${name === 'Allah' ? 'God (الله, اللہ, خدا) is "Allah", always.' : 'God (الله, اللہ, خدا) is "God", always.'}`,
     ...(lang === 'ar'
       ? []
       : [
@@ -61,6 +98,7 @@ export function translationRules(lang: SourceLang): string {
         ]),
     '6. Write clear, natural English with the formality of the original. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.',
     '7. Scanned and downloaded books often carry a watermark or stamp (a library, publisher or website name, a web address, a phone number, "for free distribution", a seal) that can slip into the text. It is not part of the book: leave it out of the English without comment. If a whole paragraph is only such a stamp, give an empty "en" for it.',
+    '8. Keep the book consistent. Names and terms already used earlier in this book are given below: write them exactly that way. Then list under "names" the proper names (people, places, books, schools) and special terms you rendered in these paragraphs that are not in the glossary, each as written in the text and as you wrote it in English, e.g. {"source": "ہارون رشید", "en": "Hārūn al-Rashīd"}.',
   ].join('\n');
 }
 
@@ -70,17 +108,23 @@ export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | '
   const glossaryLines = hits.map((h) => `- ${h.found} → ${h.term.tr} (${h.term.en})${h.term.plain ? `, only in this technical sense. As an ordinary word (${h.term.plain}) it is put in plain English, with no transliteration in brackets` : ''}`).join('\n');
 
   const system = [
-    translationRules(req.lang),
+    translationRules(req.lang, req.style),
     '',
     'Answer with JSON only, in this shape:',
-    '{"paragraphs":[{"id":"…","en":"…","uncertain":[{"span":"…","reason":"…"}]}]}',
+    '{"paragraphs":[{"id":"…","en":"…","uncertain":[{"span":"…","reason":"…"}]}],"names":[{"source":"…","en":"…"}]}',
   ].join('\n');
+  const folded = fold(all);
+  const memory = (req.memory ?? []).filter((m) => m.source && folded.includes(fold(m.source))).slice(0, 40);
 
   const context = [
     req.bookTitle ? `Book: ${req.bookTitle}` : '',
     req.chapter ? `Chapter: ${req.chapter}` : '',
     req.previous ? `The English of the paragraph just before (for continuity only, do not translate it again):\n${req.previous}` : '',
     glossaryLines ? `Glossary terms in this passage:\n${glossaryLines}` : '',
+    memory.length ? `Names and terms already used in this book (write them the same way):\n${memory.map((m) => `- ${m.source} → ${m.en}`).join('\n')}` : '',
+    req.verses?.length
+      ? `Qurʾān verses quoted in these paragraphs, with their standard English (Saheeh International):\n${req.verses.map((v) => `- [${v.id}] ${v.ref}: "${v.en}"`).join('\n')}`
+      : '',
   ].filter(Boolean).join('\n\n');
 
   const body = req.paragraphs
@@ -91,6 +135,21 @@ export function buildMessages(req: TranslateRequest): Array<{ role: 'system' | '
     { role: 'system', content: system },
     { role: 'user', content: `${context ? `${context}\n\n` : ''}Translate these paragraphs:\n\n${body}` },
   ];
+}
+
+/** The names and special terms an answer says it rendered (for the book's memory), checked for shape. */
+export function parseNames(raw: string): MemoryItem[] {
+  try {
+    let text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+    text = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+    const data = JSON.parse(text) as { names?: Array<{ source?: unknown; en?: unknown }> };
+    return (Array.isArray(data.names) ? data.names : [])
+      .map((n) => ({ source: String(n.source ?? '').trim(), en: String(n.en ?? '').trim() }))
+      .filter((n) => /[؀-ۿ]/.test(n.source) && n.source.length <= 60 && n.en && n.en.length <= 80 && !/[؀-ۿ]/.test(n.en))
+      .slice(0, 30);
+  } catch {
+    return [];
+  }
 }
 
 /** Pulls the JSON out of a model's answer, tolerating code fences and stray prose. */
