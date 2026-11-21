@@ -383,6 +383,43 @@ await section('Pages mode and themes', async () => {
   await shot('08-pages-lamp');
   const lowText = (await contrastOf('.pg .bk[data-t="p"]')).filter((c) => c.ratio < 7);
   check(lowText.length === 0, `dark theme: book text has strong contrast ${JSON.stringify(lowText.slice(0, 2))}`);
+
+  // The palettes: picked from the reader, the whole app takes them, and they last.
+  await showChrome();
+  await page.getByRole('button', { name: 'Text and theme' }).click();
+  for (const [name, tone] of [['Forest', 'dark'], ['Midnight', 'dark'], ['Gallery', 'light'], ['Terracotta', 'light']]) {
+    await page.getByRole('button', { name, exact: true }).click();
+    await pause(250);
+    const now = await page.evaluate(() => ({ theme: document.documentElement.dataset.theme, tone: document.documentElement.dataset.tone, bg: getComputedStyle(document.body).backgroundColor, bar: document.querySelector('meta[name="theme-color"]').content }));
+    check(now.theme === name.toLowerCase() && now.tone === tone, `${name}: the app takes the theme (${now.theme}, ${now.tone})`);
+    const pressed = await page.getByRole('button', { name, exact: true }).getAttribute('aria-pressed');
+    check(pressed === 'true', `${name}: shown as chosen in the reader`);
+    await shot(`08b-palette-${name.toLowerCase()}`);
+    const lowP = (await contrastOf('.sheet h2, .sheet .lbl span, .sheet .theme-chip, .sheet .seg button, .pg .bk[data-t="p"]')).filter((c) => c.ratio < 4.5);
+    check(lowP.length === 0, `${name}: every label and the book text are readable ${JSON.stringify(lowP.slice(0, 2))}`);
+  }
+  await page.reload();
+  await page.waitForSelector('.bk');
+  check((await page.evaluate(() => document.documentElement.dataset.theme)) === 'terracotta', 'the chosen palette is kept after the app is reopened');
+  // Follow phone uses the chosen pair: Gallery by day, Forest at night.
+  await page.evaluate(() => { location.hash = '#/settings/theme'; });
+  await pause(600);
+  await page.getByRole('radio', { name: /^Follow phone/ }).click();
+  await page.getByRole('group', { name: 'Theme by day' }).getByRole('button', { name: 'Gallery' }).click();
+  await page.getByRole('group', { name: 'Theme at night' }).getByRole('button', { name: 'Forest' }).click();
+  await pause(300);
+  await page.emulateMedia({ colorScheme: 'light' });
+  await pause(300);
+  check((await page.evaluate(() => document.documentElement.dataset.theme)) === 'gallery', 'Follow phone: Gallery by day');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await pause(300);
+  check((await page.evaluate(() => document.documentElement.dataset.theme)) === 'forest', 'Follow phone: Forest when the phone goes dark');
+  await shot('08c-theme-page-auto');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByRole('radio', { name: /^Lamp/ }).click();
+  await pause(300);
+  await page.evaluate(() => { history.back(); });
+  await page.waitForSelector('.bk');
   await showChrome();
   await page.getByRole('button', { name: 'Text and theme' }).click();
   await page.getByRole('button', { name: 'Scroll', exact: true }).click();

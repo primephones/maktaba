@@ -1,11 +1,11 @@
-import { lazy, Suspense, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useRoute, goBack, canGoBack, navigate } from './router';
 import { AppContext } from './AppContext';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useAddBooks } from './addBooks';
 import { UpdateNotice } from './UpdateNotice';
 import { Catalogue } from '../features/library/Catalogue';
-import { resolveTheme, useSetting } from './settings';
+import { applyThemeWith, themeTone, useSetting } from './settings';
 import { BottomBar } from '../ui/BottomBar';
 import { Toasts, toast } from '../ui/toast';
 import { EmptyState } from '../ui/EmptyState';
@@ -158,22 +158,27 @@ export function App() {
     };
   }, [addDropped]);
 
-  // The status bar is drawn over the app: its icons must contrast with what is under them,
-  // which is leather on Home and paper elsewhere.
+  // The theme follows the settings wherever they change (here, or synced from another
+  // device). The status bar is drawn over the app: its icons must show on the theme.
   const theme = useSetting('theme');
+  const autoThemes = useSetting('autoThemes');
+  const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches);
   useEffect(() => {
-    const resolved = resolveTheme(theme);
-    const dark = resolved === 'lamp' || resolved === 'black';
-    const onLeather = route.name === 'home';
-    const color = onLeather ? (dark ? '#4f1c18' : '#7c2822') : { paper: '#f6f4ef', sepia: '#f1e7d0', lamp: '#1d1914', black: '#000000' }[resolved];
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    const on = () => setSystemDark(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  useEffect(() => {
+    applyThemeWith(theme, autoThemes);
+    const dark = themeTone(theme) === 'dark';
     void (async () => {
       const { Capacitor } = await import('@capacitor/core');
       if (!Capacitor.isNativePlatform()) return;
       const { StatusBar, Style } = await import('@capacitor/status-bar');
-      await StatusBar.setStyle({ style: dark || onLeather ? Style.Dark : Style.Light }).catch(() => undefined);
+      await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => undefined);
     })();
-  }, [route.name, theme]);
+  }, [theme, autoThemes.light, autoThemes.dark, systemDark]);
 
   const inReader = route.name === 'reader';
   const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'setup' || route.name === 'review' || route.name === 'catalogue';

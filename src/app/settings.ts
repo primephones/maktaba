@@ -2,8 +2,14 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/db';
 import type { CoverStyle } from '../db/types';
 import type { TranslateStyle } from '../../server/src/translate';
+import { isThemeId, themeInfo, type ThemeId } from './themes';
 
-export type ThemeName = 'auto' | 'paper' | 'sepia' | 'lamp' | 'black';
+export type ThemeName = 'auto' | ThemeId;
+/** Which theme "Follow phone" uses by day and by night. */
+export interface AutoThemes {
+  light: ThemeId;
+  dark: ThemeId;
+}
 export type ReadMode = 'scroll' | 'paged';
 
 export interface ReaderPrefs {
@@ -43,6 +49,7 @@ export interface AiPrefs {
 
 export interface Settings {
   theme: ThemeName;
+  autoThemes: AutoThemes;
   ai: AiPrefs;
   reader: ReaderPrefs;
   coverStyle: CoverStyle;
@@ -58,6 +65,7 @@ export interface Settings {
 
 export const DEFAULTS: Settings = {
   theme: 'auto',
+  autoThemes: { light: 'paper', dark: 'lamp' },
   ai: { prefer: { translate: ['gemini', 'groq', 'openrouter', 'workers-ai'] } },
   reader: {
     mode: 'scroll',
@@ -90,6 +98,11 @@ export async function getSetting<K extends keyof Settings>(key: K): Promise<Sett
 export async function setSetting<K extends keyof Settings>(key: K, value: Settings[K]): Promise<void> {
   await db.settings.put({ key, value });
   if (key === 'theme') applyTheme(value as ThemeName);
+  if (key === 'autoThemes') {
+    autoPair = value as AutoThemes;
+    mirror('maktaba.autoThemes', JSON.stringify(autoPair));
+    void getSetting('theme').then(applyTheme);
+  }
   if (key === 'flags') applyMotion((value as Flags).reduceMotion);
 }
 
@@ -105,25 +118,43 @@ export function useSetting<K extends keyof Settings>(key: K): Settings[K] {
   return merge(DEFAULTS[key], rec?.value as Settings[K] | undefined);
 }
 
-const THEME_COLOR: Record<Exclude<ThemeName, 'auto'>, string> = {
-  paper: '#f6f4ef', sepia: '#f1e7d0', lamp: '#1d1914', black: '#000000',
-};
+let autoPair: AutoThemes = DEFAULTS.autoThemes;
 
-export function resolveTheme(theme: ThemeName): Exclude<ThemeName, 'auto'> {
-  if (theme !== 'auto') return theme;
-  return matchMedia('(prefers-color-scheme: dark)').matches ? 'lamp' : 'paper';
-}
-
-export function applyTheme(theme: ThemeName) {
-  const resolved = resolveTheme(theme);
-  document.documentElement.dataset.theme = resolved;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLOR[resolved]);
+function mirror(key: string, value: string) {
   try {
     // Mirrored so the right colours are painted before the database has opened.
-    localStorage.setItem('maktaba.theme', theme);
+    localStorage.setItem(key, value);
   } catch {
     /* private mode */
   }
+}
+
+export function resolveTheme(theme: ThemeName): ThemeId {
+  if (theme !== 'auto') return isThemeId(theme) ? theme : 'paper';
+  return matchMedia('(prefers-color-scheme: dark)').matches ? autoPair.dark : autoPair.light;
+}
+
+/** Light or dark, for the status bar's icons and the rules that differ between the two. */
+export const themeTone = (theme: ThemeName) => themeInfo(resolveTheme(theme)).tone;
+
+export function applyTheme(theme: ThemeName) {
+  const resolved = resolveTheme(theme);
+  const info = themeInfo(resolved);
+  const root = document.documentElement;
+  root.dataset.theme = resolved;
+  root.dataset.tone = info.tone;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', info.bg);
+  mirror('maktaba.theme', theme);
+  window.dispatchEvent(new Event('maktaba:theme'));
+}
+
+/** Applies the theme with the day/night pair from the settings (which may have come by sync). */
+export function applyThemeWith(theme: ThemeName, pair: AutoThemes) {
+  if (isThemeId(pair.light) && isThemeId(pair.dark) && (pair.light !== autoPair.light || pair.dark !== autoPair.dark)) {
+    autoPair = pair;
+    mirror('maktaba.autoThemes', JSON.stringify(pair));
+  }
+  applyTheme(theme);
 }
 
 export function applyMotion(reduce: boolean) {
@@ -134,13 +165,22 @@ export function bootTheme() {
   let stored: ThemeName = 'auto';
   try {
     stored = (localStorage.getItem('maktaba.theme') as ThemeName) || 'auto';
+    const pair = JSON.parse(localStorage.getItem('maktaba.autoThemes') ?? 'null') as AutoThemes | null;
+    if (pair && isThemeId(pair.light) && isThemeId(pair.dark)) autoPair = pair;
   } catch {
     /* private mode */
   }
   applyTheme(stored);
+  // Synced settings may differ from the mirror: the database has the last word.
+  void getSetting('autoThemes')
+    .then((p) => {
+      autoPair = p;
+      mirror('maktaba.autoThemes', JSON.stringify(p));
+      return getSetting('theme');
+    })
+    .then(applyTheme);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     void getSetting('theme').then(applyTheme);
   });
-  void getSetting('theme').then(applyTheme);
   void getSetting('flags').then((f) => applyMotion(f.reduceMotion));
 }

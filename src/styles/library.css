@@ -59,6 +59,31 @@
 .cover[data-leather='ink'] { --leather: #26231f; --leather-hi: #3a3631; --leather-lo: #151311; }
 .cover[data-leather='burgundy'] { --leather: #5a1e2c; --leather-hi: #74293a; --leather-lo: #3c121c; }
 .cover[data-leather='tan'] { --leather: #7a5230; --leather-hi: #946840; --leather-lo: #56381f; }
+/* In the palettes, the bindings take the palette's own leathers. */
+:root[data-theme='forest'] .cover[data-leather='oxblood'] { --leather: #3a5442; --leather-hi: #546a5b; --leather-lo: #27382c; }
+:root[data-theme='forest'] .cover[data-leather='slate'] { --leather: #2c3f37; --leather-hi: #475851; --leather-lo: #1d2a25; }
+:root[data-theme='forest'] .cover[data-leather='brown'] { --leather: #5a4e34; --leather-hi: #6f654e; --leather-lo: #3c3423; }
+:root[data-theme='forest'] .cover[data-leather='ink'] { --leather: #1c2a23; --leather-hi: #3a4640; --leather-lo: #131c17; }
+:root[data-theme='forest'] .cover[data-leather='burgundy'] { --leather: #4f5c45; --leather-hi: #66715d; --leather-lo: #353e2e; }
+:root[data-theme='forest'] .cover[data-leather='tan'] { --leather: #7a7350; --leather-hi: #8b8567; --leather-lo: #524d36; }
+:root[data-theme='midnight'] .cover[data-leather='oxblood'] { --leather: #3d3124; --leather-hi: #564c40; --leather-lo: #292118; }
+:root[data-theme='midnight'] .cover[data-leather='slate'] { --leather: #2a2d35; --leather-hi: #46484f; --leather-lo: #1c1e24; }
+:root[data-theme='midnight'] .cover[data-leather='brown'] { --leather: #4a3a26; --leather-hi: #625442; --leather-lo: #322719; }
+:root[data-theme='midnight'] .cover[data-leather='ink'] { --leather: #1d1d21; --leather-hi: #3a3a3e; --leather-lo: #131316; }
+:root[data-theme='midnight'] .cover[data-leather='burgundy'] { --leather: #432c2c; --leather-hi: #5b4747; --leather-lo: #2d1d1d; }
+:root[data-theme='midnight'] .cover[data-leather='tan'] { --leather: #6e5530; --leather-hi: #816b4b; --leather-lo: #4a3920; }
+:root[data-theme='gallery'] .cover[data-leather='oxblood'] { --leather: #1c1c1c; --leather-hi: #3a3a3a; --leather-lo: #131313; }
+:root[data-theme='gallery'] .cover[data-leather='slate'] { --leather: #2f3a44; --leather-hi: #4a545c; --leather-lo: #1f272e; }
+:root[data-theme='gallery'] .cover[data-leather='brown'] { --leather: #3d3d3b; --leather-hi: #565654; --leather-lo: #292928; }
+:root[data-theme='gallery'] .cover[data-leather='ink'] { --leather: #0e0e0e; --leather-hi: #2d2d2d; --leather-lo: #090909; }
+:root[data-theme='gallery'] .cover[data-leather='burgundy'] { --leather: #b5410f; --leather-hi: #bf5a2e; --leather-lo: #792c0a; }
+:root[data-theme='gallery'] .cover[data-leather='tan'] { --leather: #5c5b55; --leather-hi: #71706b; --leather-lo: #3e3d39; }
+:root[data-theme='terracotta'] .cover[data-leather='oxblood'] { --leather: #7a3b22; --leather-hi: #8b543f; --leather-lo: #522817; }
+:root[data-theme='terracotta'] .cover[data-leather='slate'] { --leather: #4a3a33; --leather-hi: #62544e; --leather-lo: #322722; }
+:root[data-theme='terracotta'] .cover[data-leather='brown'] { --leather: #3e2723; --leather-hi: #574340; --leather-lo: #2a1a17; }
+:root[data-theme='terracotta'] .cover[data-leather='ink'] { --leather: #2a1a17; --leather-hi: #463835; --leather-lo: #1c110f; }
+:root[data-theme='terracotta'] .cover[data-leather='burgundy'] { --leather: #974b28; --leather-hi: #a56244; --leather-lo: #65321b; }
+:root[data-theme='terracotta'] .cover[data-leather='tan'] { --leather: #a0662f; --leather-hi: #ac7a4a; --leather-lo: #6b441f; }
 
 .cover img {
   position: absolute;
@@ -74,7 +99,7 @@
   width: 79%;
   height: 82%;
   border-radius: 1.5px;
-  box-shadow: 0 0 0 1px rgba(201, 169, 97, 0.75), 0 0 0 3px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--foil-line) 75%, transparent), 0 0 0 3px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.45);
 }
 .cover[data-style='bound'][data-rtl='true'] img {
   inset: 9% 13% 9% 8%;
@@ -93,8 +118,8 @@
   padding: 7cqw 5cqw;
   text-align: center;
   border: 0.9cqw solid transparent;
-  border-image: linear-gradient(135deg, #8a6a24, #e3cc8a 35%, #a8863c 60%, #edd9a0 85%, #8f7028) 1;
-  outline: 0.4cqw solid rgba(201, 169, 97, 0.5);
+  border-image: var(--foil) 1;
+  outline: 0.4cqw solid color-mix(in srgb, var(--foil-line) 50%, transparent);
   outline-offset: -2.6cqw;
 }
 .cover[data-rtl='true'] .cover-foil {
@@ -102,7 +127,7 @@
 }
 .cover-foil .t,
 .cover-foil .a {
-  background: linear-gradient(135deg, #a8863c, #f0dfa8 30%, #b7954a 55%, #f3e3b0 78%, #9a7a30);
+  background: var(--foil);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -159,7 +184,7 @@
   transform: translateX(-50%);
   width: 12cqw;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #d9c283, transparent);
+  background: linear-gradient(90deg, transparent, var(--foil-line), transparent);
 }
 
 /* Ribbon on books in progress. */
@@ -170,7 +195,7 @@
   z-index: 4;
   width: 9%;
   height: 21%;
-  background: linear-gradient(180deg, #c2413a, #a3302a);
+  background: var(--ribbon);
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
 }
@@ -196,7 +221,7 @@
   background: rgba(255, 255, 255, 0.25);
 }
 .cover-veil .meter > i {
-  background: #e7c87a;
+  background: var(--foil-line);
 }
 .cover-veil[data-failed='true'] {
   background: linear-gradient(180deg, rgba(60, 12, 8, 0.45), rgba(40, 8, 6, 0.92));
@@ -702,7 +727,7 @@
   left: 22px;
   right: 22px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--gold-soft) 20%, #e6cf8e 50%, var(--gold-soft) 80%, transparent);
+  background: linear-gradient(90deg, transparent, var(--gold-soft) 20%, var(--fillet) 50%, var(--gold-soft) 80%, transparent);
   opacity: 0.85;
 }
 .continue h2,
@@ -799,7 +824,7 @@
   margin-top: 4px;
 }
 .position-label.is-for {
-  color: #2f8a5b;
+  color: var(--ok);
 }
 .position-label.is-against {
   color: var(--rubric);

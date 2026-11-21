@@ -1,7 +1,7 @@
-import { setSetting, useSetting, type ReaderPrefs, type ThemeName } from '../../app/settings';
+import { resolveTheme, setSetting, useSetting, type ReaderPrefs } from '../../app/settings';
+import { THEMES, swatchStyle } from '../../app/themes';
 import { isAndroidApp } from '../../native/maktaba';
 
-const THEMES: Array<[Exclude<ThemeName, 'auto'>, string]> = [['paper', 'Paper'], ['sepia', 'Sepia'], ['lamp', 'Lamp'], ['black', 'Black']];
 
 interface Props {
   /** Show the theme row (in the reader; Settings has its own Theme page). */
@@ -32,10 +32,10 @@ export function ReadingControls({ showTheme, showScriptOptions, lang, grouped }:
         <div className="ctl">
           {!grouped && <div className="lbl"><span>Theme</span></div>}
           <div className="theme-chips" role="group" aria-label="Theme">
-            {THEMES.map(([value, label]) => (
-              <button key={value} className="theme-chip" aria-pressed={document.documentElement.dataset.theme === value && (theme === value || theme === 'auto')} onClick={() => void setSetting('theme', value)}>
-                <span className="swatch" data-swatch={value} aria-hidden="true" />
-                {label}
+            {THEMES.map((t) => (
+              <button key={t.id} className="theme-chip" aria-pressed={resolveTheme(theme) === t.id} onClick={() => void setSetting('theme', t.id)}>
+                <span className="swatch" style={swatchStyle(t)} aria-hidden="true" />
+                {t.label}
               </button>
             ))}
           </div>

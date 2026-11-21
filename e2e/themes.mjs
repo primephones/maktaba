@@ -8,7 +8,7 @@ const { chromium } = createRequire(import.meta.url)('playwright');
 const out = decodeURIComponent(new URL('./out/themes/', import.meta.url).pathname);
 mkdirSync(out, { recursive: true });
 const fx = (n) => decodeURIComponent(new URL(`./out/fixtures/${n}`, import.meta.url).pathname);
-const THEMES = (process.argv[2] ?? 'paper,sepia,lamp,black').split(',');
+const THEMES = (process.argv[2] ?? 'paper,sepia,lamp,black,forest,midnight,gallery,terracotta').split(',');
 
 /** Runs in the page: every visible text element whose contrast is too low. */
 const audit = () => {

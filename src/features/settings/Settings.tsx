@@ -6,7 +6,8 @@ import { db, requestPersistence } from '../../db/db';
 import type { Book, CoverStyle } from '../../db/types';
 import { formatBytes } from '../../lib/util';
 import { goBack, navigate } from '../../app/router';
-import { DEFAULTS, setSetting, useSetting, type ThemeName } from '../../app/settings';
+import { DEFAULTS, setSetting, useSetting } from '../../app/settings';
+import { THEMES, swatchStyle, themeInfo, type ThemeInfo } from '../../app/themes';
 import { ErrorBoundary } from '../../app/ErrorBoundary';
 import { Icon, type IconName } from '../../ui/Icon';
 import { BookCover } from '../library/BookCover';
@@ -18,19 +19,12 @@ import { HelpPage } from './HelpPage';
 import { BackupPage } from './BackupPage';
 import { VoicePage } from './VoicePage';
 
-const THEMES: Array<[ThemeName, string, string]> = [
-  ['auto', 'Follow phone', 'Paper by day, Lamp when the phone is in dark mode'],
-  ['paper', 'Paper', 'Vellum'],
-  ['sepia', 'Sepia', 'Warm, low glare'],
-  ['lamp', 'Lamp', 'Dark, for evening reading'],
-  ['black', 'Black', 'True black for OLED screens'],
-];
 
 const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string; group: string }> = [
   { id: 'help', group: 'Start here', title: 'Help & setup', icon: 'info', sub: 'The setup guide, and answers to common questions' },
   { id: 'cloud', group: 'Your accounts', title: 'Your cloud', icon: 'cloud', sub: 'Your library in your own Google Drive, on all your phones' },
   { id: 'ai', group: 'Your accounts', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account, test it, today’s allowance' },
-  { id: 'theme', group: 'Reading', title: 'Theme', icon: 'palette', sub: 'Paper, Sepia, Lamp or Black' },
+  { id: 'theme', group: 'Reading', title: 'Theme', icon: 'palette', sub: 'Eight colour themes, or follow the phone' },
   { id: 'reading', group: 'Reading', title: 'Reading defaults', icon: 'type', sub: 'Typefaces, size, spacing and page mode' },
   { id: 'voice', group: 'Reading', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
   { id: 'library', group: 'Your library', title: 'Sorting new books', icon: 'folder', sub: 'Into folders: ask me, automatically, or leave them' },
@@ -94,18 +88,58 @@ export function Settings({ page }: { page?: string }) {
 
 function ThemePage() {
   const theme = useSetting('theme');
+  const pair = useSetting('autoThemes');
+  const row = (t: ThemeInfo) => (
+    <button className="row" key={t.id} role="radio" aria-checked={theme === t.id} onClick={() => void setSetting('theme', t.id)}>
+      <span className="swatch" style={swatchStyle(t)} aria-hidden="true" />
+      <span className="grow">
+        <span className="title">{t.label}</span>
+        <div className="sub">{t.sub}</div>
+      </span>
+      {theme === t.id && <Icon name="check" />}
+    </button>
+  );
+  const day = themeInfo(pair.light);
+  const night = themeInfo(pair.dark);
   return (
-    <div className="list" role="radiogroup" aria-label="Theme">
-      {THEMES.map(([value, label, sub]) => (
-        <button className="row" key={value} role="radio" aria-checked={theme === value} onClick={() => void setSetting('theme', value)}>
-          <span className="swatch" data-swatch={value} aria-hidden="true" />
+    <div role="radiogroup" aria-label="Theme">
+      <div className="theme-preview" aria-hidden="true">
+        <span className="tp-eyebrow">Continue reading</span>
+        <span className="tp-title">al-Risāla</span>
+        <span className="tp-text">Knowledge is of two kinds: knowledge of the body, and knowledge of religion.</span>
+        <span className="tp-row"><span className="tp-btn">Read</span><span className="tp-chip">✦ Translate</span><span className="tp-hl">highlight</span></span>
+      </div>
+      <div className="list">
+        <button className="row" role="radio" aria-checked={theme === 'auto'} onClick={() => void setSetting('theme', 'auto')}>
+          <span className="swatch swatch--split" style={{ background: `linear-gradient(135deg, ${day.swatch[0]} 50%, ${night.swatch[0]} 50%)` }} aria-hidden="true" />
           <span className="grow">
-            <span className="title">{label}</span>
-            <div className="sub">{sub}</div>
+            <span className="title">Follow phone</span>
+            <div className="sub">{day.label} by day, {night.label} when the phone is in dark mode</div>
           </span>
-          {theme === value && <Icon name="check" />}
+          {theme === 'auto' && <Icon name="check" />}
         </button>
-      ))}
+      </div>
+      {theme === 'auto' && (
+        <div className="auto-pair">
+          {(['light', 'dark'] as const).map((tone) => (
+            <div className="ctl" key={tone}>
+              <div className="lbl"><span>{tone === 'light' ? 'By day' : 'At night'}</span></div>
+              <div className="theme-chips" role="group" aria-label={tone === 'light' ? 'Theme by day' : 'Theme at night'}>
+                {THEMES.filter((t) => t.tone === tone).map((t) => (
+                  <button key={t.id} className="theme-chip" aria-pressed={pair[tone] === t.id} onClick={() => void setSetting('autoThemes', { ...pair, [tone]: t.id })}>
+                    <span className="swatch" style={swatchStyle(t)} aria-hidden="true" />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="section-title">Palettes</div>
+      <div className="list">{THEMES.filter((t) => t.family === 'palette').map(row)}</div>
+      <div className="section-title">Classic</div>
+      <div className="list">{THEMES.filter((t) => t.family === 'classic').map(row)}</div>
     </div>
   );
 }

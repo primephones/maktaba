@@ -170,8 +170,8 @@ img {
   transform: scale(0.97);
 }
 .btn--primary {
-  background: var(--rubric);
-  color: var(--on-rubric);
+  background: var(--primary);
+  color: var(--on-primary);
   border-color: transparent;
 }
 .btn--quiet {
@@ -346,7 +346,7 @@ button.row:active {
   transition: transform 0.22s var(--ease-spring);
 }
 .switch[aria-checked='true'] {
-  background: var(--rubric);
+  background: var(--primary);
 }
 .switch[aria-checked='true']::after {
   transform: translateX(20px);
@@ -503,12 +503,12 @@ input[type='range'] {
   background: var(--surface-2);
 }
 .bar-act--add {
-  background: var(--rubric);
-  color: var(--on-rubric);
-  box-shadow: 0 3px 10px color-mix(in srgb, var(--rubric) 40%, transparent);
+  background: var(--primary);
+  color: var(--on-primary);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--primary) 40%, transparent);
 }
 .bar-act--add:active {
-  background: var(--rubric);
+  background: var(--primary);
   transform: scale(0.94);
 }
 
@@ -1070,8 +1070,8 @@ details.finish-by-hand textarea {
   text-align: center;
 }
 .setup-steps li[aria-current='step'] {
-  background: var(--rubric);
-  color: var(--on-rubric);
+  background: var(--primary);
+  color: var(--on-primary);
 }
 .setup-steps li[data-done='true'] {
   color: var(--ink);

@@ -356,8 +356,7 @@ mark.flash {
   font-family: var(--font-ui);
   font-size: 0.7rem;
 }
-:root[data-theme='lamp'] .pdfpage canvas,
-:root[data-theme='black'] .pdfpage canvas {
+:root[data-tone='dark'] .pdfpage canvas {
   filter: brightness(0.86);
 }
 
@@ -622,15 +621,96 @@ mark.flash {
   border: 1.5px solid var(--line-strong);
   flex: none;
 }
-.swatch[data-swatch='paper'] { background: #f6f4ef; }
-.swatch[data-swatch='sepia'] { background: #f1e7d0; }
-.swatch[data-swatch='lamp'] { background: #1d1914; }
-.swatch[data-swatch='black'] { background: #000; }
-.swatch[data-swatch='auto'] { background: linear-gradient(135deg, #f6f4ef 50%, #1d1914 50%); }
 .theme-chips {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
+}
+.theme-chip .swatch {
+  width: 26px;
+  height: 26px;
+}
+
+/* The Theme page: a small sample of the app in the chosen colours, live. */
+.theme-preview {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 16px;
+  padding: 16px 18px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+  transition: background var(--dur), border-color var(--dur);
+}
+.theme-preview::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold-soft) 20%, var(--fillet) 50%, var(--gold-soft) 80%, transparent);
+}
+.tp-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rubric);
+}
+.tp-title {
+  font-family: var(--font-read);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tp-text {
+  font-family: var(--font-read);
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.tp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.tp-btn {
+  padding: 6px 16px;
+  border-radius: var(--r-pill);
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.tp-chip {
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong);
+  color: var(--gold);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.tp-hl {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--hl-gold);
+  color: var(--ink);
+  font-family: var(--font-read);
+  font-size: 0.9rem;
+}
+.auto-pair {
+  display: grid;
+  gap: 14px;
+  margin: 12px 0 4px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
 }
 .theme-chip {
   display: grid;
@@ -1009,8 +1089,8 @@ mark.flash {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--rubric);
-  color: var(--on-rubric);
+  background: var(--primary);
+  color: var(--on-primary);
   font-size: 1.1rem;
   display: grid;
   place-items: center;
@@ -1275,7 +1355,7 @@ mark.flash {
   font-size: 0.92rem;
 }
 .irab-verdict.is-right {
-  color: #2f8a5b;
+  color: var(--ok);
 }
 .irab-verdict.is-wrong {
   color: var(--rubric);
@@ -1319,8 +1399,8 @@ mark.flash {
   color: var(--ink-2);
 }
 .quiz-options button[data-state='right'] {
-  border-color: #2f8a5b;
-  background: color-mix(in srgb, #2f8a5b 14%, transparent);
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
   color: var(--ink);
 }
 .quiz-options button[data-state='wrong'] {
@@ -1437,9 +1517,9 @@ mark.flash {
   font-size: 0.92rem;
 }
 .ahead-grid .btn[aria-pressed='true'] {
-  background: var(--rubric);
-  color: var(--on-rubric);
-  border-color: var(--rubric);
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
 }
 .ahead-pill-text {
   overflow: hidden;

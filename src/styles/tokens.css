@@ -177,3 +177,166 @@
   --on-leather: #efe3cb;
   --on-leather-2: #c9b695;
 }
+
+/* ---------- Palettes ----------
+   Each is a whole theme: the same tokens as above, so every screen and sheet follows it.
+   Beyond those: --primary for filled buttons and switches (the accent unless a palette
+   wants otherwise), --ok for "done" and "for", the ribbon and the gold foil on covers. */
+
+:root {
+  --primary: var(--rubric);
+  --on-primary: var(--on-rubric);
+  --ok: #2f8a5b;
+  --ribbon: linear-gradient(180deg, #c2413a, #a3302a);
+  --fillet: #e6cf8e;
+}
+:root[data-tone='dark'] {
+  --ok: #7fc99a;
+}
+
+/* Forest: deep green, olive and sand. */
+:root[data-theme='forest'] {
+  color-scheme: dark;
+  --bg: #17251f;
+  --surface: #1e2f27;
+  --surface-2: #283c32;
+  --ink: #f1ebdd;
+  --ink-2: #d8d1bd;
+  --ink-3: #aeaa8b;
+  --line: #31463b;
+  --line-strong: #4b6252;
+  --rubric: #dccb8f;
+  --on-rubric: #17251f;
+  --slate: #abc3b2;
+  --gold: #e0cd8f;
+  --gold-soft: #a6a078;
+  --glass: rgba(30, 47, 39, 0.86);
+  --glass-line: rgba(241, 235, 221, 0.12);
+  --scrim: rgba(7, 13, 10, 0.62);
+  --shadow: 0 12px 34px rgba(3, 8, 5, 0.55), 0 2px 8px rgba(3, 8, 5, 0.35);
+  --hl-gold: rgba(214, 201, 154, 0.3);
+  --hl-rubric: rgba(222, 145, 112, 0.32);
+  --hl-slate: rgba(130, 180, 165, 0.32);
+  --hl-rose: rgba(215, 150, 160, 0.3);
+  --hl-ink: rgba(241, 235, 221, 0.18);
+  --leather: #344b3a;
+  --leather-hi: #44614b;
+  --leather-lo: #22342b;
+  --on-leather: #f1ebdd;
+  --on-leather-2: #d6c99a;
+  --ok: #9fd4a5;
+  --foil: linear-gradient(135deg, #a6a078, #f1ebdd 30%, #b9b088 55%, #efe6c8 78%, #8d8761);
+  --foil-line: #d6c99a;
+  --fillet: #f1ebdd;
+  --ribbon: linear-gradient(180deg, #e8dbab, #c9b97f);
+}
+
+/* Midnight: charcoal and amber. */
+:root[data-theme='midnight'] {
+  color-scheme: dark;
+  --bg: #141416;
+  --surface: #1e1e22;
+  --surface-2: #29292e;
+  --ink: #f3efe6;
+  --ink-2: #cfcabf;
+  --ink-3: #a29d93;
+  --line: #2e2e34;
+  --line-strong: #47474f;
+  --rubric: #e2b868;
+  --on-rubric: #1a1306;
+  --slate: #aebdcc;
+  --gold: #e8c47c;
+  --gold-soft: #b8964f;
+  --glass: rgba(36, 36, 41, 0.8);
+  --glass-line: rgba(243, 239, 230, 0.12);
+  --scrim: rgba(0, 0, 0, 0.66);
+  --shadow: 0 14px 38px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --hl-gold: rgba(226, 184, 104, 0.32);
+  --hl-rubric: rgba(232, 130, 110, 0.32);
+  --hl-slate: rgba(130, 165, 200, 0.34);
+  --hl-rose: rgba(220, 145, 170, 0.32);
+  --hl-ink: rgba(243, 239, 230, 0.18);
+  --leather: #2b2722;
+  --leather-hi: #3b352d;
+  --leather-lo: #191714;
+  --on-leather: #f3e7cc;
+  --on-leather-2: #cdb88f;
+  --primary: #dcae5c;
+  --on-primary: #1a1306;
+  --ribbon: linear-gradient(180deg, #f0cf8a, #cf9f4c);
+  --fillet: #f0d79e;
+}
+
+/* Gallery: clean white, black type, orange for emphasis. */
+:root[data-theme='gallery'] {
+  color-scheme: light;
+  --bg: #f5f5f2;
+  --surface: #ffffff;
+  --surface-2: #ebebe7;
+  --ink: #111111;
+  --ink-2: #3d3d3d;
+  --ink-3: #606060;
+  --line: #e1e1dc;
+  --line-strong: #c5c5bf;
+  --rubric: #b53c0b;
+  --on-rubric: #ffffff;
+  --slate: #34505f;
+  --gold: #855f00;
+  --gold-soft: #dca522;
+  --glass: rgba(255, 255, 255, 0.84);
+  --glass-line: rgba(17, 17, 17, 0.08);
+  --scrim: rgba(17, 17, 17, 0.4);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --hl-gold: rgba(245, 190, 40, 0.38);
+  --hl-rubric: rgba(235, 95, 40, 0.24);
+  --hl-slate: rgba(60, 140, 200, 0.24);
+  --hl-rose: rgba(230, 110, 150, 0.26);
+  --hl-ink: rgba(17, 17, 17, 0.12);
+  --leather: #1a1a1a;
+  --leather-hi: #2e2e2e;
+  --leather-lo: #050505;
+  --on-leather: #ffffff;
+  --on-leather-2: #cfcfcf;
+  --primary: #111111;
+  --on-primary: #ffffff;
+  --ok: #1a6e42;
+  --ribbon: linear-gradient(180deg, #f06a2e, #c2410c);
+  --fillet: #f5c84a;
+}
+
+/* Terracotta: clay, sienna and cream. */
+:root[data-theme='terracotta'] {
+  color-scheme: light;
+  --bg: #f8eee3;
+  --surface: #fefcf8;
+  --surface-2: #f1e1cf;
+  --ink: #3e2723;
+  --ink-2: #5d4037;
+  --ink-3: #78584a;
+  --line: #ead7c2;
+  --line-strong: #d6b99a;
+  --rubric: #974b28;
+  --on-rubric: #fefcf8;
+  --slate: #4b636c;
+  --gold: #87521a;
+  --gold-soft: #d18b47;
+  --glass: rgba(254, 252, 248, 0.82);
+  --glass-line: rgba(62, 39, 35, 0.1);
+  --scrim: rgba(62, 39, 35, 0.42);
+  --shadow: 0 10px 30px rgba(90, 50, 30, 0.16), 0 2px 6px rgba(90, 50, 30, 0.1);
+  --hl-gold: rgba(209, 139, 71, 0.34);
+  --hl-rubric: rgba(160, 82, 45, 0.26);
+  --hl-slate: rgba(80, 125, 150, 0.26);
+  --hl-rose: rgba(200, 120, 130, 0.3);
+  --hl-ink: rgba(62, 39, 35, 0.14);
+  --leather: #3e2723;
+  --leather-hi: #5a3a30;
+  --leather-lo: #2a1a17;
+  --on-leather: #f6e8d9;
+  --on-leather-2: #e4c7a1;
+  --ok: #2f6a3f;
+  --foil: linear-gradient(135deg, #a0522d, #f0d2ae 30%, #b9693a 55%, #f6e1c4 78%, #8e4726);
+  --foil-line: #d18b47;
+  --fillet: #e4c7a1;
+  --ribbon: linear-gradient(180deg, #d18b47, #a0522d);
+}
