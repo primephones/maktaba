@@ -50,31 +50,31 @@ function Welcome({ onNext }: { onNext: () => void }) {
     <>
       <div className="hero-card">
         <span className="ai-mark" aria-hidden="true">✦</span>
-        <h2>Two steps, about five minutes</h2>
-        <p>Maktaba is yours alone: your own cloud keeps your library, and your own AI does the translating. Both are free, and nobody else can see what you read.</p>
+        <h2>Two small steps. Then the books do the talking.</h2>
+        <p>Maktaba keeps nothing of yours on anyone else’s computer. Your own Google Drive holds the library; your own free AI does the translating. Nobody, us included, sees what you read.</p>
       </div>
 
-      <div className="section-title">1 · Your cloud: what it gives you</div>
+      <div className="section-title">1 · A shelf that can’t burn down</div>
       <div className="card gets">
         <div className="gets-head"><Icon name="cloud" /><b>Google Drive</b></div>
         <ul>
-          <li><b>Never lose your library.</b> Books, notes, highlights, references and translations are kept in your own Drive.</li>
-          <li><b>Read on any phone.</b> Connect the same account on a new phone and everything is there.</li>
-          <li><b>Private.</b> Maktaba can only see the folder it makes for itself; nobody else can see it.</li>
+          <li><b>Never lose a book.</b> Phones get dropped, stolen and upgraded. Your books, notes, highlights and translations sit safely in your own Drive.</li>
+          <li><b>Any phone, same shelf.</b> Sign in on a new phone and your library is already there, open at the page you left.</li>
+          <li><b>Private.</b> Maktaba sees only the one folder it makes. Not your photos, not your documents.</li>
         </ul>
       </div>
 
-      <div className="section-title">2 · Your AI: what it gives you</div>
+      <div className="section-title">2 · A translator that never sleeps</div>
       <div className="card gets">
         <div className="gets-head"><Icon name="sparkle" /><b>Gemini or OpenRouter (free)</b></div>
         <ul>
-          <li><b>Read in English.</b> Arabic, Urdu, Persian, Pashto and Malay books, paragraph by paragraph, with the original a tap away.</li>
-          <li><b>Scanned books, read for you.</b> The AI reads each printed page and translates it; you see the page with its English beneath.</li>
-          <li><b>Study.</b> Explain a passage; the iʿrāb of a sentence and why each word takes its case; ask your books and get the answer with references; the arguments for and against.</li>
+          <li><b>Read in English.</b> Arabic, Urdu, Persian, Pashto and Malay, paragraph by paragraph, with the original a tap away, because a translation should never have the last word.</li>
+          <li><b>Scanned books, read for you.</b> Even the faded Nastaliq one with a website stamped across every page. You see the page as printed, its English beneath.</li>
+          <li><b>Study like a student, not a tourist.</b> Explain a passage, the iʿrāb of a sentence and why, ask your own books, and hear both sides of a question, each answer with its references.</li>
         </ul>
       </div>
-      <p className="muted small">You can skip either one and come back any time: Settings › Help &amp; setup.</p>
-      <button className="btn btn--primary btn--block" onClick={onNext}>Start</button>
+      <p className="muted small">Skip either and come back when you like (Settings › Help &amp; setup). The books will wait; they are good at that.</p>
+      <button className="btn btn--primary btn--block" onClick={onNext}>Bismillāh, let’s begin</button>
     </>
   );
 }
@@ -237,7 +237,7 @@ function AiStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) 
   return (
     <>
       <h2 className="setup-title">Connect your own AI</h2>
-      <p>Choose one. You can add more later: with two, Maktaba switches to the other when one runs out for the day.</p>
+      <p>Pick one; it takes about two minutes and costs nothing. Two is better than one: when a free allowance runs out for the day, Maktaba quietly moves to the other.</p>
       {connected.length > 0 && (
         <div className="done-card">
           <Icon name="check" />
@@ -366,8 +366,10 @@ function Done() {
     <>
       <div className="hero-card">
         <span className="ai-mark" aria-hidden="true">✦</span>
-        <h2>{state.cloud && state.ai ? 'All set' : 'Ready to read'}</h2>
-        <p>{state.cloud && state.ai ? 'Your library is kept in your own cloud, and your own AI is ready to translate.' : 'You can finish the rest any time from Settings › Help & setup.'}</p>
+        <h2>{state.cloud && state.ai ? 'Your library is ready' : 'Good enough to start'}</h2>
+        <p lang="ar" dir="rtl" className="done-verse">اقْرَأْ وَرَبُّكَ الْأَكْرَمُ</p>
+        <p className="muted small" style={{ marginTop: 0 }}>“Read, and your Lord is the Most Generous.” (al-ʿAlaq 96:3)</p>
+        <p>{state.cloud && state.ai ? 'A shelf in your own cloud, a translator at your service. All that is missing is a book.' : 'The rest can wait until you are curious: Settings › Help & setup.'}</p>
       </div>
       <div className="list">
         <button className="row" onClick={() => navigate('/setup/cloud', { replace: true })}>
@@ -382,8 +384,8 @@ function Done() {
       <div className="section-title">What to try first</div>
       <ol className="howto">
         <li>Add a book: an Arabic, Urdu or Persian PDF, EPUB or Word file from your phone.</li>
-        <li>Open it. Tap <b>Original</b> at the top to see the page exactly as printed.</li>
-        {state.ai && <li>In the book’s details, tap <b>Translate the whole book</b>. Then read in English, and tap any paragraph for the original.</li>}
+        <li>Open it, and tap the middle of the page: everything you need is at the bottom.</li>
+        {state.ai && <li>Tap <b>English</b>, then <b>As I read</b>: the pages ahead come into English while you read. Tap any paragraph for the original; it is good to keep the translator honest.</li>}
       </ol>
       <button className="btn btn--primary btn--block" onClick={() => { navigate('/', { replace: true }); addBooks(); }}><Icon name="plus" size={20} />Add a book</button>
       <button className="btn btn--quiet btn--block" onClick={() => navigate('/', { replace: true })}>Go to my library</button>

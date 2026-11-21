@@ -1403,3 +1403,12 @@ details.finish-by-hand textarea {
   font-weight: 600;
   color: var(--ink-3);
 }
+
+/* Setup › done: a verse, set like one. */
+.done-verse {
+  font-family: var(--font-arabic);
+  font-size: 1.7rem;
+  line-height: 1.6;
+  margin: 4px 0 2px;
+  color: var(--rubric);
+}

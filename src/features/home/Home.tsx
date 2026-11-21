@@ -64,7 +64,7 @@ export function Home() {
       {books.length === 0 ? (
         <EmptyState
           epigraph={BEST_COMPANION}
-          title="Welcome to your library"
+          title="An empty shelf, for now"
           action={
             <>
               <button className="btn btn--primary" onClick={() => addBooks()}><Icon name="plus" size={20} />Add your first book</button>
@@ -73,7 +73,7 @@ export function Home() {
             </>
           }
         >
-          Add an Arabic, Urdu, Persian or English book from your phone. It stays on this device and opens without internet.
+          Add an Arabic, Urdu, Persian or English book from your phone: it stays on this device and opens without internet. Or start with a classic from the catalogue; they have aged well.
         </EmptyState>
       ) : (
         <>

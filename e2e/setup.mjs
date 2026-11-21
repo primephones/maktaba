@@ -41,10 +41,10 @@ try {
   console.log('Starting');
   await page.goto(app.url);
   await page.getByRole('button', { name: /Set up Maktaba \(2 steps\)/ }).click();
-  await page.getByRole('heading', { name: 'Two steps, about five minutes' }).waitFor();
+  await page.getByRole('heading', { name: 'Two small steps. Then the books do the talking.' }).waitFor();
   check(true, 'a new person is offered the setup guide from Home');
   await shot('60-setup-welcome');
-  await page.getByRole('button', { name: 'Start' }).click();
+  await page.getByRole('button', { name: 'Bismillāh, let’s begin' }).click();
 
   console.log('Step 1: the cloud');
   await page.getByRole('heading', { name: 'Keep your library in your own Google Drive' }).waitFor();
@@ -83,7 +83,7 @@ try {
   await page.getByRole('button', { name: 'Finish' }).click();
 
   console.log('Done');
-  await page.getByRole('heading', { name: 'Ready to read' }).waitFor();
+  await page.getByRole('heading', { name: 'Good enough to start' }).waitFor();
   check(await page.getByText('Not yet: tap to set it up').isVisible(), 'the end shows what is set up and what is still to do');
   check(await page.getByText('What to try first').isVisible(), 'and what to try first');
   await shot('64-setup-done');
