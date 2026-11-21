@@ -205,7 +205,7 @@
   --ink-3: #aeaa8b;
   --line: #31463b;
   --line-strong: #4b6252;
-  --rubric: #dccb8f;
+  --rubric: #d6c99a;
   --on-rubric: #17251f;
   --slate: #abc3b2;
   --gold: #e0cd8f;
@@ -307,14 +307,14 @@
 /* Terracotta: clay, sienna and cream. */
 :root[data-theme='terracotta'] {
   color-scheme: light;
-  --bg: #f8eee3;
+  --bg: #f6e8d9;
   --surface: #fefcf8;
-  --surface-2: #f1e1cf;
+  --surface-2: #efdcc6;
   --ink: #3e2723;
   --ink-2: #5d4037;
   --ink-3: #78584a;
-  --line: #ead7c2;
-  --line-strong: #d6b99a;
+  --line: #e4c7a1;
+  --line-strong: #d1ab80;
   --rubric: #974b28;
   --on-rubric: #fefcf8;
   --slate: #4b636c;
@@ -335,6 +335,8 @@
   --on-leather: #f6e8d9;
   --on-leather-2: #e4c7a1;
   --ok: #2f6a3f;
+  --primary: #a0522d;
+  --on-primary: #fefcf8;
   --foil: linear-gradient(135deg, #a0522d, #f0d2ae 30%, #b9693a 55%, #f6e1c4 78%, #8e4726);
   --foil-line: #d18b47;
   --fillet: #e4c7a1;

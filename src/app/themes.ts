@@ -25,7 +25,7 @@ export const THEMES: ThemeInfo[] = [
   { id: 'forest', label: 'Forest', sub: 'Deep green, olive and sand', tone: 'dark', bg: '#17251f', swatch: ['#17251f', '#d6c99a', '#65745a'], family: 'palette' },
   { id: 'midnight', label: 'Midnight', sub: 'Charcoal and amber, for late reading', tone: 'dark', bg: '#141416', swatch: ['#141416', '#e2b868', '#2b2b30'], family: 'palette' },
   { id: 'gallery', label: 'Gallery', sub: 'Clean white, black type, a touch of orange', tone: 'light', bg: '#f5f5f2', swatch: ['#ffffff', '#111111', '#e0571f'], family: 'palette' },
-  { id: 'terracotta', label: 'Terracotta', sub: 'Clay, sienna and cream', tone: 'light', bg: '#f8eee3', swatch: ['#f8eee3', '#a0522d', '#3e2723'], family: 'palette' },
+  { id: 'terracotta', label: 'Terracotta', sub: 'Clay, sienna and cream', tone: 'light', bg: '#f6e8d9', swatch: ['#f6e8d9', '#a0522d', '#3e2723'], family: 'palette' },
 ];
 
 export const themeInfo = (id: ThemeId): ThemeInfo => THEMES.find((t) => t.id === id) ?? THEMES[0];
