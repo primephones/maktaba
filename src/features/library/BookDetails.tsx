@@ -12,7 +12,7 @@ import { Icon } from '../../ui/Icon';
 import { toast } from '../../ui/toast';
 import { HelpFor } from '../setup/help';
 import { mimeOf, openOriginal, saveFile } from '../../lib/saveFile';
-import { BookCover, useCoverUrl } from './BookCover';
+import { BookCover, leatherOf, useCoverUrl } from './BookCover';
 import { CHECK_BELOW, rereadWithAi, rerunOcr, runOcrQueue } from '../../ocr/queue';
 import { aiReaderFor, aiReaderPausedUntil } from '../../ocr/ai';
 import { aiReady } from '../../ai/client';
@@ -278,16 +278,13 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
 
   return (
     <Sheet title="Book details" onClose={onClose}>
-      <div className="detail-head">
-        <BookCover book={book} showState={false} />
-        <div>
-          <h3 lang={langAttr(book.title)} dir="auto">{book.title}</h3>
-          {book.author && <p className="by" lang={langAttr(book.author)} dir="auto">{book.author}</p>}
-          <p className="detail-facts">
-            {langName(book.lang)}, {FORMAT[book.format]}{book.pageCount ? `, ${book.pageCount} pages` : ''}<br />{formatBytes(book.size)} on this device
-          </p>
-        </div>
+      <div className="detail-band" data-leather={leatherOf(book)}>
+        <div className="detail-band-cover"><BookCover book={book} showState={false} /></div>
+        <h3 lang={langAttr(book.title)} dir="auto">{book.title}</h3>
+        {book.author && <p className="by" lang={langAttr(book.author)} dir="auto">{book.author}</p>}
       </div>
+      <DetailFacts book={book} />
+      <p className="detail-facts">{FORMAT[book.format]} · {formatBytes(book.size)} on this device</p>
 
       {imp.state === 'missing' && (
         <div className="banner" role="status">
@@ -322,9 +319,11 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
       {ready && translatable(book) && <TranslationCard book={book} />}
 
       {ready && (
-        <button className="btn btn--primary btn--block" onClick={() => navigate(`/book/${book.id}`)}>
-          {book.progress && book.progress.fraction > 0.003 ? `Continue · ${percent(book.progress.fraction)}` : 'Start reading'}
-        </button>
+        <div className="detail-cta">
+          <button className="btn btn--primary btn--block" onClick={() => navigate(`/book/${book.id}`)}>
+            {book.progress && book.progress.fraction > 0.003 ? `Continue · ${percent(book.progress.fraction)}` : 'Start reading'}
+          </button>
+        </div>
       )}
 
       <div>
@@ -525,5 +524,20 @@ function RemoveBook({ book, onBack, onDone }: { book: Book; onBack: () => void; 
       </button>
       <button className="btn btn--block" onClick={onBack}>Keep it</button>
     </Sheet>
+  );
+}
+
+/** The book's facts in one row: its language, its length, how far you are, how much is in English. */
+function DetailFacts({ book }: { book: Book }) {
+  const english = useLiveQuery(() => db.translations.where('bookId').equals(book.id).count(), [book.id]) ?? 0;
+  const pages = book.pageCount ?? Math.max(1, Math.ceil(book.sectionChars.reduce((a, b) => a + b, 0) / 1500));
+  const total = book.translation?.total;
+  return (
+    <div className="detail-stats">
+      <div><b>{langName(book.lang)}</b><small>Language</small></div>
+      <div><b>{pages.toLocaleString()}</b><small>Pages</small></div>
+      <div><b>{percent(book.progress?.fraction ?? 0)}</b><small>Read</small></div>
+      <div><b>{english ? (total ? percent(Math.min(1, english / total)) : english.toLocaleString()) : 'None'}</b><small>{english && !total ? 'Paras in English' : 'In English'}</small></div>
+    </div>
   );
 }

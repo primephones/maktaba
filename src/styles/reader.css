@@ -2228,6 +2228,9 @@ mark.flash {
 .rd {
   transition: transform 0.42s var(--ease-out), filter 0.42s var(--ease-out), border-radius 0.42s;
 }
+:root[data-sheet-closing] .rd {
+  transition: none;
+}
 :root[data-sheet]:not([data-sheet-closing]) .rd {
   transform: scale(0.955) translateY(6px);
   border-radius: 18px;
@@ -2322,4 +2325,27 @@ mark.flash {
   gap: 8px;
   justify-content: center;
   margin-top: 8px;
+}
+
+/* Wide screens: the original and its English side by side, the original on its own side. */
+@media (min-width: 900px) {
+  .rd-scroll .rd-col:has(.bk-pair) {
+    max-width: min(1240px, 100vw);
+  }
+  .rd-scroll .bk-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 40px;
+    align-items: start;
+  }
+  .rd-scroll .bk-pair:has(> .bk:is([lang='ar'], [lang='fa'], [lang='ur'], [lang='ps'])) {
+    direction: rtl;
+  }
+  .rd-scroll .bk-pair > .bk {
+    margin-bottom: 0;
+  }
+  .rd-scroll .bk-pair > .bk--en {
+    direction: ltr;
+    font-size: 0.96em;
+  }
 }

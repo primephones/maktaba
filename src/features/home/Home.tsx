@@ -1,4 +1,5 @@
 import { ShelfSkeleton } from '../../ui/InkName';
+import { CountUp } from '../../ui/CountUp';
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -18,18 +19,68 @@ import { backupDue } from '../settings/BackupPage';
 import { useSetting } from '../../app/settings';
 import { timeAgo } from '../../lib/util';
 
-/** Where the reader is, in words: the current chapter from the contents list. */
+/** Where the reader is, in words: the current chapter from the contents list (in English when it has been put into English). */
 function whereIn(book: Book): string {
   const p = book.progress;
   if (!p) return '';
   let title = '';
-  for (const t of book.toc) {
+  book.toc.forEach((t, i) => {
     // The book's own title at the head of its contents is not a chapter.
-    if (t.title.trim() === book.title.trim()) continue;
-    if (t.section < p.section || (t.section === p.section && (t.block ?? 0) <= p.block)) title = t.title;
-    else break;
-  }
+    if (t.title.trim() === book.title.trim()) return;
+    if (t.section < p.section || (t.section === p.section && (t.block ?? 0) <= p.block)) title = (book.view !== 'orig' && book.tocEn?.[i]) || t.title;
+  });
   return title;
+}
+
+/** How long the rest of the book takes at this reader's own pace. */
+function timeLeft(book: Book, speed: number): string {
+  const total = book.sectionChars.reduce((a, b) => a + b, 0);
+  const mins = Math.round(((1 - (book.progress?.fraction ?? 0)) * total) / Math.max(250, speed));
+  if (mins < 1) return 'nearly finished';
+  if (mins < 60) return `${mins} min left`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h} h${m >= 5 ? ` ${m} min` : ''} left`;
+}
+
+/** The book being read: its cover, where you are, and how far you have come. */
+function ContinueCard({ book, where }: { book: Book; where: string }) {
+  const speed = useSetting('readingSpeed');
+  const f = book.progress?.fraction ?? 0;
+  const c = 2 * Math.PI * 15;
+  return (
+    <button className="continue fade-in" onClick={() => navigate(`/book/${book.id}`)} aria-label={`Continue reading ${book.title}`}>
+      <BookCover book={book} />
+      <span className="continue-body">
+        <span className="eyebrow">Continue reading</span>
+        <h2 lang={langAttr(book.title)} dir="auto">{book.title}</h2>
+        <span className="where" dir="auto" lang={langAttr(where)}>{where}</span>
+        <span className="continue-meta tile-progress">
+          <svg className="ring" viewBox="0 0 36 36" aria-hidden="true">
+            <circle className="ring-bg" cx="18" cy="18" r="15" />
+            <circle className="ring-fg" cx="18" cy="18" r="15" style={{ strokeDasharray: c, strokeDashoffset: c * (1 - f) }} />
+          </svg>
+          <span>
+            <b><CountUp value={Math.round(f * 100)} suffix="%" /></b> · {timeLeft(book, speed)}
+          </span>
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** A quiet line while your AI works on a book in the background; tap it to open the book. */
+function LiveLine({ books }: { books: Book[] }) {
+  const busy = books.find((b) => (b.translation && (b.translation.state === 'running' || b.translation.state === 'queued')) || (b.ocr && (b.ocr.state === 'running' || b.ocr.state === 'queued') && b.ocr.done < b.ocr.total));
+  if (!busy) return null;
+  const t = busy.translation && (busy.translation.state === 'running' || busy.translation.state === 'queued') ? busy.translation : null;
+  const text = t ? `Translating ${busy.title}: ${t.done} of ${t.total} paragraphs` : `Reading and translating ${busy.title}: page ${busy.ocr!.done} of ${busy.ocr!.total}`;
+  return (
+    <button className="live-line" onClick={() => navigate(`/book/${busy.id}`)}>
+      <i aria-hidden="true" />
+      <span dir="auto">{text}</span>
+    </button>
+  );
 }
 
 export function Home() {
@@ -88,20 +139,8 @@ export function Home() {
         </EmptyState>
       ) : (
         <>
-          {current && (
-            <button className="continue fade-in" onClick={() => navigate(`/book/${current.id}`)} aria-label={`Continue reading ${current.title}`}>
-              <BookCover book={current} />
-              <span>
-                <span className="eyebrow">Continue reading</span>
-                <h2 lang={langAttr(current.title)} dir="auto">{current.title}</h2>
-                <span className="where" dir="auto" lang={langAttr(where)}>{where}</span>
-                <span className="tile-progress">
-                  <span className="meter"><i style={{ width: percent(current.progress?.fraction) }} /></span>
-                  {percent(current.progress?.fraction)}
-                </span>
-              </span>
-            </button>
-          )}
+          {current && <ContinueCard book={current} where={where} />}
+          <LiveLine books={books} />
 
           {working.length > 0 && (
             <>

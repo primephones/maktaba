@@ -7,6 +7,9 @@ import { useSetting } from '../../app/settings';
 
 const LEATHERS = ['oxblood', 'slate', 'brown', 'ink', 'burgundy', 'tan'] as const;
 
+/** The leather a book is bound in (the same on every screen). */
+export const leatherOf = (book: Pick<Book, 'series' | 'title'>) => LEATHERS[hashString(book.series || book.title) % LEATHERS.length];
+
 /** Object URLs for cover images, shared between every place a cover appears. */
 const urls = new Map<string, { url: string; users: number }>();
 

@@ -114,6 +114,7 @@ export function Library({ folderId }: { folderId?: string }) {
   const books = useLiveQuery(() => db.books.toArray(), []);
   const folders = useLiveQuery(() => db.folders.toArray(), []) ?? [];
   const sort = useSetting('librarySort');
+  const view = useSetting('libraryView');
   const [filter, setFilter] = useState<Filter>('all');
   const [details, setDetails] = useState<string | null>(null);
   const [stack, setStack] = useState<Book[] | null>(null);
@@ -169,6 +170,9 @@ export function Library({ folderId }: { folderId?: string }) {
       <div className={`screen-head${folderId ? ' screen-head--sub' : ''}`}>
         {folderId && <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back"><Icon name="back" /></button>}
         <h1 dir={folderId ? 'auto' : undefined}>{folderId ? folder?.name ?? '' : <>Library<span className="ar" lang="ar">مكتبة</span></>}</h1>
+        <button className="icon-btn" onClick={() => void setSetting('libraryView', view === 'list' ? 'grid' : 'list')} aria-label={view === 'list' ? 'Show as covers' : 'Show as a list'}>
+          <Icon name={view === 'list' ? 'grid' : 'toc'} />
+        </button>
         <button className="icon-btn" onClick={() => setMenu('menu')} aria-label="Library options"><Icon name="more" /></button>
       </div>
 
@@ -186,7 +190,7 @@ export function Library({ folderId }: { folderId?: string }) {
       ) : (
         <>
           {here.length > 0 && (
-            <div className="chips" role="group" aria-label="Show">
+            <div className="chips chips--sticky" role="group" aria-label="Show">
               {([['all', 'All'], ['reading', 'In progress'], ['unread', 'Unread'], ['finished', 'Finished']] as Array<[Filter, string]>).map(([value, label]) => (
                 <button key={value} className="chip" aria-pressed={filter === value} onClick={() => setFilter(value)}>{label}</button>
               ))}
@@ -211,7 +215,7 @@ export function Library({ folderId }: { folderId?: string }) {
           )}
 
           {shelves.length > 0 ? (
-            <div className="grid">
+            <div className={view === 'list' ? 'grid grid--list' : 'grid'}>
               {shelves.map((s) => (
                 <BookTile key={s.key} book={s.book} volumes={s.volumes} onDetails={setDetails} onStack={() => setStack(s.volumes!)} />
               ))}

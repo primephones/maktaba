@@ -872,3 +872,197 @@
 .cat-langs [lang='ar'] {
   font-family: var(--font-arabic);
 }
+
+/* ---------- Home: the book being read ---------- */
+
+.continue-body {
+  display: grid;
+  min-width: 0;
+}
+.continue-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.continue-meta b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.ring {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  transform: rotate(-90deg);
+}
+.ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+.ring-bg {
+  stroke: var(--line);
+}
+.ring-fg {
+  stroke: var(--rubric);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s var(--ease-out);
+}
+.live-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: 0.84rem;
+  text-align: start;
+}
+.live-line i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold-soft);
+  animation: breathe 1.8s ease-in-out infinite;
+}
+.live-line span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes breathe {
+  50% { opacity: 0.35; transform: scale(0.8); }
+}
+
+/* ---------- Library: a list as well as shelves; filters stay in reach ---------- */
+
+.chips--sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-inline: -18px;
+  padding: calc(var(--safe-top) + 6px) 18px 8px;
+  margin-top: calc(-1 * var(--safe-top));
+  background: linear-gradient(var(--bg) 82%, transparent);
+}
+.grid--list {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.grid--list > .tile {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.grid--list > .tile .tile-row {
+  margin: 0;
+}
+.grid--list > .tile .tile-title {
+  font-size: 0.95rem;
+}
+.grid--list .vol-stack .stack-count {
+  font-size: 0.6rem;
+  padding: 1px 5px;
+}
+
+/* ---------- Book details, coloured by the book ---------- */
+
+.detail-band {
+  --tint: #6b1f1b;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin: -4px -20px 0;
+  padding: 18px 20px 10px;
+  text-align: center;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 42%, var(--surface)) 0%, color-mix(in srgb, var(--tint) 12%, var(--surface)) 55%, var(--surface) 100%);
+}
+.detail-band[data-leather='slate'] { --tint: #2f4450; }
+.detail-band[data-leather='brown'] { --tint: #4d3524; }
+.detail-band[data-leather='ink'] { --tint: #26231f; }
+.detail-band[data-leather='burgundy'] { --tint: #5a1e2c; }
+.detail-band[data-leather='tan'] { --tint: #7a5230; }
+.detail-band-cover {
+  width: 104px;
+  margin-bottom: 10px;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.28));
+}
+.detail-band h3 {
+  margin: 0;
+  font-family: var(--font-read);
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.detail-band h3:is([lang='ar'], [lang='fa']) {
+  font-family: var(--font-arabic);
+  font-size: 1.4rem;
+}
+.detail-band h3[lang='ur'] {
+  font-family: var(--font-urdu);
+  line-height: 2.1;
+  font-weight: 400;
+}
+.detail-band .by {
+  margin: 0;
+  color: var(--ink-2);
+}
+.detail-band .by:is([lang='ar'], [lang='fa'], [lang='ur']) {
+  font-family: var(--font-arabic);
+  font-size: 1.05rem;
+}
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 8px;
+  border-block: 1px solid var(--line);
+}
+.detail-stats > div {
+  display: grid;
+  gap: 1px;
+  padding: 10px 4px;
+  text-align: center;
+}
+.detail-stats > div + div {
+  border-inline-start: 1px solid var(--line);
+}
+.detail-stats b {
+  font-size: 0.92rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detail-stats small {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.detail-band + .detail-stats + .detail-facts {
+  text-align: center;
+  margin: 6px 0 2px;
+}
+/* The main button stays at the foot of the sheet, where the thumb is. */
+.detail-cta {
+  position: sticky;
+  bottom: calc(-1 * var(--safe-bottom) - 28px);
+  z-index: 3;
+  margin: 0 -20px;
+  padding: 10px 20px calc(var(--safe-bottom) + 28px);
+  background: linear-gradient(transparent, var(--surface) 30%);
+}

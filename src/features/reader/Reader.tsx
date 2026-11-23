@@ -203,6 +203,8 @@ function ReaderInner({ book }: { book: Book }) {
       const pageNo = b?.printed ?? (b?.page ? String(b.page) : '');
       setBack({ ...from, label: pageNo ? `Back to p. ${pageNo}` : 'Back to where you were' });
     } else if (!remember) setBack(null);
+    // A jump made from a sheet: the page comes forward at once, so it is measured at full size.
+    if (document.documentElement.dataset.sheet) document.documentElement.dataset.sheetClosing = '';
     setTarget((t) => ({ section, block, nonce: t.nonce + 1 }));
     lastJump.current = Date.now();
     latest.current = { section, block };

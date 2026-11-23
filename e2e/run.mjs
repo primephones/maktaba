@@ -685,7 +685,8 @@ await section('Comfort and finding your way', async () => {
   await page.getByRole('button', { name: 'Close' }).click();
   await pause(500);
   const indents2 = await page.evaluate(() => [...document.querySelectorAll('.rd-text .bk[data-t="p"]')].slice(0, 6).map((el) => parseFloat(getComputedStyle(el).textIndent)));
-  check(indents2.every((n) => n === 0) && (await page.locator('.rd-warm, .rd-dim').count()) === 0, 'spaced paragraphs, and warm light and dimming off again');
+  const overlays = await page.locator('.rd-warm, .rd-dim').count();
+  check(indents2.every((n) => n === 0) && overlays === 0, `spaced paragraphs, and warm light and dimming off again (indents ${indents2.join(', ')}; overlays ${overlays})`);
   await showChrome();
   await page.getByRole('button', { name: 'Text and theme' }).click();
   await page.getByRole('button', { name: 'Like a book', exact: true }).click();

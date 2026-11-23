@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
 import { Icon, type IconName } from './Icon';
+import { EmptyDrawing } from './Ornament';
+
+/** Empty screens about books show a book stand; searching shows a lamp; references a star. */
+const DRAWING: Partial<Record<string, 'rehal' | 'lamp' | 'star'>> = { book: 'rehal', search: 'lamp', references: 'star', bookmark: 'star' };
 
 /** A line of Arabic set large, with its meaning and author beneath. */
 export interface Epigraph {
@@ -36,6 +40,8 @@ export function EmptyState({ icon = 'book', title, children, action, epigraph }:
             <span className="by">{epigraph.by}</span>
           </figcaption>
         </figure>
+      ) : DRAWING[icon] ? (
+        <EmptyDrawing kind={DRAWING[icon]!} />
       ) : (
         <div className="mark">
           <Icon name={icon} size={34} />

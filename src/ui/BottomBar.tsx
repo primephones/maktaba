@@ -10,7 +10,7 @@ export function BottomBar({ route, hidden, onAdd }: { route: Route; hidden: bool
   return (
     <nav className="bar" data-hidden={hidden} aria-label="Main" inert={hidden}>
       <div className="bar-tabs">
-        {active >= 0 && <span className="bar-ind" style={{ transform: `translateX(${active * 100}%)` }} />}
+        {active >= 0 && <span className="bar-ind" style={{ ['--i' as string]: active }} />}
         {TABS.map((tab) => (
           <button key={tab} className="bar-tab" aria-current={route.name === tab ? 'page' : undefined} onClick={() => switchTab(tab)}>
             <Icon name={ICON[tab]} size={22} />

@@ -1,4 +1,5 @@
-// Draws the Maktaba icon — مكتبة in gold naskh on red leather — and writes the PNG sizes
+// Draws the Maktaba icon — مكتبة in gold naskh on red leather, over a faint eight-pointed
+// star — and writes the PNG sizes
 // the web app and the Android app need. Run with: node scripts/make-icons.mjs
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -27,6 +28,9 @@ html,body{margin:0;width:${size}px;height:${size}px;background:transparent}
   filter:drop-shadow(0 ${size * 0.006}px ${size * 0.004}px rgba(0,0,0,.45))}
 </style></head><body><div class="icon">
 ${transparent ? '' : `<svg class="grain" width="${size}" height="${size}"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="${(1.1 * 512) / size}" numOctaves="2" seed="7"/><feColorMatrix values="0 0 0 0 0.25  0 0 0 0 0.08  0 0 0 0 0.06  0 0 0 0.55 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>`}
+<svg class="star" viewBox="0 0 24 24" style="position:absolute;left:50%;top:47%;width:${size * (0.86 - inset * 1.5)}px;height:${size * (0.86 - inset * 1.5)}px;transform:translate(-50%,-50%);overflow:visible">
+  <g fill="none" stroke="rgba(226,196,124,.17)" stroke-width="${Math.max(0.35, 0.42)}" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16"/><rect x="4" y="4" width="16" height="16" transform="rotate(45 12 12)"/></g>
+</svg>
 <div class="frame"></div><div class="word">مكتبة</div></div></body></html>`;
 
 const browser = await chromium.launch();
