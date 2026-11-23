@@ -320,6 +320,7 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
       {ready && book.ocr && <OcrStatus book={book} />}
 
       {ready && translatable(book) && <TranslationCard book={book} />}
+      {ready && translatable(book) && <EnglishDownload book={book} />}
 
       {ready && (
         <div className="detail-cta">
@@ -570,5 +571,38 @@ function FindTitle({ book }: { book: Book }) {
         <span>It is still named after its file. Your AI reads them from the book’s first pages.</span>
       </span>
     </button>
+  );
+}
+
+/** The book's English as an e-book (EPUB) or a PDF, to read in any app or to send. */
+function EnglishDownload({ book }: { book: Book }) {
+  const have = useLiveQuery(() => db.translations.where('bookId').equals(book.id).count(), [book.id]) ?? 0;
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!have) return null;
+  const make = async (kind: 'epub' | 'pdf') => {
+    setBusy(kind === 'epub' ? 'Making the e-book…' : 'Laying out the pages…');
+    try {
+      const m = await import('./englishBook');
+      const r = kind === 'epub' ? await m.englishEpub(book, (d, t) => setBusy(`Making the e-book… ${d} of ${t}`)) : await m.englishPdf(book, (d, t) => setBusy(`Laying out the pages… ${d} of ${t}`));
+      const name = `${(book.titleEn || book.title).replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60)} - English.${kind}`;
+      const saved = await saveFile(r.blob, name, mimeOf(name));
+      toast(`Saved to ${saved.location}.${r.english < r.total ? ` ${r.total - r.english} paragraphs not yet in English are in the original.` : ''}`, saved.share ? { label: 'Send', run: () => void saved.share!() } : undefined, 7000);
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="card english-dl">
+      <div>
+        <b>The English as a book</b>
+        <p className="muted small">{busy ?? 'To read in any e-book app (Kindle, Google Play Books, Apple Books), or to print and send.'}</p>
+      </div>
+      <div className="english-dl-acts">
+        <button className="btn" disabled={!!busy} onClick={() => void make('epub')}><Icon name="download" size={18} />E-book (EPUB)</button>
+        <button className="btn" disabled={!!busy} onClick={() => void make('pdf')}><Icon name="download" size={18} />PDF</button>
+      </div>
+    </div>
   );
 }

@@ -1250,3 +1250,16 @@
   width: 34px;
   flex: none;
 }
+
+.english-dl {
+  display: grid;
+  gap: 10px;
+}
+.english-dl p {
+  margin: 2px 0 0;
+}
+.english-dl-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

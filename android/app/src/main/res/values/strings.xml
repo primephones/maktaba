@@ -5,4 +5,6 @@
     <string name="package_name">za.co.primephones.maktaba</string>
     <string name="custom_url_scheme">za.co.primephones.maktaba</string>
     <string name="share_label">Add to Maktaba</string>
+    <string name="widget_label">Continue reading</string>
+    <string name="widget_description">The book you are reading, where you are, and how far. Tap to carry on.</string>
 </resources>

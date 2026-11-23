@@ -7,7 +7,7 @@ import { UpdateNotice } from './UpdateNotice';
 import { Catalogue } from '../features/library/Catalogue';
 import { applyThemeWith, nightByClock, themeTone, useSetting } from './settings';
 import { BottomBar } from '../ui/BottomBar';
-import { Toasts, toast } from '../ui/toast';
+import { Toasts, clearToasts, toast } from '../ui/toast';
 import { EmptyState } from '../ui/EmptyState';
 import { resumeImports } from '../import';
 import { Home } from '../features/home/Home';
@@ -190,6 +190,28 @@ export function App() {
   }, [theme, autoThemes.light, autoThemes.dark, autoThemes.by, autoThemes.from, autoThemes.to, systemDark, clockNight]);
 
   const inReader = route.name === 'reader';
+  // The home-screen widget tapped: open its book (when the app was started by it, or brought back).
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let alive = true;
+    void import('../native/maktaba').then(async ({ native }) => {
+      const r = await native.call('takeOpenBook');
+      if (r?.bookId && alive) navigate(`/book/${r.bookId}`);
+      const stop = await native.on('openBook', (e) => navigate(`/book/${e.bookId}`));
+      if (alive) off = stop;
+      else stop();
+    });
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, []);
+
+  // Opening a book: messages about the library do not follow the reader into it.
+  const readerId = route.name === 'reader' ? route.bookId : null;
+  useEffect(() => {
+    if (readerId) clearToasts();
+  }, [readerId]);
   const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'setup' || route.name === 'review' || route.name === 'catalogue';
   const key = route.name === 'reader' ? `reader:${route.bookId}` : route.name === 'review' ? `review:${route.bookId}` : route.name;
 

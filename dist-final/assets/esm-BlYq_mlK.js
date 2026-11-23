@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./web-CGHSDKb6.js","./dist-Bvr9E661.js","./rolldown-runtime-BCiCTKAo.js"])))=>i.map(i=>d[i]);
+import{i as e}from"./dist-Bvr9E661.js";import{t}from"./preload-helper-DclECHGd.js";var n=e(`App`,{web:()=>t(()=>import(`./web-CGHSDKb6.js`).then(e=>new e.AppWeb),__vite__mapDeps([0,1,2]),import.meta.url)});export{n as App};

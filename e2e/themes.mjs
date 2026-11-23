@@ -15,7 +15,9 @@ const audit = () => {
   const parse = (s) => {
     const m = s.match(/[\d.]+/g);
     if (!m) return null;
-    return { c: m.slice(0, 3).map(Number), a: m[3] === undefined ? 1 : Number(m[3]) };
+    // A mixed colour is given as color(srgb r g b / a), each from 0 to 1.
+    const k = /^color\(srgb/.test(s) ? 255 : 1;
+    return { c: m.slice(0, 3).map((v) => Number(v) * k), a: m[3] === undefined ? 1 : Number(m[3]) };
   };
   const lum = ([r, g, b]) => {
     const f = (v) => {

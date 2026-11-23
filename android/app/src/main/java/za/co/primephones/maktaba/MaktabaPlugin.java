@@ -240,6 +240,38 @@ public class MaktabaPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    // ------------------------------------------------------------------ home-screen widget
+
+    /** What the "Continue reading" widget shows: the book, where in it, and how far. */
+    @PluginMethod
+    public void setWidget(PluginCall call) {
+        String bookId = call.getString("bookId");
+        String title = call.getString("title");
+        if (bookId == null || title == null) {
+            call.reject("A book and its title are needed.");
+            return;
+        }
+        Integer percent = call.getInt("percent", 0);
+        ContinueWidget.save(getContext(), bookId, title, call.getString("where", ""), percent == null ? 0 : percent);
+        call.resolve();
+    }
+
+    /** The book the widget was tapped for, if the app was opened that way (once). */
+    @PluginMethod
+    public void takeOpenBook(PluginCall call) {
+        JSObject ret = new JSObject();
+        Activity a = getActivity();
+        Intent intent = a != null ? a.getIntent() : null;
+        if (intent != null && !intent.getBooleanExtra(HANDLED, false)) {
+            String id = intent.getStringExtra(ContinueWidget.EXTRA_OPEN_BOOK);
+            if (id != null) {
+                intent.putExtra(HANDLED, true);
+                ret.put("bookId", id);
+            }
+        }
+        call.resolve(ret);
+    }
+
     // ------------------------------------------------------------------ lock-screen controls
 
     private static final String MEDIA_ACTION = "za.co.primephones.maktaba.MEDIA";
@@ -998,6 +1030,15 @@ public class MaktabaPlugin extends Plugin {
 
     private void receive(Intent intent) {
         if (intent == null || intent.getBooleanExtra(HANDLED, false)) return;
+        // The home-screen widget: open this book.
+        String openBook = intent.getStringExtra(ContinueWidget.EXTRA_OPEN_BOOK);
+        if (openBook != null) {
+            intent.putExtra(HANDLED, true);
+            JSObject data = new JSObject();
+            data.put("bookId", openBook);
+            notifyListeners("openBook", data, true);
+            return;
+        }
         String action = intent.getAction();
         // A sign-in finishing in the browser hands back to the app as maktaba://auth?...
         if (Intent.ACTION_VIEW.equals(action) && intent.getData() != null && "maktaba".equals(intent.getData().getScheme())) {

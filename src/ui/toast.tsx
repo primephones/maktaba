@@ -30,6 +30,11 @@ export function toast(text: string, action?: Action | Action[], ms = 4200) {
   window.setTimeout(() => dismiss(id), actions.length ? Math.max(ms, 6500) : ms);
 }
 
+/** Clears every message (a book has been opened: what was said about the library is past). */
+export function clearToasts() {
+  for (const t of toasts) dismiss(t.id);
+}
+
 /** Lets a message slip away, then removes it. */
 function dismiss(id: number) {
   if (!toasts.some((t) => t.id === id && !t.leaving)) return;

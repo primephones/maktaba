@@ -2359,3 +2359,48 @@ mark.flash {
   background-color: var(--hl-gold);
   color: inherit;
 }
+
+/* Back after a break: an offer to recall where the book had got to. */
+.rd-recap {
+  position: absolute;
+  z-index: calc(var(--z-reader-chrome) + 1);
+  left: 50%;
+  top: calc(var(--safe-top) + 64px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 32px);
+  padding: 4px 4px 4px 14px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  animation: back-down 0.5s var(--ease-spring) both;
+}
+.rd-recap button:first-child {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-weight: 600;
+  padding: 6px 4px;
+  text-align: start;
+}
+.rd-recap-x {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ink-3);
+}
+.recap-text p {
+  margin: 0 0 0.7em;
+  font-family: var(--font-read);
+  font-size: 1.02rem;
+  line-height: 1.65;
+}

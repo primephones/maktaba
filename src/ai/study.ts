@@ -314,3 +314,29 @@ export async function quizChapter(book: Book, at: { section: number; block: numb
   const r = await study<{ questions: Quiz['questions'] }>({ task: 'quiz', passages: sources.map(({ id, text, en, cite }) => ({ id, text, en, cite })) }, !!book.private, 'explain');
   return { ...r.result, sources, title: ch.title, provider: r.provider, model: r.model };
 }
+
+/**
+ * Back after a break: what happened in the pages just before where the reader stopped, in
+ * a few lines, only from those paragraphs.
+ */
+export async function recapBefore(book: Book, at: { section: number; block: number }): Promise<{ summary: string; sources: Source[] }> {
+  const trs = new Map((await db.translations.where('bookId').equals(book.id).toArray()).map((t) => [`${t.section}:${t.block}`, t.en]));
+  const back: Source[] = [];
+  let size = 0;
+  for (let s = at.section; s >= 0 && size < 9000; s--) {
+    const sec = await db.sections.get(sectionId(book.id, s));
+    if (!sec) continue;
+    for (let i = (s === at.section ? at.block : sec.blocks.length) - 1; i >= 0 && size < 9000; i--) {
+      const b = sec.blocks[i];
+      if (!b || b.t === 'img' || b.t === 'h' || b.text.trim().length < 2) continue;
+      const en = trs.get(`${s}:${i}`);
+      size += b.text.length + (en?.length ?? 0);
+      const page = b.printed ?? (b.page ? String(b.page) : undefined);
+      back.unshift({ id: '', bookId: book.id, section: s, block: i, text: b.text.slice(0, 3000), en: en?.slice(0, 3000), cite: formatCitation({ author: book.author, book: book.title, page, chapter: sec.title }) });
+    }
+  }
+  if (!back.length) throw new Error('There is nothing read yet to recall.');
+  const sources = back.map((x, n) => ({ ...x, id: `p${n + 1}` }));
+  const r = await study<{ summary: string }>({ task: 'summarise', passages: sources.map(({ id, text, en, cite }) => ({ id, text, en, cite })) }, !!book.private, 'explain');
+  return { summary: r.result.summary.replace(/\s*\[[^\]\s]+\]/g, '').trim(), sources };
+}

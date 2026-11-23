@@ -160,6 +160,13 @@ function ReaderInner({ book }: { book: Book }) {
   const lastJump = useRef(Date.now());
   const latest = useRef(pos);
   const [finished, setFinished] = useState(false);
+  // Back after three days or more: an offer to recall where the book had got to.
+  const [recap, setRecap] = useState<'offer' | 'open' | null>(() => (book.openedAt && Date.now() - book.openedAt > 3 * 86_400_000 && (book.progress?.fraction ?? 0) > 0.01 ? 'offer' : null));
+  useEffect(() => {
+    if (recap !== 'offer') return;
+    const t = window.setTimeout(() => setRecap((r) => (r === 'offer' ? null : r)), 20000);
+    return () => window.clearTimeout(t);
+  }, [recap]);
   const persist = useCallback(() => {
     const p = latest.current;
     const sec = cache.current.get(p.section);
@@ -168,6 +175,12 @@ function ReaderInner({ book }: { book: Book }) {
     const atEnd = p.section === book.sectionCount - 1 && p.block >= sec.blocks.length - 2;
     // Reaching the end by reading (not by a jump): the book is finished, and that is marked.
     if (atEnd && book.status === 'reading' && Date.now() - lastJump.current > 4000) setFinished(true);
+    // The home-screen widget shows this book, where in it, and how far.
+    let where = '';
+    book.toc.forEach((t, i) => {
+      if (t.section < p.section || (t.section === p.section && (t.block ?? 0) <= p.block)) where = ((book.view ?? 'en') !== 'orig' && book.tocEn?.[i]) || t.title;
+    });
+    void native.call('setWidget', { bookId: book.id, title: book.titleEn || book.title, where, percent: Math.round((atEnd ? 1 : fraction) * 100) });
     void db.books.update(book.id, {
       progress: { section: p.section, block: p.block, fraction: atEnd ? 1 : fraction, updatedAt: Date.now() },
       // Landing near the end by a jump (search, contents) is not finishing the book.
@@ -930,6 +943,14 @@ function ReaderInner({ book }: { book: Book }) {
 
       {prefs.warmth > 0 && <div className="rd-warm" aria-hidden="true" />}
       {prefs.dim > 0 && <div className="rd-dim" aria-hidden="true" />}
+      {recap === 'offer' && !back && !selection && (
+        <div className="rd-recap" role="status">
+          <button onClick={() => setRecap('open')}>
+            <span className="ai-mark" aria-hidden="true">✦</span> Welcome back. Catch up on where you were
+          </button>
+          <button className="rd-recap-x" aria-label="No thanks" onClick={() => setRecap(null)}><Icon name="close" size={16} /></button>
+        </div>
+      )}
       {back && !selection && (
         <button className="rd-back" onClick={() => { goTo(back.section, back.block, undefined, false); }}>
           <Icon name="back" size={18} />
@@ -1047,6 +1068,7 @@ function ReaderInner({ book }: { book: Book }) {
 
       {fixing && <ParagraphEnglish book={book} section={fixing.section} block={fixing.block} onClose={() => setFixing(null)} />}
       {words && <WordList book={book} onClose={() => setWords(false)} />}
+      {recap === 'open' && <RecapSheet book={book} at={pos} onClose={() => setRecap(null)} />}
       {finished && <FinishedSeal book={book} onClose={() => setFinished(false)} />}
       {peek && (
         <div className="peek" role="dialog" aria-label="The original" onClick={() => setPeek(null)}>
@@ -1204,6 +1226,44 @@ function ReaderInner({ book }: { book: Book }) {
       {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} onPlace={prefs.mode === 'paged' ? (s, b) => goTo(s, b, undefined, false) : undefined} />}
       {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}
     </div>
+  );
+}
+
+/** The pages just before where you stopped, recalled in a few lines by your AI. */
+function RecapSheet({ book, at, onClose }: { book: Book; at: { section: number; block: number }; onClose: () => void }) {
+  const [text, setText] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let alive = true;
+    void aiReady().then(async (ok) => {
+      if (!ok) return alive && setError('Connect your AI first: Settings › Your AI.');
+      try {
+        const { recapBefore } = await import('../../ai/study');
+        const r = await recapBefore(book, at);
+        if (alive) setText(r.summary);
+      } catch (e) {
+        if (alive) setError((e as Error).message);
+      }
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Sheet title="Where you were" onClose={onClose}>
+      {text ? (
+        <div className="recap-text">
+          {text.split(/\n+/).map((l, i) => <p key={i}>{l.replace(/^[-•*]\s*/, '')}</p>)}
+        </div>
+      ) : error ? (
+        <p role="alert">{error}</p>
+      ) : (
+        <p className="muted" aria-busy="true"><span className="ai-mark" aria-hidden="true">✦</span> Recalling the pages before where you stopped…</p>
+      )}
+      <p className="muted small">Made by your AI from the pages just before your place. Read on to see for yourself.</p>
+      <button className="btn btn--primary btn--block" onClick={onClose}>Carry on reading</button>
+    </Sheet>
   );
 }
 

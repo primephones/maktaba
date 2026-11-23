@@ -100,7 +100,7 @@ const contrastOf = (selector, bgVar) => page.evaluate(([sel, bgVar]) => {
     const [r, g, b] = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
-  const parse = (s) => { const m = s.match(/[\d.]+/g).map(Number); return { rgb: m.slice(0, 3), a: m[3] ?? 1 }; };
+  const parse = (s) => { const k = /^color\(srgb/.test(s) ? 255 : 1; const m = s.match(/[\d.]+/g).map(Number); return { rgb: m.slice(0, 3).map((v) => v * k), a: m[3] ?? 1 }; };
   const out = [];
   for (const el of document.querySelectorAll(sel)) {
     if (!el.textContent.trim() || !el.getClientRects().length) continue;

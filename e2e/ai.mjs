@@ -344,6 +344,46 @@ try {
   await page.getByRole('button', { name: 'Close' }).click();
   await wait(400);
 
+  console.log('The English as a book, and welcome back');
+  await go('#/library');
+  await page.getByRole('button', { name: 'Details for مختصر في أصول الفقه' }).click();
+  const fs = await import('node:fs');
+  const [ep] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByRole('button', { name: /E-book \(EPUB\)/ }).click()]);
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const epubBytes = new Uint8Array(fs.readFileSync(await ep.path()));
+  const entries = unzipSync(epubBytes);
+  const firstName = strFromU8(epubBytes.slice(30, 38));
+  const chapterText = Object.entries(entries).filter(([k]) => /OEBPS\/ch\d+\.xhtml$/.test(k)).map(([, v]) => strFromU8(v)).join('');
+  check(firstName === 'mimetype' && strFromU8(entries.mimetype) === 'application/epub+zip' && !!entries['OEBPS/nav.xhtml'] && /English of paragraph/.test(chapterText), `the English downloads as an e-book for any e-reader (${ep.suggestedFilename()})`);
+  const [pd] = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.getByRole('button', { name: 'PDF', exact: true }).click()]);
+  const pdfHead = fs.readFileSync(await pd.path()).slice(0, 5).toString();
+  check(pdfHead === '%PDF-', 'and as a PDF');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
+  // Away for a few days: an offer to recall where the book had got to.
+  const rBook = await page.evaluate(async () => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const tx = dbh.transaction('books', 'readwrite');
+    const st = tx.objectStore('books');
+    const all = await new Promise((r) => (st.getAll().onsuccess = (e) => r(e.target.result)));
+    const b = all.find((x) => x.title === 'مختصر في أصول الفقه');
+    st.put({ ...b, openedAt: Date.now() - 5 * 86_400_000, progress: { section: 2, block: 2, fraction: 0.4, updatedAt: Date.now() } });
+    await new Promise((r) => (tx.oncomplete = r));
+    dbh.close();
+    return b.id;
+  });
+  await page.reload();
+  await go(`#/book/${rBook}`);
+  await page.locator('.rd-recap').waitFor({ timeout: 10000 });
+  check(true, 'back after a few days, the book offers to recall where you were');
+  await page.locator('.rd-recap button').first().click();
+  await page.getByText(/The chapter defines analogy/).waitFor({ timeout: 20000 });
+  check(true, 'and recalls the pages before your place in a few lines');
+  await shot('46-welcome-back');
+  await page.getByRole('button', { name: 'Carry on reading' }).click();
+  await wait(400);
+
   console.log('Sync between two phones');
   // Phone A highlights a passage and makes a folder, through the app.
   await go('#/library');
