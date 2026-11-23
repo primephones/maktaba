@@ -127,10 +127,11 @@ async function prepareNewBooks(ids: string[]): Promise<void> {
     if (!translatable(book)) continue;
     const fresh = (await db.books.get(id)) ?? book;
     if (fresh.toc.length >= 2 && !fresh.tocEn) await translateContents(fresh).catch(() => undefined);
-    // The opening of the first new book, so it opens in English (a scanned book's first page).
-    if (!opened) {
+    // The opening of the first new book of text, so it opens in English. (A scanned book's
+    // pages are read as they are reached: reading pictures costs more of the allowance.)
+    if (!opened && !isScanned(fresh)) {
       opened = true;
-      void translateAhead(fresh, { from: { section: 0, block: 0 }, count: isScanned(fresh) ? 1 : 12 }).catch(() => undefined);
+      void translateAhead(fresh, { from: { section: 0, block: 0 }, count: 12 }).catch(() => undefined);
     }
   }
 }

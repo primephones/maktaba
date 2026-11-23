@@ -68,19 +68,36 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
     if (!el) return null;
     const r = el.getBoundingClientRect();
     const pad = parseFloat(getComputedStyle(el).paddingTop) || 0;
+    const line = r.top + pad;
     for (const dy of [8, 40, 90, 160]) {
-      for (const hit of document.elementsFromPoint(r.left + r.width / 2, r.top + pad + dy)) {
+      for (const hit of document.elementsFromPoint(r.left + r.width / 2, line + dy)) {
         const block = hit.closest?.('[data-b]') as HTMLElement | null;
-        if (block && el.contains(block)) return block;
+        if (!block || !el.contains(block)) continue;
+        // Only its last line or two still showing at the top: the next paragraph is the one being read.
+        const box = block.getBoundingClientRect();
+        if (box.top < line - 4 && box.bottom < line + 44 && dy < 160) break;
+        return block;
       }
     }
     return el.querySelector('[data-b]');
   }, []);
 
+  /**
+   * Where a paragraph sits below the top of the scrolling page, in the page's own size: the
+   * same whether or not the page is drawn smaller (stepped back behind a sheet).
+   */
+  const offsetIn = useCallback((node: Element) => {
+    const el = scroller.current;
+    if (!el) return node.getBoundingClientRect().top;
+    const box = el.getBoundingClientRect();
+    const scale = el.offsetHeight ? box.height / el.offsetHeight : 1;
+    return (node.getBoundingClientRect().top - box.top) / (scale || 1);
+  }, []);
+
   const holdPlace = useCallback(() => {
     const b = topBlock();
-    if (b) anchor.current = { s: Number(b.dataset.s), b: Number(b.dataset.b), top: b.getBoundingClientRect().top, node: b };
-  }, [topBlock]);
+    if (b) anchor.current = { s: Number(b.dataset.s), b: Number(b.dataset.b), top: offsetIn(b), node: b };
+  }, [topBlock, offsetIn]);
 
   // A chapter's content changes while it is read (English arriving, a scanned page's text read
   // in the background): what is at the top of the screen stays where it is. Taken here, from
@@ -140,12 +157,12 @@ export function ScrollView({ book, target, get, load, version, layoutKey, justif
       // text is put in before it), else the paragraph at the same place.
       const node = a.node?.isConnected ? a.node : find(a.s, a.b);
       // Only when something did move: setting the scroll would stop a fling under the finger.
-      const moved = node ? node.getBoundingClientRect().top - a.top : 0;
+      const moved = node ? offsetIn(node) - a.top : 0;
       if (Math.abs(moved) >= 1) el.scrollTop += moved;
       anchor.current = null;
     }
     extend();
-  }, [range, tick, version, get, extend, renderSection]);
+  }, [range, tick, version, get, extend, renderSection, offsetIn]);
 
   // A change of type size or margins reflows everything: keep the same paragraph in view.
   const firstLayout = useRef(true);

@@ -237,7 +237,7 @@ try {
   await page.screenshot({ path: `${shots}73-urdu-scan-details.png` });
   check(errors.length === 0, `no errors in the page ${JSON.stringify(errors.slice(0, 2))}`);
 } catch (e) {
-  check(false, `stopped: ${e.message.split('\n')[0]}`);
+  check(false, `stopped: ${e.message.split('\n').slice(0, 8).join(' | ')}`);
   await page.screenshot({ path: `${shots}FAILED-scan-urdu.png` }).catch(() => undefined);
 } finally {
   await browser.close();
