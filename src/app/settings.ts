@@ -9,6 +9,22 @@ export type ThemeName = 'auto' | ThemeId;
 export interface AutoThemes {
   light: ThemeId;
   dark: ThemeId;
+  /** What decides night: the phone's dark mode, or the clock (from `from` to `to`). */
+  by?: 'phone' | 'clock';
+  from?: string;
+  to?: string;
+}
+
+/** Whether a time of day (now) falls in the night set by the clock, e.g. 19:00 to 06:00. */
+export function nightByClock(from = '19:00', to = '06:00', now = new Date()): boolean {
+  const mins = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+  const n = now.getHours() * 60 + now.getMinutes();
+  const a = mins(from);
+  const b = mins(to);
+  return a <= b ? n >= a && n < b : n >= a || n < b;
 }
 export type ReadMode = 'scroll' | 'paged';
 
@@ -20,7 +36,7 @@ export interface ReaderPrefs {
   /** Side margin in px. */
   margin: number;
   justify: boolean;
-  latinFont: 'literata' | 'plex';
+  latinFont: 'literata' | 'garamond' | 'atkinson' | 'plex';
   arabicFont: 'amiri' | 'scheherazade' | 'plex';
   urduFont: 'nastaliq' | 'gulzar' | 'amiri';
   /** Show vowel marks (tashkīl) in Arabic-script text. */
@@ -31,6 +47,16 @@ export interface ReaderPrefs {
   keepAwake: boolean;
   /** Android: lock the screen's orientation while reading. */
   orientation: 'auto' | 'portrait' | 'landscape';
+  /** Printed pages shown light on dark (colours turned round) in a dark theme. */
+  darkPages: boolean;
+  /** Paragraphs as in a printed book (indented, no gaps), or set apart by space. */
+  layout: 'book' | 'spaced';
+  /** Heavier text, for small screens or tired eyes. */
+  bold: boolean;
+  /** Warm light over the page, 0 (none) to 80. */
+  warmth: number;
+  /** Dimmer than the phone allows, 0 (none) to 60. */
+  dim: number;
 }
 
 /**
@@ -61,6 +87,8 @@ export interface Settings {
   backupReminder: 'off' | 'weekly' | 'monthly';
   /** How the English reads: Allah or God, honorifics, technical terms. */
   translationStyle: Required<TranslateStyle>;
+  /** How fast this reader reads, in characters a minute (learned while reading). */
+  readingSpeed: number;
 }
 
 export const DEFAULTS: Settings = {
@@ -80,6 +108,11 @@ export const DEFAULTS: Settings = {
     volumeKeys: false,
     keepAwake: false,
     orientation: 'auto',
+    darkPages: false,
+    layout: 'book',
+    bold: false,
+    warmth: 0,
+    dim: 0,
   },
   coverStyle: 'bound',
   flags: { pageCurl: false, reduceMotion: false },
@@ -88,6 +121,7 @@ export const DEFAULTS: Settings = {
   lastBackupAt: 0,
   backupReminder: 'monthly',
   translationStyle: { god: 'Allah', honorifics: 'words', terms: 'transliterated' },
+  readingSpeed: 950,
 };
 
 export async function getSetting<K extends keyof Settings>(key: K): Promise<Settings[K]> {
@@ -131,7 +165,8 @@ function mirror(key: string, value: string) {
 
 export function resolveTheme(theme: ThemeName): ThemeId {
   if (theme !== 'auto') return isThemeId(theme) ? theme : 'paper';
-  return matchMedia('(prefers-color-scheme: dark)').matches ? autoPair.dark : autoPair.light;
+  const night = autoPair.by === 'clock' ? nightByClock(autoPair.from, autoPair.to) : matchMedia('(prefers-color-scheme: dark)').matches;
+  return night ? autoPair.dark : autoPair.light;
 }
 
 /** Light or dark, for the status bar's icons and the rules that differ between the two. */
@@ -150,7 +185,7 @@ export function applyTheme(theme: ThemeName) {
 
 /** Applies the theme with the day/night pair from the settings (which may have come by sync). */
 export function applyThemeWith(theme: ThemeName, pair: AutoThemes) {
-  if (isThemeId(pair.light) && isThemeId(pair.dark) && (pair.light !== autoPair.light || pair.dark !== autoPair.dark)) {
+  if (isThemeId(pair.light) && isThemeId(pair.dark) && JSON.stringify(pair) !== JSON.stringify(autoPair)) {
     autoPair = pair;
     mirror('maktaba.autoThemes', JSON.stringify(pair));
   }

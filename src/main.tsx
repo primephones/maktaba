@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 
 import '@fontsource-variable/literata/wght.css';
 import '@fontsource-variable/literata/wght-italic.css';
+import '@fontsource-variable/eb-garamond/wght.css';
+import '@fontsource/atkinson-hyperlegible/400.css';
+import '@fontsource/atkinson-hyperlegible/700.css';
 import '@fontsource/ibm-plex-sans/400.css';
 import '@fontsource/ibm-plex-sans/500.css';
 import '@fontsource/ibm-plex-sans/600.css';

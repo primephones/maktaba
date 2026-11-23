@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { resolveTheme, setSetting, useSetting, type ReaderPrefs } from '../../app/settings';
 import { THEMES, swatchStyle } from '../../app/themes';
 import { isAndroidApp } from '../../native/maktaba';
@@ -16,9 +17,28 @@ interface Props {
 
 /** The reading controls: one component used by the reader's Text sheet and by Settings. */
 export function ReadingControls({ showTheme, showScriptOptions, lang, grouped }: Props) {
-  const prefs = useSetting('reader');
+  // Shown as set at once, and saved behind: a slider dragged quickly does not jump back while
+  // each step is being written.
+  const stored = useSetting('reader');
+  const [prefs, setPrefs] = useState(stored);
+  const latest = useRef(stored);
+  const writing = useRef(0);
+  useEffect(() => {
+    if (writing.current === 0) {
+      latest.current = stored;
+      setPrefs(stored);
+    }
+  }, [stored]);
   const theme = useSetting('theme');
-  const set = (patch: Partial<ReaderPrefs>) => void setSetting('reader', { ...prefs, ...patch });
+  const set = (patch: Partial<ReaderPrefs>) => {
+    const next = { ...latest.current, ...patch };
+    latest.current = next;
+    setPrefs(next);
+    writing.current++;
+    void setSetting('reader', next).finally(() => {
+      writing.current--;
+    });
+  };
   const arabic = showScriptOptions || lang === 'ar' || lang === 'fa' || lang === 'ps';
   const urdu = showScriptOptions || lang === 'ur';
   // English: the book's own, or its translation.
@@ -48,7 +68,9 @@ export function ReadingControls({ showTheme, showScriptOptions, lang, grouped }:
           <div className="lbl"><span>English typeface</span></div>
           <div className="seg" role="group" aria-label="English typeface">
             <button aria-pressed={prefs.latinFont === 'literata'} onClick={() => set({ latinFont: 'literata' })} style={{ fontFamily: 'var(--font-read)' }}>Literata</button>
-            <button aria-pressed={prefs.latinFont === 'plex'} onClick={() => set({ latinFont: 'plex' })}>Plex Sans</button>
+            <button aria-pressed={prefs.latinFont === 'garamond'} onClick={() => set({ latinFont: 'garamond' })} style={{ fontFamily: 'var(--font-garamond)', fontSize: '1.05rem' }}>Garamond</button>
+            <button aria-pressed={prefs.latinFont === 'atkinson'} onClick={() => set({ latinFont: 'atkinson' })} style={{ fontFamily: 'var(--font-clear)' }} aria-label="Atkinson, extra clear">Atkinson</button>
+            <button aria-pressed={prefs.latinFont === 'plex'} onClick={() => set({ latinFont: 'plex' })}>Plex</button>
           </div>
         </div>
       )}
@@ -102,6 +124,22 @@ export function ReadingControls({ showTheme, showScriptOptions, lang, grouped }:
         </div>
       </div>
 
+      <div className="ctl">
+        <div className="lbl"><span>Paragraphs</span><span>{prefs.layout === 'spaced' ? 'set apart by a line of space' : 'indented, as in a printed book'}</span></div>
+        <div className="seg" role="group" aria-label="Paragraphs">
+          <button aria-pressed={prefs.layout !== 'spaced'} onClick={() => set({ layout: 'book' })}>Like a book</button>
+          <button aria-pressed={prefs.layout === 'spaced'} onClick={() => set({ layout: 'spaced' })}>Spaced</button>
+        </div>
+      </div>
+
+      <div className="ctl-row">
+        <span className="grow" id="ctl-bold">
+          Bolder text
+          <div className="muted small">Easier on a small screen or tired eyes</div>
+        </span>
+        <button className="switch" role="switch" aria-checked={prefs.bold} aria-labelledby="ctl-bold" onClick={() => set({ bold: !prefs.bold })} />
+      </div>
+
       <div className="ctl-row">
         <span className="grow" id="ctl-just">Justify text</span>
         <button className="switch" role="switch" aria-checked={prefs.justify} aria-labelledby="ctl-just" onClick={() => set({ justify: !prefs.justify })} />
@@ -116,6 +154,24 @@ export function ReadingControls({ showTheme, showScriptOptions, lang, grouped }:
           <button className="switch" role="switch" aria-checked={prefs.tashkil} aria-labelledby="ctl-tashkil" onClick={() => set({ tashkil: !prefs.tashkil })} />
         </div>
       )}
+
+      {title('At night')}
+      <div className="ctl">
+        <div className="lbl"><span id="ctl-warm">Warm light</span><span>{prefs.warmth ? `${prefs.warmth}%` : 'Off'}</span></div>
+        <input type="range" min={0} max={80} step={5} value={prefs.warmth} aria-labelledby="ctl-warm" onChange={(e) => set({ warmth: Number(e.target.value) })} />
+      </div>
+      <div className="ctl">
+        <div className="lbl"><span id="ctl-dim">Extra dim</span><span>{prefs.dim ? `${prefs.dim}%` : 'Off'}</span></div>
+        <input type="range" min={0} max={60} step={5} value={prefs.dim} aria-labelledby="ctl-dim" onChange={(e) => set({ dim: Number(e.target.value) })} />
+        <div className="muted small">Darker than the phone’s lowest brightness, for reading in bed.</div>
+      </div>
+      <div className="ctl-row">
+        <span className="grow" id="ctl-darkpages">
+          Dark printed pages
+          <div className="muted small">In a dark theme, scanned pages are shown light on dark</div>
+        </span>
+        <button className="switch" role="switch" aria-checked={prefs.darkPages} aria-labelledby="ctl-darkpages" onClick={() => set({ darkPages: !prefs.darkPages })} />
+      </div>
 
       {isAndroidApp() && (
         <>

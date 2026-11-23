@@ -5,7 +5,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { useAddBooks } from './addBooks';
 import { UpdateNotice } from './UpdateNotice';
 import { Catalogue } from '../features/library/Catalogue';
-import { applyThemeWith, themeTone, useSetting } from './settings';
+import { applyThemeWith, nightByClock, themeTone, useSetting } from './settings';
 import { BottomBar } from '../ui/BottomBar';
 import { Toasts, toast } from '../ui/toast';
 import { EmptyState } from '../ui/EmptyState';
@@ -163,6 +163,15 @@ export function App() {
   const theme = useSetting('theme');
   const autoThemes = useSetting('autoThemes');
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches);
+  // Night by the clock: looked at each minute, so the theme turns at the time set.
+  const [clockNight, setClockNight] = useState(() => nightByClock(autoThemes.from, autoThemes.to));
+  useEffect(() => {
+    if (autoThemes.by !== 'clock') return;
+    const tick = () => setClockNight(nightByClock(autoThemes.from, autoThemes.to));
+    tick();
+    const t = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(t);
+  }, [autoThemes.by, autoThemes.from, autoThemes.to]);
   useEffect(() => {
     const mq = matchMedia('(prefers-color-scheme: dark)');
     const on = () => setSystemDark(mq.matches);
@@ -178,7 +187,7 @@ export function App() {
       const { StatusBar, Style } = await import('@capacitor/status-bar');
       await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light }).catch(() => undefined);
     })();
-  }, [theme, autoThemes.light, autoThemes.dark, systemDark]);
+  }, [theme, autoThemes.light, autoThemes.dark, autoThemes.by, autoThemes.from, autoThemes.to, systemDark, clockNight]);
 
   const inReader = route.name === 'reader';
   const barHidden = inReader || route.name === 'search' || route.name === 'settings' || route.name === 'setup' || route.name === 'review' || route.name === 'catalogue';

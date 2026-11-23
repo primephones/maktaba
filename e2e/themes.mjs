@@ -228,7 +228,7 @@ for (const theme of THEMES) {
     if (p === '/setup/ai') await page.getByRole('button', { name: /Google Gemini/ }).click().catch(() => undefined);
     await look(p.replace(/\//g, '-').slice(1));
   }
-  for (const p of ['', '/help', '/ai', '/cloud', '/share', '/backup', '/voice', '/theme', '/reading', '/covers', '/switches', '/storage', '/about']) {
+  for (const p of ['', '/help', '/ai', '/cloud', '/share', '/backup', '/voice', '/english', '/theme', '/reading', '/covers', '/switches', '/storage', '/about']) {
     await go(`#/settings${p}`);
     await page.waitForTimeout(400);
     await look(`settings${p.replace('/', '-') || ''}`);

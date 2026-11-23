@@ -726,9 +726,16 @@ input[type='search']::-webkit-search-decoration {
   bottom: calc(var(--safe-bottom) + 24px);
 }
 .toasts[data-place='reader'] {
-  /* In the reader, under the title bar: clear of the tools at the foot and of sheets. */
-  top: calc(var(--safe-top) + 64px);
-  bottom: auto;
+  /* In the reader, never over the text: just above the reading bars when they show, else
+     at the very foot of the screen. */
+  bottom: calc(var(--safe-bottom) + 26px);
+}
+body:has(.rd[data-chrome='true']) .toasts[data-place='reader'] {
+  bottom: calc(var(--rd-bar-h, 150px) + 10px);
+}
+.toasts[data-place='reader'] .toast {
+  padding: 9px 14px;
+  font-size: 0.86rem;
 }
 
 .banner > svg {

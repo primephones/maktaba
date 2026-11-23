@@ -65,27 +65,37 @@ function blockLang(block: Block, bookLang: Lang): Lang {
   return /[A-Za-z]/.test(block.text) ? 'en' : bookLang;
 }
 
-/** The English of a paragraph, with each † a button that explains the doubt. */
-function linkVerses(text: string, onQuran?: (m: QuranMatch) => void): React.ReactNode {
-  const refs = findQuranRefs(text).filter((m) => m.kind === 'ref');
-  if (!refs.length) return text;
-  const out: React.ReactNode[] = [];
-  let at = 0;
-  refs.forEach((m, i) => {
-    out.push(text.slice(at, m.start));
-    out.push(
-      <span key={i} className="qref" role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); onQuran?.(m); }}>
-        {text.slice(m.start, m.end)}
-      </span>,
-    );
-    at = m.end;
-  });
-  out.push(text.slice(at));
-  return out;
+/** The English as shown: each † set against the word it qualifies (the space before it dropped). */
+export function enDisplay(en: string): string {
+  const parts = en.split('†');
+  return parts.map((p, i) => (i < parts.length - 1 ? p.replace(/\s+$/, '') + '†' : p)).join('');
 }
 
-function English({ tr, onUncertain, onQuran, heading, section, index, onFlip }: { tr: Translation; onUncertain?: (t: Translation) => void; onQuran?: (m: QuranMatch) => void; heading: boolean; section: number; index: number; onFlip?: (s: number, i: number) => void }) {
-  const parts = tr.en.split('†');
+/** Where a highlight made on the English sits now (the English may have been made again since). */
+function placeOf(text: string, m: Mark): [number, number] | null {
+  if (m.start === undefined || m.end === undefined) return null;
+  if (m.text && text.slice(m.start, m.end) === m.text) return [m.start, m.end];
+  if (m.text) {
+    const at = text.indexOf(m.text);
+    if (at >= 0) return [at, at + m.text.length];
+    return null;
+  }
+  return m.end <= text.length ? [m.start, m.end] : null;
+}
+
+/**
+ * The English of a paragraph: each † a button that explains the doubt, verse references
+ * that open the verse, and the reader's own highlights and notes.
+ */
+function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, index, onFlip }: { tr: Translation; marks: Mark[]; onUncertain?: (t: Translation) => void; onQuran?: (m: QuranMatch) => void; onMark?: (id: string) => void; heading: boolean; section: number; index: number; onFlip?: (s: number, i: number) => void }) {
+  const text = enDisplay(tr.en);
+  const refs = findQuranRefs(text).filter((m) => m.kind === 'ref');
+  const hls = marks.filter((m) => m.en && m.type !== 'bookmark').map((m) => ({ m, at: placeOf(text, m) })).filter((x): x is { m: Mark; at: [number, number] } => !!x.at);
+  const cuts = new Set([0, text.length]);
+  for (const r of refs) cuts.add(r.start).add(r.end);
+  for (const h of hls) cuts.add(h.at[0]).add(h.at[1]);
+  for (let i = 0; i < text.length; i++) if (text[i] === '†') cuts.add(i).add(i + 1);
+  const pts = [...cuts].filter((n) => n >= 0 && n <= text.length).sort((a, b) => a - b);
   const Tag = heading ? 'h2' : 'p';
   return (
     <Tag
@@ -98,16 +108,17 @@ function English({ tr, onUncertain, onQuran, heading, section, index, onFlip }: 
       lang="en"
       dir="ltr"
       onClick={(e) => {
-        if (!window.getSelection()?.isCollapsed || (e.target as Element).closest('.unc, .qref')) return;
+        if (!window.getSelection()?.isCollapsed || (e.target as Element).closest('.unc, .qref, .hl')) return;
         onFlip?.(section, index);
       }}
     >
-      {parts.map((part, i) => (
-        <span key={i}>
-          {/* The mark sits against the word it qualifies, like a footnote mark. */}
-          {linkVerses(i < parts.length - 1 ? part.replace(/\s+$/, '') : part, onQuran)}
-          {i < parts.length - 1 && (
+      {pts.slice(0, -1).map((a, k) => {
+        const b = pts[k + 1];
+        const piece = text.slice(a, b);
+        if (piece === '†') {
+          return (
             <button
+              key={k}
               className="unc"
               aria-label="Why the translation is unsure here"
               onClick={(e) => {
@@ -117,9 +128,29 @@ function English({ tr, onUncertain, onQuran, heading, section, index, onFlip }: 
             >
               †
             </button>
-          )}
-        </span>
-      ))}
+          );
+        }
+        let node: React.ReactNode = piece;
+        const ref = refs.find((r) => r.start <= a && b <= r.end);
+        if (ref) {
+          node = (
+            <span className="qref" role="button" tabIndex={0} onClick={(e) => { if (!window.getSelection()?.isCollapsed) return; e.stopPropagation(); onQuran?.(ref); }}>
+              {node}
+            </span>
+          );
+        }
+        // The latest highlight wins where two overlap.
+        const hl = [...hls].reverse().find((h) => h.at[0] <= a && b <= h.at[1]);
+        if (hl) {
+          const id = hl.m.id;
+          node = (
+            <span className="hl" data-c={hl.m.color} data-note={hl.m.note || undefined} data-mark={id} onClick={(e) => { if (!window.getSelection()?.isCollapsed) return; e.stopPropagation(); onMark?.(id); }}>
+              {node}
+            </span>
+          );
+        }
+        return <span key={k}>{node}</span>;
+      })}
     </Tag>
   );
 }
@@ -145,11 +176,11 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
 
   const heading = block.t === 'h';
   if (tr && show === 'en' && !flipped) {
-    return <English tr={tr} onUncertain={onUncertain} onQuran={onQuran} heading={heading} section={section} index={index} onFlip={onFlip} />;
+    return <English tr={tr} marks={marks} onUncertain={onUncertain} onQuran={onQuran} onMark={onMark} heading={heading} section={section} index={index} onFlip={onFlip} />;
   }
 
   const lang = blockLang(block, bookLang);
-  const { segments, tail } = renderBlock(block, marks, flash, showTashkil, findQuranRefs(block.text));
+  const { segments, tail } = renderBlock(block, marks.some((m) => m.en) ? marks.filter((m) => !m.en) : marks, flash, showTashkil, findQuranRefs(block.text));
   const Tag = block.t === 'h' ? 'h2' : block.t === 'quote' ? 'blockquote' : 'p';
   const fn = (n: { id: string; label: string }) => (
     <span
@@ -243,7 +274,7 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
     return (
       <div className="bk-pair">
         {original}
-        <English tr={tr} onUncertain={onUncertain} onQuran={onQuran} heading={heading} section={section} index={index} />
+        <English tr={tr} marks={marks} onUncertain={onUncertain} onQuran={onQuran} onMark={onMark} heading={heading} section={section} index={index} />
       </div>
     );
   }

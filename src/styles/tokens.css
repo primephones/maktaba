@@ -16,6 +16,8 @@
 :root {
   --font-ui: 'IBM Plex Sans', 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --font-read: 'Literata Variable', 'Literata', Georgia, serif;
+  --font-garamond: 'EB Garamond Variable', 'EB Garamond', Georgia, serif;
+  --font-clear: 'Atkinson Hyperlegible', 'IBM Plex Sans', system-ui, sans-serif;
   --font-arabic: 'Amiri', 'IBM Plex Sans Arabic', serif;
   --font-arabic-sans: 'IBM Plex Sans Arabic', 'Amiri', sans-serif;
   --font-urdu: 'Maktaba Honorifics', 'Noto Nastaliq Urdu', 'Amiri', serif;

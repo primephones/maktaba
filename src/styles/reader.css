@@ -1525,3 +1525,653 @@ mark.flash {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---------- The printed page, always within reach ---------- */
+
+/* A page and its English: one unit. Stacked on a phone; side by side on a wide screen. */
+.pagepair {
+  display: contents;
+}
+.bk--page {
+  margin: 0 0 0.6em;
+}
+.page-src {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: -0.2em 0 1em;
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  color: var(--ink-3);
+  text-align: start;
+  direction: ltr;
+}
+.page-src > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+.page-src[data-unsure] {
+  color: var(--rubric);
+}
+.page-src-go {
+  flex: none;
+  font-weight: 600;
+  color: var(--slate);
+}
+.page-src[data-unsure] .page-src-go {
+  color: var(--rubric);
+}
+.pgmark button {
+  border: 0;
+  background: none;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  font: inherit;
+  color: inherit;
+  border-radius: var(--r-pill);
+}
+.pgmark button:active {
+  background: var(--surface-2);
+}
+.pgmark button[data-unsure]::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-start: 5px;
+  border-radius: 50%;
+  background: var(--rubric);
+  vertical-align: middle;
+}
+@media (min-width: 900px) {
+  .rd-scroll .rd-col:has(.pagepair) {
+    max-width: min(1240px, 100vw);
+  }
+  .rd-scroll .pagepair {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    column-gap: 32px;
+    align-items: start;
+    margin-bottom: 1.6em;
+  }
+  .rd-scroll .pagepair > .bk:first-child {
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: calc(var(--rd-top) + 8px);
+  }
+  .rd-scroll .pagepair > .page-src {
+    margin: 0 0 0.6em;
+  }
+  .rd-scroll .pagepair > :not(:first-child) {
+    grid-column: 2;
+  }
+}
+
+/* Choosing how a PDF is shown. */
+.show-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.show-grid button {
+  display: grid;
+  gap: 2px;
+  text-align: start;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+.show-grid button b {
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.show-grid button span {
+  font-size: 0.76rem;
+  color: var(--ink-3);
+  line-height: 1.3;
+}
+.show-grid button[aria-pressed='true'] {
+  border-color: var(--rubric);
+  background: color-mix(in srgb, var(--rubric) 8%, var(--surface));
+}
+
+/* About one page. */
+.page-info {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.page-info p {
+  margin: 0;
+}
+.page-info-src {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-weight: 600;
+}
+.page-info-src[data-unsure] {
+  color: var(--rubric);
+}
+.confirm {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  display: grid;
+  gap: 10px;
+}
+.confirm p {
+  margin: 0;
+}
+.confirm-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* The page viewer: where am I, go to page, every page at once, the file missing. */
+.orig-where {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 2px 10px;
+  border-radius: var(--r-pill);
+  text-decoration: underline dotted rgba(243, 236, 220, 0.5);
+  text-underline-offset: 4px;
+}
+.orig-goto label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.86rem;
+}
+.orig-goto input {
+  width: 5.5em;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid rgba(243, 236, 220, 0.4);
+  background: rgba(0, 0, 0, 0.3);
+  color: #f3ecdc;
+  font: inherit;
+}
+.orig-acts button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.orig-acts button[aria-pressed='true'] {
+  background: rgba(243, 236, 220, 0.18);
+}
+.orig-missing {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 30%;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  text-align: center;
+  padding: 20px;
+  border-radius: var(--r-lg);
+  background: rgba(30, 28, 23, 0.92);
+  color: #f3ecdc;
+}
+.orig-missing p {
+  margin: 0 0 6px;
+  color: rgba(243, 236, 220, 0.8);
+}
+.thumbs {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  background: #14120f;
+  color: #f3ecdc;
+  animation: fade-in 0.18s both;
+}
+.thumbs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(var(--safe-top) + 8px) 12px 8px 18px;
+}
+.zoom .thumbs-head .icon-btn {
+  position: static;
+}
+.thumbs-grid {
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 14px 12px;
+  padding: 6px 16px calc(var(--safe-bottom) + 24px);
+  align-content: start;
+}
+.thumb {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  font-size: 0.74rem;
+  color: rgba(243, 236, 220, 0.75);
+  font-variant-numeric: tabular-nums;
+}
+.thumb .pdfpage {
+  cursor: pointer;
+}
+.thumb .pdfpage .pn {
+  display: none;
+}
+.thumb[data-current] .pdfpage {
+  outline: 2.5px solid var(--gold-soft);
+  outline-offset: 2px;
+}
+.thumb[data-current] span {
+  color: #f3ecdc;
+  font-weight: 600;
+}
+
+/* Printed pages light on dark, for reading a scan at night. */
+:root[data-tone='dark'] .rd[data-dark-pages] .pdfpage canvas,
+.zoom[data-dark-page] .zoom-stage canvas,
+.thumbs-grid[data-dark-page] .pdfpage canvas {
+  filter: invert(0.88) hue-rotate(180deg) contrast(0.92);
+}
+:root[data-tone='dark'] .rd[data-dark-pages] .pdfpage,
+.zoom[data-dark-page] .zoom-stage canvas {
+  background: #1a1815;
+}
+
+/* ---------- Reading: where you are, quietly ---------- */
+
+/* With the bars hidden: time left in the chapter and the page, in the bottom corners. */
+.rd-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--safe-bottom) + 6px);
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 calc(var(--rd-margin) + var(--safe-right)) 0 calc(var(--rd-margin) + var(--safe-left));
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+  z-index: 2;
+}
+.rd-foot > span:only-child {
+  margin-inline-start: auto;
+}
+.rd[data-chrome='true'] .rd-foot {
+  opacity: 0;
+}
+
+/* The note that the English is a translation: quiet, and a way to learn more. */
+.tr-label {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: start;
+  cursor: pointer;
+}
+.tr-label:active {
+  color: var(--ink-2);
+}
+
+/* Where the English stops. */
+.tr-gap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0.4em 0 0.8em;
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  color: var(--ink-3);
+}
+.tr-gap::before {
+  content: '';
+  width: 18px;
+  height: 1px;
+  background: var(--line-strong);
+}
+.tr-gap .btn {
+  min-height: 34px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+}
+
+/* Both languages as equals: the original, then its English at full strength, a hairline between pairs. */
+.bk-pair {
+  margin-bottom: 0;
+  padding: 0.2em 0 0.9em;
+  border-bottom: 1px solid var(--line);
+  margin-top: 0.7em;
+}
+.bk-pair:last-child {
+  border-bottom: 0;
+}
+.bk-pair > .bk {
+  margin-bottom: 0.35em;
+}
+.bk-pair > .bk--en {
+  color: var(--ink);
+  padding-inline-start: 0;
+  border-inline-start: 0;
+  font-size: 0.94em;
+  margin-bottom: 0;
+}
+.bk-pair > h2.bk--en {
+  font-size: 1.05em;
+  line-height: 1.35;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* Contents: the English title, the original beneath. */
+.toc-two {
+  display: grid;
+  gap: 1px;
+}
+.toc-two .toc-en {
+  font-family: var(--font-read);
+}
+.toc-two .toc-orig {
+  font-size: 0.86em;
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.toc-row[aria-current='true'] .toc-orig {
+  color: color-mix(in srgb, var(--rubric) 70%, var(--ink-3));
+}
+
+/* The sample on How the English reads. */
+.style-sample {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.style-sample-k {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.style-sample p {
+  margin: 4px 0 0;
+  font-family: var(--font-read);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.settings-page > .ctl {
+  margin-bottom: 16px;
+}
+
+/* ---------- Comfort: a page like a printed book ---------- */
+
+/* Like a book: paragraphs follow each other closely, each after the first indented. */
+.rd[data-layout='book'] .rd-text .bk[data-t='p'] {
+  margin-bottom: 0.15em;
+}
+.rd[data-layout='book'] .rd-text .bk[data-t='p'] + .bk[data-t='p'],
+.rd[data-layout='book'] .rd-text .bk[data-t='p'] + .pgmark + .bk[data-t='p'] {
+  text-indent: 1.4em;
+}
+.rd[data-layout='book'] .rd-text .bk[data-t='p']:has(+ :not(.bk[data-t='p'], .pgmark)) {
+  margin-bottom: 0.85em;
+}
+.rd[data-layout='book'] .rd-text .bk--en[data-t='p'] {
+  hyphens: auto;
+}
+.rd-text .bk[data-t='p'] {
+  orphans: 2;
+  widows: 2;
+}
+.rd[data-bold] .rd-text {
+  font-weight: 500;
+}
+.rd[data-bold] .rd-text .bk[data-t='h'] {
+  font-weight: 750;
+}
+
+/* A page number in the margin beside the text, for citing, rather than a line across it. */
+.rd[data-layout='book'] .rd-scroll .pgmark {
+  float: inline-end;
+  clear: both;
+  margin: 0.25em calc(-1 * var(--rd-margin) + 2px) 0 4px;
+  width: max(18px, calc(var(--rd-margin) - 6px));
+  justify-content: center;
+  font-size: 0.62rem;
+  color: var(--gold);
+  break-after: auto;
+}
+.rd[data-layout='book'] .rd-scroll .pgmark::before,
+.rd[data-layout='book'] .rd-scroll .pgmark::after {
+  display: none;
+}
+.rd[data-layout='book'] .rd-scroll .pagepair .pgmark,
+.rd[data-layout='book'] .rd-scroll .pgmark:has(+ .pagepair) {
+  float: none;
+  width: auto;
+  margin: 0.2em 0 0.9em;
+}
+
+/* A chapter that opens like a book: the title set apart, an ornament, a large first letter
+   and small capitals on the opening line of the English. */
+.rd[data-layout='book'] section[data-section]:has(> .bk[data-t='h']:nth-child(-n + 2)) > .bk[data-t='h']:nth-child(-n + 2) {
+  text-align: center;
+  margin-top: 1.8em;
+  text-wrap: balance;
+}
+.rd[data-layout='book'] section[data-section] > .bk[data-t='h']:nth-child(-n + 2)::after {
+  content: '۞';
+  display: block;
+  margin: 0.55em auto 0.2em;
+  font-family: var(--font-arabic);
+  font-size: 0.7em;
+  font-weight: 400;
+  color: var(--gold-soft);
+  text-indent: 0;
+}
+.rd[data-layout='book'] section[data-section] > .tr-label {
+  text-align: center;
+}
+.rd[data-layout='book'] section[data-section]:has(> .bk[data-t='h']:nth-child(-n + 2)) > p.bk:is(.bk--en, [lang='en']):nth-child(1 of p.bk[data-t='p'])::first-letter {
+  float: left;
+  font-size: 3.15em;
+  line-height: 0.85;
+  padding: 0.06em 0.08em 0 0;
+  color: var(--rubric);
+  font-weight: 600;
+}
+.rd[data-layout='book'] section[data-section]:has(> .bk[data-t='h']:nth-child(-n + 2)) > p.bk:is(.bk--en, [lang='en']):nth-child(1 of p.bk[data-t='p'])::first-line {
+  font-variant-caps: small-caps;
+  letter-spacing: 0.03em;
+}
+.rd[data-layout='book'] section[data-section]:has(> .bk[data-t='h']:nth-child(-n + 2)) > p.bk:nth-child(1 of p.bk[data-t='p']) {
+  text-indent: 0;
+}
+
+/* Warm light and extra dimming, over the page but never in the way of a tap. */
+.rd-warm,
+.rd-dim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: calc(var(--z-reader-chrome) + 2);
+}
+.rd-warm {
+  background: rgb(255, 150, 40);
+  mix-blend-mode: multiply;
+  opacity: calc(var(--rd-warm) * 0.55);
+}
+.rd-dim {
+  background: #000;
+  opacity: var(--rd-dim);
+}
+
+/* Back to where you were, after a jump. */
+.rd-back {
+  position: absolute;
+  z-index: calc(var(--z-reader-chrome) + 1);
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 30px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px 9px 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  animation: back-in 0.5s var(--ease-spring) both;
+}
+.rd[data-chrome='true'] .rd-back {
+  /* With the bars showing, just under the top bar: messages keep the foot. */
+  bottom: auto;
+  top: calc(var(--safe-top) + 64px);
+  animation-name: back-down;
+}
+@keyframes back-down {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -60%);
+  }
+}
+@keyframes back-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 140%);
+  }
+}
+
+/* Peek: the original over the English, without moving the page. */
+.peek {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: grid;
+  align-items: end;
+  padding: 16px 16px calc(var(--safe-bottom) + 24px);
+  background: color-mix(in srgb, var(--scrim) 50%, transparent);
+  animation: fade-in 0.18s both;
+}
+.peek-card {
+  display: grid;
+  gap: 6px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 14px 18px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: rise 0.32s var(--ease-spring) both;
+}
+.peek-card small {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.peek-card p {
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.9;
+}
+.peek-card p:lang(ar),
+.peek-card p:lang(fa) {
+  font-family: var(--rd-ar-font, var(--font-arabic));
+}
+.peek-card p:lang(ur) {
+  font-family: var(--rd-ur-font, var(--font-urdu));
+  line-height: 2.3;
+}
+
+/* The slider: chapter marks along it, and the chapter under the finger while dragging. */
+.rd-slider {
+  position: relative;
+}
+.rd-ticks {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 50%;
+  height: 0;
+  pointer-events: none;
+}
+.rd-ticks i {
+  position: absolute;
+  top: -4px;
+  width: 1.5px;
+  height: 8px;
+  margin-left: -0.75px;
+  border-radius: 1px;
+  background: var(--ink-3);
+  opacity: 0.55;
+}
+.rd-scrub-bubble {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%);
+  max-width: min(78vw, 320px);
+  display: grid;
+  gap: 1px;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.8rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+.rd-scrub-bubble b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.rd-scrub-bubble span {
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.clock-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+.clock-row input {
+  margin-inline-start: 6px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}

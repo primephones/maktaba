@@ -15,6 +15,21 @@ import { useEffect } from 'react';
  * The single way books get into the app. Every Add button opens the same file picker
  * and goes through the same queue; duplicates and unreadable files are reported plainly.
  */
+/** Resolves once no book is open (at once, if none is). */
+function outOfReader(): Promise<void> {
+  return new Promise((resolve) => {
+    const reading = () => /^#\/book\/[^/]+\/?$/.test(location.hash);
+    if (!reading()) return resolve();
+    const check = () => {
+      if (reading()) return;
+      window.removeEventListener('hashchange', check);
+      // A moment after arriving, so the question is not lost in the change of screen.
+      window.setTimeout(resolve, 600);
+    };
+    window.addEventListener('hashchange', check);
+  });
+}
+
 export function useAddBooks(): { pick: (folderId?: string) => void; addDropped: (files: File[]) => void; element: ReactNode } {
   const inputRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<string | undefined>(undefined);
@@ -119,6 +134,8 @@ async function offerShelving(ids: string[], choose: (ids: string[]) => void) {
   const one = sure.length === 1 ? sure[0] : null;
   const sameFolder = sure.length > 1 && sure.every((x) => where(x.s) === where(sure[0].s));
   const label = one ? `“${one.book.title}” in ${where(one.s)}` : sameFolder ? `the ${sure.length} new books in ${where(sure[0].s)}` : `the ${sure.length} new books in their folders`;
+  // Not while a book is open: the question waits until the reader leaves it.
+  await outOfReader();
   const apply = () => shelve(sure.map((x) => ({ bookId: x.book.id, folderId: x.s.folderId, newName: x.s.newName })));
   const undo = () => shelve(sure.map((x) => ({ bookId: x.book.id })));
 

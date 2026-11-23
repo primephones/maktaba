@@ -25,6 +25,7 @@ const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string; gro
   { id: 'cloud', group: 'Your accounts', title: 'Your cloud', icon: 'cloud', sub: 'Your library in your own Google Drive, on all your phones' },
   { id: 'ai', group: 'Your accounts', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account, test it, today’s allowance' },
   { id: 'theme', group: 'Reading', title: 'Theme', icon: 'palette', sub: 'Eight colour themes, or follow the phone' },
+  { id: 'english', group: 'Reading', title: 'How the English reads', icon: 'language', sub: 'Allah or God, honorifics, technical terms' },
   { id: 'reading', group: 'Reading', title: 'Reading defaults', icon: 'type', sub: 'Typefaces, size, spacing and page mode' },
   { id: 'voice', group: 'Reading', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
   { id: 'library', group: 'Your library', title: 'Sorting new books', icon: 'folder', sub: 'Into folders: ask me, automatically, or leave them' },
@@ -75,6 +76,7 @@ export function Settings({ page }: { page?: string }) {
         {page === 'voice' && <VoicePage />}
         {page === 'theme' && <ThemePage />}
         {page === 'reading' && <ReadingPage />}
+        {page === 'english' && <EnglishStylePage />}
         {page === 'library' && <LibraryPage />}
         {page === 'covers' && <CoversPage />}
         {page === 'switches' && <SwitchesPage />}
@@ -113,14 +115,27 @@ function ThemePage() {
         <button className="row" role="radio" aria-checked={theme === 'auto'} onClick={() => void setSetting('theme', 'auto')}>
           <span className="swatch swatch--split" style={{ background: `linear-gradient(135deg, ${day.swatch[0]} 50%, ${night.swatch[0]} 50%)` }} aria-hidden="true" />
           <span className="grow">
-            <span className="title">Follow phone</span>
-            <div className="sub">{day.label} by day, {night.label} when the phone is in dark mode</div>
+            <span className="title">Day and night</span>
+            <div className="sub">{day.label} by day, {night.label} {pair.by === 'clock' ? `from ${pair.from ?? '19:00'} to ${pair.to ?? '06:00'}` : 'when the phone is in dark mode'}</div>
           </span>
           {theme === 'auto' && <Icon name="check" />}
         </button>
       </div>
       {theme === 'auto' && (
         <div className="auto-pair">
+          <div className="ctl">
+            <div className="lbl"><span>Night begins</span></div>
+            <div className="seg" role="group" aria-label="Night begins">
+              <button aria-pressed={pair.by !== 'clock'} onClick={() => void setSetting('autoThemes', { ...pair, by: 'phone' })}>With the phone</button>
+              <button aria-pressed={pair.by === 'clock'} onClick={() => void setSetting('autoThemes', { ...pair, by: 'clock', from: pair.from ?? '19:00', to: pair.to ?? '06:00' })}>By the clock</button>
+            </div>
+            {pair.by === 'clock' && (
+              <div className="clock-row">
+                <label>From <input type="time" value={pair.from ?? '19:00'} onChange={(e) => e.target.value && void setSetting('autoThemes', { ...pair, from: e.target.value })} /></label>
+                <label>to <input type="time" value={pair.to ?? '06:00'} onChange={(e) => e.target.value && void setSetting('autoThemes', { ...pair, to: e.target.value })} /></label>
+              </div>
+            )}
+          </div>
           {(['light', 'dark'] as const).map((tone) => (
             <div className="ctl" key={tone}>
               <div className="lbl"><span>{tone === 'light' ? 'By day' : 'At night'}</span></div>
@@ -141,6 +156,45 @@ function ThemePage() {
       <div className="section-title">Classic</div>
       <div className="list">{THEMES.filter((t) => t.family === 'classic').map(row)}</div>
     </div>
+  );
+}
+
+/** How the AI's English reads, with a sample that changes as each choice is made. */
+function EnglishStylePage() {
+  const style = useSetting('translationStyle');
+  const set = (patch: Partial<typeof style>) => void setSetting('translationStyle', { ...style, ...patch });
+  const god = style.god === 'God' ? 'God' : 'Allah';
+  const prophet = style.honorifics === 'short' ? 'the Prophet ﷺ' : 'the Prophet (peace and blessings be upon him)';
+  const term = style.terms === 'plain' ? 'by consensus' : 'by ijmāʿ (consensus)';
+  return (
+    <>
+      <div className="style-sample" aria-live="polite">
+        <span className="style-sample-k">Sample</span>
+        <p>{god} commands justice, and {prophet} taught it. What the scholars of an age agree upon is established {term}.</p>
+      </div>
+      <div className="ctl">
+        <div className="lbl"><span>The name of God</span></div>
+        <div className="seg" role="group" aria-label="The name of God">
+          <button aria-pressed={style.god !== 'God'} onClick={() => set({ god: 'Allah' })}>Allah</button>
+          <button aria-pressed={style.god === 'God'} onClick={() => set({ god: 'God' })}>God</button>
+        </div>
+      </div>
+      <div className="ctl">
+        <div className="lbl"><span>Honorifics</span><span>after the names of the Prophet and the Companions</span></div>
+        <div className="seg" role="group" aria-label="Honorifics">
+          <button aria-pressed={style.honorifics !== 'short'} onClick={() => set({ honorifics: 'words' })}>In words</button>
+          <button aria-pressed={style.honorifics === 'short'} onClick={() => set({ honorifics: 'short' })}>Short (ﷺ, ra)</button>
+        </div>
+      </div>
+      <div className="ctl">
+        <div className="lbl"><span>Technical terms</span><span>such as ijmāʿ, qiyās, makrūh</span></div>
+        <div className="seg" role="group" aria-label="Technical terms">
+          <button aria-pressed={style.terms !== 'plain'} onClick={() => set({ terms: 'transliterated' })}>Arabic term, explained</button>
+          <button aria-pressed={style.terms === 'plain'} onClick={() => set({ terms: 'plain' })}>Plain English</button>
+        </div>
+      </div>
+      <p className="muted small">These apply to English made from now on, in every book. English already made stays as it is.</p>
+    </>
   );
 }
 

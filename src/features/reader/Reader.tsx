@@ -20,7 +20,7 @@ import { openOriginal } from '../../lib/saveFile';
 import { Listen } from './Listen';
 import { canSpeak } from '../../speech/speech';
 import { goBack, navigate } from '../../app/router';
-import { useSetting } from '../../app/settings';
+import { setSetting, useSetting } from '../../app/settings';
 import { EmptyState } from '../../ui/EmptyState';
 import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
@@ -39,6 +39,8 @@ import { ReadingControls } from './ReadingControls';
 import { readSelection, type ReaderSelection } from './selection';
 import { PagedView, ScrollView, type Target } from './views';
 import { ZoomViewer, type PageMark, type ZoomSource } from './ZoomViewer';
+import { PdfPage } from './PdfPage';
+import { PageInfo, PageSourceLine, sourceText, usePageSources } from './PageInfo';
 
 const COLORS: HighlightColor[] = ['gold', 'rubric', 'slate', 'rose', 'ink'];
 const COLOR_NAME: Record<HighlightColor, string> = { gold: 'Gold', rubric: 'Red', slate: 'Slate blue', rose: 'Rose', ink: 'Grey' };
@@ -96,7 +98,10 @@ function ReaderInner({ book }: { book: Book }) {
   const [editMark, setEditMark] = useState<string | null>(null);
   const [zoom, setZoom] = useState<ZoomSource | null>(null);
   const [original, setOriginal] = useState<{ page: number; mark?: PageMark } | null>(null);
+  const [pageInfo, setPageInfo] = useState<{ page: number; printed?: string } | null>(null);
+  const [aboutEn, setAboutEn] = useState<Translation | null>(null);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
+  const [peek, setPeek] = useState<{ section: number; block: number } | null>(null);
   const [scrub, setScrub] = useState<number | null>(null);
 
   // ----- Sections: loaded on demand and kept while the book is open -----
@@ -185,7 +190,15 @@ function ReaderInner({ book }: { book: Book }) {
     };
   }, [persist]);
 
-  const goTo = useCallback((section: number, block: number, range?: [number, number]) => {
+  // After a jump (contents, search, a page, the slider): a way straight back.
+  const [back, setBack] = useState<{ section: number; block: number; label: string } | null>(null);
+  const goTo = useCallback((section: number, block: number, range?: [number, number], remember = true) => {
+    const from = latest.current;
+    if (remember && (from.section !== section || Math.abs(from.block - block) > 3)) {
+      const b = cache.current.get(from.section)?.blocks[from.block];
+      const pageNo = b?.printed ?? (b?.page ? String(b.page) : '');
+      setBack({ ...from, label: pageNo ? `Back to p. ${pageNo}` : 'Back to where you were' });
+    } else if (!remember) setBack(null);
     setTarget((t) => ({ section, block, nonce: t.nonce + 1 }));
     lastJump.current = Date.now();
     latest.current = { section, block };
@@ -194,6 +207,51 @@ function ReaderInner({ book }: { book: Book }) {
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(persist, 900);
   }, [persist]);
+
+  useEffect(() => {
+    if (!back) return;
+    const t = window.setTimeout(() => setBack(null), 20000);
+    return () => window.clearTimeout(t);
+  }, [back]);
+
+  // Pinch the page with two fingers to make the text bigger or smaller.
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    let start: { d: number; size: number } | null = null;
+    let live = 0;
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 2 && !(e.target as Element).closest('.sheet, .zoom')) start = { d: dist(e.touches), size: prefsRef.current.fontSize };
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start || e.touches.length !== 2) return;
+      e.preventDefault();
+      live = clamp(Math.round((start.size * dist(e.touches)) / start.d / 5) * 5, 70, 220);
+      el.style.setProperty('--rd-size', `${(1.1875 * live) / 100}rem`);
+    };
+    const onEnd = () => {
+      if (!start) return;
+      start = null;
+      if (live && live !== prefsRef.current.fontSize) {
+        void setSetting('reader', { ...prefsRef.current, fontSize: live });
+        toast(`Text size ${live}%`);
+      }
+      live = 0;
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
 
   // ----- Android reading aids: volume keys, screen on, orientation -----
   useEffect(() => {
@@ -262,13 +320,14 @@ function ReaderInner({ book }: { book: Book }) {
 
   const highlight = async (color: HighlightColor, thenEdit = false) => {
     if (!selection) return;
-    if (selection.parts.every((p) => p.en)) {
-      toast('Highlights are kept on the original text. Tap the paragraph to show the original, then highlight there.');
-      return;
-    }
     const now = Date.now();
     const made: Mark[] = [];
-    for (const part of selection.parts.filter((x) => !x.en)) {
+    for (const part of selection.parts) {
+      // In the English: kept against the English words themselves.
+      if (part.en) {
+        if (part.end > part.start && part.text.trim()) made.push({ id: uid(), bookId: book.id, type: 'highlight', en: true, section: part.section, block: part.block, start: part.start, end: part.end, color, text: part.text, createdAt: now, updatedAt: now });
+        continue;
+      }
       const p = toStored(part);
       if (!p) continue;
       made.push({ id: uid(), bookId: book.id, type: 'highlight', section: p.section, block: p.block, start: p.start, end: p.end, color, text: p.text, createdAt: now, updatedAt: now });
@@ -427,7 +486,9 @@ function ReaderInner({ book }: { book: Book }) {
     setNote(cache.current.get(section)?.notes?.[id] ?? 'This footnote is missing from the file.');
   }, []);
   const onMark = useCallback((id: string) => setEditMark(id), []);
-  const onZoom = useCallback((source: ZoomSource) => setZoom(source), []);
+  // A printed page opens in the page viewer, which turns pages and can go back to the text.
+  const onZoom = useCallback((source: ZoomSource) => (source.kind === 'pdf' ? setOriginal({ page: source.page }) : setZoom(source)), []);
+  const onPageInfo = useCallback((page: number, printed?: string) => setPageInfo({ page, printed }), []);
 
   // ----- English translation -----
   const trList = useLiveQuery(() => db.translations.where('bookId').equals(book.id).toArray(), [book.id]);
@@ -454,6 +515,10 @@ function ReaderInner({ book }: { book: Book }) {
   // default), or the text read from them.
   const hasScans = !!book.ocr;
   const scanView = book.scanView ?? 'page';
+  // Any PDF can be read as its printed pages: a scan by default, a PDF of text when chosen.
+  const isPdf = book.format === 'pdf';
+  const pageMode = isPdf && (hasScans ? scanView === 'page' : book.scanView === 'page');
+  const pageSources = usePageSources(book);
   // Pages the AI has read (or that were corrected by hand): a page read and found to hold no
   // text (a title page, a picture) is not offered for reading again.
   const aiRead = useLiveQuery(async () => (hasScans ? new Set((await db.ocrPages.where('bookId').equals(book.id).toArray()).filter((r) => r.by === 'ai' || r.edited).map((r) => r.page)) : new Set<number>()), [book.id, hasScans, book.ocr?.done]) ?? NO_PAGES;
@@ -466,10 +531,10 @@ function ReaderInner({ book }: { book: Book }) {
       // A short note at the head of a chapter says the English is a machine draft, and by whom.
       const firstTr = view !== 'orig' ? sec.blocks.map((_, i) => translations.get(`${sec.idx}:${i}`)).find(Boolean) : undefined;
       const label = firstTr ? (
-        <div className="tr-label" key="trlabel" data-skip>
-          <span className="ai-mark" aria-hidden="true">✦</span> English: {firstTr.label === 'reviewed' ? 'reviewed by a scholar' : firstTr.label === 'checked' ? 'checked' : 'machine draft'} ({firstTr.model.replace(/^.*\//, '')}).
-          {view === 'en' ? ' Tap a paragraph for the original.' : ''}
-        </div>
+        <button className="tr-label" key="trlabel" data-skip onClick={() => setAboutEn(firstTr)} aria-label="About this English">
+          <span className="ai-mark" aria-hidden="true">✦</span> {firstTr.label === 'reviewed' ? 'Reviewed by a scholar' : firstTr.label === 'checked' ? 'Translated by your AI, and checked' : 'Translated by your AI'}
+          {view === 'en' ? ' · tap a paragraph for the original' : ''}
+        </button>
       ) : null;
       // Under the chapter's heading when it opens with one (so it is in view with the heading), else at its head.
       const labelAfter = label && sec.blocks[0]?.t === 'h' ? 0 : -1;
@@ -478,30 +543,93 @@ function ReaderInner({ book }: { book: Book }) {
       // what is on screen is not redrawn as something else (and the place held stays put).
       const keys = hasScans ? keysFor(sec.blocks) : null;
       const keyOf = (i: number) => (keys ? keys[i] : String(i));
+      const blockProps = {
+        bookId: book.id,
+        bookLang: book.lang,
+        section: sec.idx,
+        showTashkil: prefs.tashkil,
+        onNote,
+        onMark,
+        onZoom,
+        flipped: false,
+        onFlip,
+        onUncertain,
+        onQuran,
+      };
+      /** The English of the paragraphs on one printed page, to go under its picture. */
+      const englishOf = (onPage: number[]) =>
+        onPage
+          .filter((j) => translations.has(`${sec.idx}:${j}`))
+          .map((j) => (
+            <BlockView
+              key={`en${keyOf(j)}`}
+              {...blockProps}
+              index={j}
+              block={sec.blocks[j]}
+              marks={marksByBlock.get(`${sec.idx}:${j}`) ?? NO_MARKS}
+              flash={flash && flash.section === sec.idx && flash.block === j ? flash.range : undefined}
+              tr={translations.get(`${sec.idx}:${j}`)}
+              show="en"
+              flipped={flipped.has(`${sec.idx}:${j}`)}
+            />
+          ));
+
+      // A PDF of text read as its printed pages: each page's picture stands in for its text,
+      // with the page's English beneath when the English is shown.
+      const textAsPages = pageMode && !hasScans && sec.blocks.some((b) => b.page);
+      const pagesShown = new Set<number>();
+      if (textAsPages) {
+        // A page that began in the chapter before was shown there.
+        const prev = cache.current.get(sec.idx - 1)?.blocks;
+        const carried = prev ? [...prev].reverse().find((b) => b.page)?.page : undefined;
+        if (carried && sec.blocks.find((b) => b.page)?.page === carried) pagesShown.add(carried);
+      }
+
       sec.blocks.forEach((block, i) => {
+        if (textAsPages) {
+          const p = block.page;
+          if (!p || pagesShown.has(p)) return;
+          pagesShown.add(p);
+          const onPage = sec.blocks.map((b, j) => (b.page === p && b.t !== 'img' && b.text.trim().length > 1 ? j : -1)).filter((j) => j >= 0);
+          out.push(
+            <div className="pagepair" key={`pp${i}`}>
+              <div className="bk bk--page" data-s={sec.idx} data-b={i} data-t="img">
+                <PdfPage bookId={book.id} page={p} label={block.printed ?? String(p)} onZoom={() => onZoom({ kind: 'pdf', bookId: book.id, page: p })} />
+              </div>
+              {view !== 'orig' && hasTranslation ? (
+                <>
+                  <PageSourceLine book={book} page={p} src={undefined} onOpen={(pg) => onPageInfo(pg, block.printed)} />
+                  <div className="pagepair-en">{englishOf(onPage)}</div>
+                </>
+              ) : null}
+            </div>,
+          );
+          if (i === labelAfter) out.push(label);
+          return;
+        }
         const isPageImage = block.t === 'img' && (/^page:\d+$/.test(block.src ?? '') || block.src === 'page-1');
         if (block.ocr && scanView === 'page') return;
         if (isPageImage && scanView === 'text' && recognised.has(block.page)) return;
-        // Mark where the printed page turns, so a passage can be cited by page.
+        // Mark where the printed page turns, so a passage can be cited by page (and, in a
+        // PDF, checked against the page itself).
         const pageNo = block.t === 'img' ? undefined : block.printed ?? (block.page ? String(block.page) : undefined);
         if (pageNo && pageNo !== lastPage) {
-          out.push(<div className="pgmark" key={`p${keyOf(i)}`} role="note" aria-label={`Page ${pageNo}`}>{pageNo}</div>);
+          const filePage = block.page;
+          const unsure = hasScans && filePage ? sourceText(book, pageSources.get(filePage))?.unsure : false;
+          out.push(
+            isPdf && filePage ? (
+              <div className="pgmark" key={`p${keyOf(i)}`} data-skip>
+                <button onClick={() => onPageInfo(filePage, block.printed)} aria-label={`Page ${pageNo}${unsure ? ', needs checking' : ''}. Check this page`} data-unsure={unsure || undefined}>
+                  {pageNo}
+                </button>
+              </div>
+            ) : (
+              <div className="pgmark" key={`p${keyOf(i)}`} role="note" aria-label={`Page ${pageNo}`}>{pageNo}</div>
+            ),
+          );
         }
         if (pageNo) lastPage = pageNo;
-        const blockProps = {
-          bookId: book.id,
-          bookLang: book.lang,
-          section: sec.idx,
-          showTashkil: prefs.tashkil,
-          onNote,
-          onMark,
-          onZoom,
-          flipped: false,
-          onFlip,
-          onUncertain,
-          onQuran,
-        };
-        out.push(
+        const view_ = (
           <BlockView
             key={keyOf(i)}
             bookId={book.id}
@@ -521,38 +649,47 @@ function ReaderInner({ book }: { book: Book }) {
             onFlip={onFlip}
             onUncertain={onUncertain}
             onQuran={onQuran}
-          />,
+          />
         );
-        if (i === labelAfter) out.push(label);
-        // Under a scanned page: its English, paragraph by paragraph, and a way to read and
-        // translate the page now if that is not done yet.
-        if (isPageImage && scanView === 'page' && hasScans && (view !== 'orig' || !hasTranslation)) {
+        // A scanned page shown as printed: the page, where its words came from, its English
+        // paragraph by paragraph, and a way to read and translate it now if not done yet.
+        if (isPageImage && scanView === 'page' && hasScans) {
           const p = block.page ?? Number(block.src?.match(/\d+/)?.[0] ?? 1);
           const onPage = sec.blocks.map((b, j) => (b.ocr && b.page === p && b.text.trim().length > 1 ? j : -1)).filter((j) => j >= 0);
+          const showEnglish = view !== 'orig' || !hasTranslation;
           const done = onPage.filter((j) => translations.has(`${sec.idx}:${j}`));
-          for (const j of done) {
-            out.push(
-              <BlockView
-                key={`en${keyOf(j)}`}
-                {...blockProps}
-                index={j}
-                block={sec.blocks[j]}
-                marks={marksByBlock.get(`${sec.idx}:${j}`) ?? NO_MARKS}
-                flash={flash && flash.section === sec.idx && flash.block === j ? flash.range : undefined}
-                tr={translations.get(`${sec.idx}:${j}`)}
-                show="en"
-                flipped={flipped.has(`${sec.idx}:${j}`)}
-              />,
-            );
-          }
-          if ((!onPage.length && !aiRead.has(p)) || done.length < onPage.length) {
-            out.push(<ScanPageAction key={`act${keyOf(i)}`} book={book} page={p} read={onPage.length > 0 || aiRead.has(p)} some={done.length > 0} />);
+          out.push(
+            <div className="pagepair" key={`pp${keyOf(i)}`}>
+              {view_}
+              <PageSourceLine book={book} page={p} src={pageSources.get(p)} onOpen={(pg) => onPageInfo(pg, block.printed)} />
+              {showEnglish && (
+                <div className="pagepair-en">
+                  {englishOf(onPage)}
+                  {((!onPage.length && !aiRead.has(p)) || done.length < onPage.length) && (
+                    <ScanPageAction book={book} page={p} read={onPage.length > 0 || aiRead.has(p)} some={done.length > 0} />
+                  )}
+                </div>
+              )}
+            </div>,
+          );
+          if (i === labelAfter) out.push(label);
+          return;
+        }
+        // English shown, but this paragraph has none yet (it failed, or was not reached): a
+        // quiet way to carry on translating from here, once at the start of each such run.
+        const untranslated = view !== 'orig' && hasTranslation && !pageMode && (block.t === 'p' || block.t === 'h' || block.t === 'quote') && block.text.trim().length > 1 && !translations.has(`${sec.idx}:${i}`);
+        if (untranslated) {
+          const prev = sec.blocks.slice(0, i).map((b, j) => ({ b, j })).reverse().find(({ b }) => b.t !== 'img' && b.t !== 'hr' && b.text.trim().length > 1);
+          if (!prev || translations.has(`${sec.idx}:${prev.j}`)) {
+            out.push(<TranslateFromHere key={`tfh${keyOf(i)}`} book={book} at={{ section: sec.idx, block: i }} />);
           }
         }
+        out.push(view_);
+        if (i === labelAfter) out.push(label);
       });
       return out;
     },
-    [book, hasScans, hasTranslation, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran, aiRead],
+    [book, hasScans, hasTranslation, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran, aiRead, pageMode, isPdf, pageSources, onPageInfo],
   );
 
   // Recognised text arrives while the book is open (by the background reading, or a page read
@@ -572,6 +709,32 @@ function ReaderInner({ book }: { book: Book }) {
     });
   }, [ocrDone, ocrStamp, book.id]);
 
+  // Full screen while reading: the phone's clock and battery bar go with the reading bars.
+  useEffect(() => {
+    void (async () => {
+      const { Capacitor } = await import('@capacitor/core');
+      if (!Capacitor.isNativePlatform()) return;
+      const { StatusBar } = await import('@capacitor/status-bar');
+      await (chrome || selection ? StatusBar.show() : StatusBar.hide()).catch(() => undefined);
+    })();
+  }, [chrome, selection]);
+  useEffect(
+    () => () =>
+      void import('@capacitor/core').then(async ({ Capacitor }) => {
+        if (Capacitor.isNativePlatform()) await (await import('@capacitor/status-bar')).StatusBar.show().catch(() => undefined);
+      }),
+    [],
+  );
+  // Messages sit just above the reading bars (or at the very foot), never over the text.
+  const footer = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = footer.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => document.documentElement.style.setProperty('--rd-bar-h', `${el.offsetHeight}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const onTap = useCallback(() => setChrome((c) => !c), []);
   const onUserMove = useCallback(() => setChrome(false), []);
   const onReveal = useCallback(() => setChrome(true), []);
@@ -580,7 +743,52 @@ function ReaderInner({ book }: { book: Book }) {
   const fraction = scrub ?? fractionAt(book, pos.section, pos.block, currentSection?.blocks.length ?? 0);
   const currentBlock = currentSection?.blocks[pos.block];
   const pageLabel = currentBlock?.printed ?? (currentBlock?.page ? String(currentBlock.page) : '');
-  const chapter = chapterAt(pos.section, pos.block);
+  // The chapter's name in English when the English is being read and its title has one.
+  const tocIndexAt = (section: number, block: number) => {
+    let at = -1;
+    book.toc.forEach((t, i) => {
+      if (t.section < section || (t.section === section && (t.block ?? 0) <= block)) at = i;
+    });
+    return at;
+  };
+  const tocEn = (i: number): string | undefined => {
+    const t = book.toc[i];
+    if (!t) return undefined;
+    if (book.tocEn?.[i]) return book.tocEn[i];
+    for (const b of t.block !== undefined ? [t.block] : [0, 1]) {
+      const en = translations.get(`${t.section}:${b}`)?.en.replace(/†/g, '').trim();
+      if (en && en.length < 140) return en;
+    }
+    return undefined;
+  };
+  const chapterOrig = chapterAt(pos.section, pos.block);
+  const chapter = (view !== 'orig' && tocEn(tocIndexAt(pos.section, pos.block))) || chapterOrig;
+  // Where in the whole book, as pages: the PDF's own pages, else pages of about 1,500 letters.
+  const totalChars = book.sectionChars.reduce((a, b) => a + b, 0);
+  const pageOf = isPdf && book.pageCount ? book.pageCount : Math.max(1, Math.ceil(totalChars / 1500));
+  const pageNow = isPdf && currentBlock?.page ? currentBlock.page : Math.max(1, Math.min(pageOf, Math.ceil(fraction * pageOf) || 1));
+  // The chapters as marks along the slider, and the chapter under the finger while dragging.
+  const sectionStarts = useMemo(() => {
+    const total = book.sectionChars.reduce((a, b) => a + b, 0) || 1;
+    let acc = 0;
+    return book.sectionChars.map((c) => {
+      const at = acc / total;
+      acc += c;
+      return at;
+    });
+  }, [book.sectionChars]);
+  const ticks = useMemo(() => {
+    const top = Math.min(...book.toc.map((t) => t.level), 9);
+    const marks = book.toc.filter((t) => t.level === top).map((t) => sectionStarts[t.section] ?? 0).filter((f) => f > 0.005 && f < 0.995);
+    return marks.length <= 60 ? marks : [];
+  }, [book.toc, sectionStarts]);
+  const scrubChapter = (f: number) => {
+    let s = 0;
+    while (s < sectionStarts.length - 1 && sectionStarts[s + 1] <= f) s++;
+    const i = tocIndexAt(s, 0);
+    return (i >= 0 && ((view !== 'orig' && tocEn(i)) || book.toc[i].title)) || book.title;
+  };
+  const minutesLeft = useMinutesLeft(pos, currentSection, translations, view);
 
   const scrubTimer = useRef(0);
   const onScrub = (value: number) => {
@@ -603,12 +811,14 @@ function ReaderInner({ book }: { book: Book }) {
   };
 
   const View = prefs.mode === 'paged' ? PagedView : ScrollView;
-  const layoutKey = `${prefs.fontSize}|${prefs.lineHeight}|${prefs.margin}|${prefs.justify}|${prefs.latinFont}|${prefs.arabicFont}|${prefs.urduFont}|${prefs.tashkil}`;
+  const layoutKey = `${prefs.fontSize}|${prefs.lineHeight}|${prefs.margin}|${prefs.justify}|${prefs.latinFont}|${prefs.arabicFont}|${prefs.urduFont}|${prefs.tashkil}|${prefs.layout}|${prefs.bold}`;
   const style = {
     '--rd-size': `${(1.1875 * prefs.fontSize) / 100}rem`,
     '--rd-lh': String(prefs.lineHeight),
     '--rd-margin': `${prefs.margin}px`,
-    '--rd-font': prefs.latinFont === 'plex' ? 'var(--font-ui)' : 'var(--font-read)',
+    '--rd-font': prefs.latinFont === 'plex' ? 'var(--font-ui)' : prefs.latinFont === 'garamond' ? 'var(--font-garamond)' : prefs.latinFont === 'atkinson' ? 'var(--font-clear)' : 'var(--font-read)',
+    '--rd-warm': String(prefs.warmth / 100),
+    '--rd-dim': String(prefs.dim / 100),
     '--rd-ar-font': prefs.arabicFont === 'plex' ? 'var(--font-arabic-sans)' : prefs.arabicFont === 'scheherazade' ? 'var(--font-arabic-scheherazade)' : 'var(--font-arabic)',
     '--rd-ur-font': prefs.urduFont === 'amiri' ? 'var(--font-arabic)' : prefs.urduFont === 'gulzar' ? 'var(--font-urdu-gulzar)' : 'var(--font-urdu)',
   } as React.CSSProperties;
@@ -616,7 +826,7 @@ function ReaderInner({ book }: { book: Book }) {
   const titleLang = detectLang(book.title);
 
   return (
-    <div className="rd" ref={root} style={style} data-chrome={chrome && !selection}>
+    <div className="rd" ref={root} style={style} data-chrome={chrome && !selection} data-dark-pages={prefs.darkPages || undefined} data-layout={prefs.layout === 'spaced' ? 'spaced' : 'book'} data-bold={prefs.bold || undefined}>
       <AheadPill book={book} />
       <View
         key={prefs.mode}
@@ -635,6 +845,19 @@ function ReaderInner({ book }: { book: Book }) {
       />
 
       <div className="rd-mini" aria-hidden="true" dir="auto">{chapter || book.title}</div>
+      <div className="rd-foot" aria-hidden="true">
+        {minutesLeft !== null && <span>{minutesLeft < 1 ? 'Less than a minute left in chapter' : `${minutesLeft} min left in chapter`}</span>}
+        <span>{pageLabel && isPdf ? `p. ${pageLabel} of ${book.pageCount ?? pageOf}` : `${pageNow} of ${pageOf}`}</span>
+      </div>
+
+      {prefs.warmth > 0 && <div className="rd-warm" aria-hidden="true" />}
+      {prefs.dim > 0 && <div className="rd-dim" aria-hidden="true" />}
+      {back && !selection && (
+        <button className="rd-back" onClick={() => { goTo(back.section, back.block, undefined, false); }}>
+          <Icon name="back" size={18} />
+          {back.label}
+        </button>
+      )}
 
       <header className="rd-top-bar" inert={!chrome || !!selection}>
         <button className="icon-btn" onClick={() => goBack('/library')} aria-label="Back to the library"><Icon name="back" /></button>
@@ -642,16 +865,31 @@ function ReaderInner({ book }: { book: Book }) {
           <span className="t-book" dir="auto" lang={titleLang === 'other' ? undefined : titleLang}>{book.title}</span>
           {chapter && chapter !== book.title && <span className="t-chapter" dir="auto">{chapter}</span>}
         </div>
+        {isPdf && (
+          <button className="icon-btn" onClick={() => void showOriginal()} aria-label="See the printed page">
+            <Icon name="original" />
+          </button>
+        )}
         <button className="icon-btn" onClick={() => setSheet('search')} aria-label="Search in this book"><Icon name="search" /></button>
         <button className="icon-btn" onClick={() => void toggleBookmark()} aria-label={bookmarkHere ? 'Remove bookmark' : 'Bookmark this place'} aria-pressed={!!bookmarkHere}>
           <Icon name={bookmarkHere ? 'bookmarkOn' : 'bookmark'} />
         </button>
       </header>
 
-      <footer className="rd-bottom-bar" inert={!chrome || !!selection}>
+      <footer className="rd-bottom-bar" ref={footer} inert={!chrome || !!selection}>
         <div className="where">
           <span dir="auto">{chapter || book.title}</span>
-          <span>{pageLabel ? `p. ${pageLabel} · ` : ''}{percent(fraction)}</span>
+          <span>{pageLabel && isPdf ? `p. ${pageLabel} of ${book.pageCount ?? pageOf}` : pageLabel ? `p. ${pageLabel}` : `${pageNow} of ${pageOf}`} · {percent(fraction)}</span>
+        </div>
+        <div className="rd-slider">
+        {scrub !== null && (
+          <div className="rd-scrub-bubble" style={{ left: `clamp(90px, ${scrub * 100}%, calc(100% - 90px))` }} aria-hidden="true">
+            <b dir="auto">{scrubChapter(scrub)}</b>
+            <span>{isPdf && book.pageCount ? `p. ${Math.max(1, Math.round(scrub * book.pageCount))}` : `${Math.max(1, Math.ceil(scrub * pageOf))} of ${pageOf}`}</span>
+          </div>
+        )}
+        <div className="rd-ticks" aria-hidden="true">
+          {ticks.map((f, i) => <i key={i} style={{ left: `${f * 100}%` }} />)}
         </div>
         <input
           type="range"
@@ -662,6 +900,7 @@ function ReaderInner({ book }: { book: Book }) {
           aria-label="Position in the book"
           aria-valuetext={`${percent(fraction)}${chapter ? `, ${chapter}` : ''}`}
         />
+        </div>
         <nav className="rd-tools" aria-label="Reading tools">
           <button onClick={() => setSheet('contents')} aria-label="Contents, bookmarks and highlights"><Icon name="toc" /><span>Contents</span></button>
           <button onClick={() => setSheet('settings')} aria-label="Text and theme"><Icon name="type" /><span>Text</span></button>
@@ -698,13 +937,38 @@ function ReaderInner({ book }: { book: Book }) {
                 <Icon name="original" size={20} />Page
               </button>
             )}
+            {selection.parts.some((p) => p.en) && (
+              <button
+                className="sel-act"
+                onClick={() => {
+                  const first = selection.parts.find((p) => p.en)!;
+                  clearSelection();
+                  setPeek({ section: first.section, block: first.block });
+                }}
+              >
+                <Icon name="language" size={20} />Original
+              </button>
+            )}
             <button className="sel-act" onClick={() => void copy()}><Icon name="copy" size={20} />Copy</button>
           </div>
         </div>
       )}
 
+      {peek && (
+        <div className="peek" role="dialog" aria-label="The original" onClick={() => setPeek(null)}>
+          <div className="peek-card">
+            <small>Original</small>
+            {(() => {
+              const b = cache.current.get(peek.section)?.blocks[peek.block];
+              const l = b ? detectLang(b.text) : 'other';
+              return <p dir="auto" lang={l === 'other' ? undefined : l}>{b?.text}</p>;
+            })()}
+            <span className="muted small">Tap anywhere to close</span>
+          </div>
+        </div>
+      )}
       {sheet === 'contents' && (
-        <Contents book={book} marks={marks} current={pos} onGo={(s, b) => goTo(s, b)} onEditMark={setEditMark} onSummary={() => setSheet('summary')} onClose={() => setSheet(null)} />
+        <Contents book={book} marks={marks} current={pos} titleEn={view !== 'orig' ? tocEn : undefined} onGo={(s, b) => goTo(s, b)} onEditMark={setEditMark} onSummary={() => setSheet('summary')} onClose={() => setSheet(null)} />
       )}
       {sheet === 'summary' && <SummarySheet book={book} at={pos} onGo={(s, b) => goTo(s, b)} onClose={() => setSheet(null)} />}
       {sheet === 'search' && (
@@ -755,10 +1019,13 @@ function ReaderInner({ book }: { book: Book }) {
               <Icon name="original" />
               <span className="grow"><span className="title">{book.format === 'pdf' ? 'See the printed page' : 'Open the original file'}</span><div className="sub">{book.format === 'pdf' ? 'Where you are reading, highlighted on the page itself' : 'The file exactly as you added it'}</div></span>
             </button>
-            {hasScans && (
-              <button className="row" onClick={() => { setSheet(null); void db.books.update(book.id, { scanView: scanView === 'text' ? 'page' : 'text' }); }}>
-                <Icon name="scan" />
-                <span className="grow"><span className="title">{scanView === 'page' ? 'Show the text read from the pages' : 'Show the pages as printed'}</span><div className="sub">{scanView === 'page' ? 'The words alone, to search, highlight and copy' : 'Each page as it is, with its English beneath'}</div></span>
+            {isPdf && (
+              <button className="row" onClick={() => { setSheet(null); void db.books.update(book.id, { scanView: pageMode ? 'text' : 'page' }); }}>
+                <Icon name={pageMode ? 'type' : 'pages'} />
+                <span className="grow">
+                  <span className="title">{pageMode ? (hasScans ? 'Read the text read from the pages' : 'Read the text') : 'Read the printed pages'}</span>
+                  <div className="sub">{pageMode ? 'The words alone, to search, highlight and copy' : hasTranslation ? 'Each page exactly as in the PDF, its English beneath' : 'Each page exactly as in the PDF, like a PDF reader'}</div>
+                </span>
               </button>
             )}
             <button className="row" onClick={() => setSheet('sharh')}>
@@ -804,12 +1071,96 @@ function ReaderInner({ book }: { book: Book }) {
       )}
       {editing && <MarkEditor mark={editing} onClose={() => setEditMark(null)} />}
       {zoom && <ZoomViewer source={zoom} onClose={() => setZoom(null)} />}
+      {aboutEn && (
+        <Sheet title="About this English" onClose={() => setAboutEn(null)}>
+          <p>
+            {aboutEn.label === 'reviewed'
+              ? 'This English was reviewed by a scholar.'
+              : aboutEn.label === 'checked'
+                ? 'Your AI translated this, and a second AI checked it against the original.'
+                : 'Your AI translated this from the original. It is careful, but it is a machine’s reading: when something matters, compare it with the original.'}
+          </p>
+          <p className="muted small">Made by {aboutEn.model.replace(/^.*\//, '')} ({aboutEn.provider}), {new Date(aboutEn.updatedAt).toLocaleDateString()}. A † marks a word the translation is unsure of; tap it for why.</p>
+          <div className="list">
+            <button className="row" onClick={() => { setAboutEn(null); navigate('/settings/english'); }}>
+              <Icon name="language" />
+              <span className="grow"><span className="title">How the English reads</span><div className="sub">Allah or God, honorifics, technical terms</div></span>
+              <Icon name="forward" size={18} />
+            </button>
+            <button className="row" onClick={() => { setAboutEn(null); setSheet('english'); }}>
+              <Icon name="check" />
+              <span className="grow"><span className="title">Check this chapter with a second AI</span><div className="sub">And the other English options</div></span>
+              <Icon name="forward" size={18} />
+            </button>
+          </div>
+        </Sheet>
+      )}
+      {pageInfo && <PageInfo book={book} page={pageInfo.page} printed={pageInfo.printed} onSeePage={(pg) => setOriginal({ page: pg })} onClose={() => setPageInfo(null)} />}
       {original && <OriginalViewer book={book} page={original.page} mark={original.mark} onGo={(s, b) => goTo(s, b)} onClose={() => setOriginal(null)} />}
       {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
       {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} />}
       {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}
     </div>
   );
+}
+
+/** Where the English stops (a part failed, or was not reached): carry on from this paragraph. */
+function TranslateFromHere({ book, at }: { book: Book; at: { section: number; block: number } }) {
+  const run = useAhead(book.id);
+  return (
+    <div className="tr-gap" data-skip>
+      <span>Not in English yet</span>
+      <button
+        className="btn btn--quiet"
+        disabled={!!run}
+        onClick={() => {
+          void aiReady().then((ok) => (ok ? void translateAhead(book, { from: at, count: 20 }) : toast('Connect your AI first: Settings › Your AI.')));
+        }}
+      >
+        <span className="ai-mark" aria-hidden="true">✦</span> {run ? 'Translating…' : 'Translate from here'}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Minutes left in the chapter at this reader's own pace. The pace is learned from how far
+ * they get in a minute of steady reading (jumps and long pauses do not count).
+ */
+function useMinutesLeft(pos: { section: number; block: number }, sec: Section | undefined, translations: Map<string, Translation>, view: 'en' | 'orig' | 'both'): number | null {
+  const speed = useSetting('readingSpeed');
+  const last = useRef<{ section: number; block: number; at: number } | null>(null);
+  const sample = useRef({ chars: 0, ms: 0 });
+  const lengthOf = useCallback(
+    (s: Section, i: number) => {
+      const b = s.blocks[i];
+      if (!b) return 0;
+      if (b.t === 'img') return b.src?.startsWith('page') && !s.blocks.some((x) => x.ocr && x.page === b.page) ? 1100 : 0;
+      const en = view !== 'orig' ? translations.get(`${s.idx}:${i}`)?.en : undefined;
+      return (en ?? b.text).length;
+    },
+    [translations, view],
+  );
+  useEffect(() => {
+    const now = Date.now();
+    const prev = last.current;
+    last.current = { ...pos, at: now };
+    if (!prev || !sec || prev.section !== pos.section || pos.block <= prev.block || pos.block - prev.block > 12) return;
+    const ms = now - prev.at;
+    if (ms > 3 * 60_000 || ms < 1500) return;
+    let chars = 0;
+    for (let i = prev.block; i < pos.block; i++) chars += lengthOf(sec, i);
+    sample.current = { chars: sample.current.chars + chars, ms: sample.current.ms + ms };
+    if (sample.current.ms > 90_000) {
+      const measured = sample.current.chars / (sample.current.ms / 60_000);
+      sample.current = { chars: 0, ms: 0 };
+      if (measured > 250 && measured < 4000) void setSetting('readingSpeed', Math.round(speed * 0.75 + measured * 0.25));
+    }
+  }, [pos, sec, lengthOf, speed]);
+  if (!sec || !sec.blocks.length) return null;
+  let left = 0;
+  for (let i = pos.block; i < sec.blocks.length; i++) left += lengthOf(sec, i);
+  return Math.round(left / Math.max(250, speed));
 }
 
 /** While translating ahead runs, a small note at the foot of the page says how far it has got. */
@@ -894,7 +1245,7 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
   const wholeRunning = scanned ? !!book.ocr && book.ocr.state !== 'done' && book.ocr.state !== 'failed' && book.ocr.state !== 'waiting' : !!t && t.state !== 'done' && t.state !== 'cancelled';
   return (
     <>
-      {hasTranslation && !scanned && (
+      {hasTranslation && book.format !== 'pdf' && (
         <div className="ctl">
           <div className="lbl"><span>Show</span></div>
           <div className="seg" role="group" aria-label="Language to show">
@@ -904,16 +1255,7 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
           </div>
         </div>
       )}
-      {hasTranslation && scanned && (
-        <div className="ctl">
-          <div className="lbl"><span>Show</span><span>{(book.scanView ?? 'page') === 'page' ? 'each printed page, its English beneath' : view === 'both' ? 'the text read, with its English' : 'the English as running text, like a book'}</span></div>
-          <div className="seg" role="group" aria-label="What to show">
-            <button aria-pressed={(book.scanView ?? 'page') === 'page'} onClick={() => void db.books.update(book.id, { scanView: 'page', view: 'en' })}>Page + English</button>
-            <button aria-pressed={book.scanView === 'text' && view === 'en'} onClick={() => void db.books.update(book.id, { scanView: 'text', view: 'en' })}>English only</button>
-            <button aria-pressed={book.scanView === 'text' && view === 'both'} onClick={() => void db.books.update(book.id, { scanView: 'text', view: 'both' })}>Both</button>
-          </div>
-        </div>
-      )}
+      {hasTranslation && book.format === 'pdf' && <ShowChoices book={book} view={view} scanned={scanned} />}
       <div className="ctl">
         <div className="lbl">
           <span><span className="ai-mark" aria-hidden="true">✦</span> Translate ahead from here</span>
@@ -965,6 +1307,31 @@ function TranslationControls({ book, view, hasTranslation, from }: { book: Book;
         </div>
       )}
     </>
+  );
+}
+
+/** How a PDF is shown: its printed pages (alone or with their English), or as running text. */
+function ShowChoices({ book, view, scanned }: { book: Book; view: 'en' | 'orig' | 'both'; scanned: boolean }) {
+  const pages = (book.scanView ?? (scanned ? 'page' : 'text')) === 'page';
+  const choices: Array<{ label: string; sub: string; on: boolean; set: Partial<Book> }> = [
+    { label: 'Pages', sub: 'Exactly as printed, nothing added', on: pages && view === 'orig', set: { scanView: 'page', view: 'orig' } },
+    { label: 'Page + English', sub: 'Each page, its English beneath', on: pages && view !== 'orig', set: { scanView: 'page', view: 'en' } },
+    { label: 'English only', sub: 'Running text, like a book', on: !pages && view === 'en', set: { scanView: 'text', view: 'en' } },
+    { label: 'Both', sub: 'Each paragraph, then its English', on: !pages && view === 'both', set: { scanView: 'text', view: 'both' } },
+    { label: scanned ? 'Text read' : 'Original text', sub: scanned ? 'The words read from the pages' : 'The text stored in the PDF', on: !pages && view === 'orig', set: { scanView: 'text', view: 'orig' } },
+  ];
+  return (
+    <div className="ctl">
+      <div className="lbl"><span>Show</span></div>
+      <div className="show-grid" role="group" aria-label="What to show">
+        {choices.map((c) => (
+          <button key={c.label} aria-label={c.label} title={c.sub} aria-pressed={c.on} onClick={() => void db.books.update(book.id, c.set)}>
+            <b>{c.label}</b>
+            <span>{c.sub}</span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

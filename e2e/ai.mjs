@@ -98,7 +98,12 @@ try {
   await page.waitForSelector('.bk--en');
   await wait(600);
   check((await page.locator('.bk--en').count()) > 5, 'an Arabic book opens in English');
-  check(await page.locator('.tr-label').first().textContent().then((t) => /machine draft/.test(t)), 'the English is labelled a machine draft, with the AI that made it');
+  check(await page.locator('.tr-label').first().textContent().then((t) => /Translated by your AI/.test(t)), 'the English is quietly labelled as translated by your AI');
+  await page.locator('.tr-label').first().click();
+  await page.getByRole('dialog', { name: 'About this English' }).getByText(/Made by .*gpt-oss|Made by /).waitFor({ timeout: 5000 });
+  check(true, 'tapping the label tells which AI made the English, and when');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
   await shot('22-reader-english');
   const first = page.locator('.bk--en[data-t="p"]').first();
   const s = await first.getAttribute('data-s');
@@ -117,6 +122,50 @@ try {
     await wait(300);
   }
   check((await page.locator('.rd').getAttribute('data-chrome')) === 'true', 'a tap at the top of the page brings the reading bars back');
+  // Highlighting the English itself: kept against the English words, and still there after reopening.
+  const enPara = page.locator('.bk--en[data-t="p"]').nth(1);
+  const enS = await enPara.getAttribute('data-s');
+  const enB = await enPara.getAttribute('data-b');
+  await enPara.evaluate((el) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const node = walker.nextNode();
+    const r = document.createRange();
+    r.setStart(node, 0);
+    r.setEnd(node, Math.min(24, node.data.length));
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await wait(500);
+  await page.getByRole('button', { name: 'Highlight Gold' }).click();
+  await wait(600);
+  const enHl = page.locator(`.bk--en[data-s="${enS}"][data-b="${enB}"] .hl`);
+  check((await enHl.count()) === 1, 'a passage of the English can be highlighted');
+  await page.reload();
+  await page.waitForSelector('.bk--en');
+  await wait(800);
+  check((await page.locator(`.bk--en[data-s="${enS}"][data-b="${enB}"] .hl`).count()) === 1, 'the English highlight is still there after reopening the book');
+  await shot('22b-english-highlight');
+  // With the bars hidden: time left in the chapter and the page, in the bottom corners.
+  const foot = await page.locator('.rd-foot').textContent();
+  check(/min left in chapter|Less than a minute/.test(foot) && /\d+ of \d+/.test(foot), `the foot of the page shows time left in the chapter and the page (“${foot}”)`);
+  // Where the English stops, a way to carry on from there.
+  const gapBook = await page.evaluate(() => location.hash.split("/")[2]);
+  await page.evaluate(async ({ bookId, s, b }) => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const tx = dbh.transaction('translations', 'readwrite');
+    for (const k of [2, 3]) tx.objectStore('translations').delete(`${bookId}:${s}:${b + k}`);
+    await new Promise((r) => (tx.oncomplete = r));
+  }, { bookId: gapBook, s: Number(enS), b: Number(enB) });
+  // Written behind the app's back: open the book again to see it.
+  await page.reload();
+  await page.waitForSelector('.bk--en');
+  await page.locator('.tr-gap').first().waitFor({ timeout: 8000 });
+  check((await page.locator('.tr-gap').count()) === 1, 'where a part has no English, one quiet “Translate from here” is shown');
+  await page.locator('.tr-gap').getByRole('button', { name: /Translate from here/ }).click();
+  await page.waitForFunction(() => !document.querySelector('.tr-gap'), null, { timeout: 30000 });
+  check(true, 'and it translates from there');
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.mouse.click(200, 40);
   await page.getByRole('button', { name: 'English', exact: true }).click();
   await page.getByRole('button', { name: 'Both', exact: true }).click();
   await page.getByRole('button', { name: 'Close' }).click();

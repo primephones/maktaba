@@ -249,6 +249,25 @@ async function translateRest(book: Book, page: number): Promise<void> {
   await translateNow((await db.books.get(book.id)) ?? book, paras, { quality: true });
 }
 
+/**
+ * Reads one page again with the reader's AI, for a page whose text (or English) looks wrong:
+ * what was read from it before, and its English, are put aside first, then it is read as new.
+ * A page corrected by hand is read again only when asked to replace the correction.
+ */
+export async function rereadPage(book: Book, page: number, opts: { replaceCorrection?: boolean } = {}): Promise<void> {
+  const row = await db.ocrPages.get(`${book.id}:${page}`);
+  if (row?.edited && !opts.replaceCorrection) throw new Error('You corrected this page by hand. Reading it again would replace your correction.');
+  const idx = await sectionOfPage(book.id, page);
+  if (idx !== null) {
+    const sec = await db.sections.get(sectionId(book.id, idx));
+    const stale = (sec?.blocks ?? []).map((b, i) => (b.ocr && b.page === page ? `${book.id}:${idx}:${i}` : '')).filter(Boolean);
+    if (stale.length) await db.translations.bulkDelete(stale);
+  }
+  await db.ocrPages.delete(`${book.id}:${page}`);
+  if (idx !== null) await applyOcrToSection(book.id, idx);
+  await readPageNow((await db.books.get(book.id)) ?? book, page);
+}
+
 /** Reads one page with the reader's AI now (ahead of the rest of the book), keeping hand corrections. */
 export async function readPageNow(book: Book, page: number): Promise<void> {
   if (await pageIsRead(book.id, page)) return;

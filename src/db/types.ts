@@ -151,6 +151,8 @@ export interface Book {
   translation?: BookTranslation;
   /** How the reader shows a book with a translation. */
   view?: 'en' | 'orig' | 'both';
+  /** The contents' titles in English, in the order of `toc`. */
+  tocEn?: string[];
   progress?: Progress;
 }
 
@@ -227,6 +229,8 @@ export interface Mark {
   color?: HighlightColor;
   /** The marked text, kept so lists can show it without loading the book. */
   text?: string;
+  /** Marked in the English translation (start and end are then inside the English). */
+  en?: boolean;
   note?: string;
   createdAt: number;
   updatedAt: number;

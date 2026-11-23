@@ -14,6 +14,8 @@ interface Props {
   onEditMark: (id: string) => void;
   /** Opens a summary of the chapter being read. */
   onSummary?: () => void;
+  /** A contents entry's title in English, when the English is read and it has one. */
+  titleEn?: (index: number) => string | undefined;
   onClose: () => void;
 }
 
@@ -36,7 +38,7 @@ export async function findPage(book: Book, wanted: string): Promise<{ section: n
   return null;
 }
 
-export function Contents({ book, marks, current, onGo, onEditMark, onSummary, onClose }: Props) {
+export function Contents({ book, marks, current, onGo, onEditMark, onSummary, titleEn, onClose }: Props) {
   const [tab, setTab] = useState<'contents' | 'bookmarks' | 'notes'>('contents');
   const [page, setPage] = useState('');
   const [pageError, setPageError] = useState('');
@@ -103,10 +105,17 @@ export function Contents({ book, marks, current, onGo, onEditMark, onSummary, on
                   className="toc-row"
                   data-level={Math.min(4, t.level)}
                   aria-current={i === currentIdx ? 'true' : undefined}
-                  lang={lang}
+                  lang={titleEn?.(i) ? undefined : lang}
                   onClick={() => go(t.section, t.block ?? 0)}
                 >
-                  <span className="grow" dir="auto">{t.title}</span>
+                  {titleEn?.(i) ? (
+                    <span className="grow toc-two">
+                      <span className="toc-en" lang="en">{titleEn(i)}</span>
+                      <span className="toc-orig" dir="auto" lang={lang}>{t.title}</span>
+                    </span>
+                  ) : (
+                    <span className="grow" dir="auto">{t.title}</span>
+                  )}
                 </button>
               ))}
             </div>

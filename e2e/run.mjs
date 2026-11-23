@@ -76,7 +76,7 @@ const showChrome = async () => {
 const fromMore = async (name) => {
   await showChrome();
   await page.getByRole('button', { name: 'More', exact: true }).click();
-  await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+  await page.getByRole('button', { name: new RegExp(`^${name}`) }).last().click();
 };
 const openBook = async (title) => {
   await page.goto(server.url + '#/library');
@@ -404,7 +404,7 @@ await section('Pages mode and themes', async () => {
   // Follow phone uses the chosen pair: Gallery by day, Forest at night.
   await page.evaluate(() => { location.hash = '#/settings/theme'; });
   await pause(600);
-  await page.getByRole('radio', { name: /^Follow phone/ }).click();
+  await page.getByRole('radio', { name: /^Day and night/ }).click();
   await page.getByRole('group', { name: 'Theme by day' }).getByRole('button', { name: 'Gallery' }).click();
   await page.getByRole('group', { name: 'Theme at night' }).getByRole('button', { name: 'Forest' }).click();
   await pause(300);
@@ -415,6 +415,15 @@ await section('Pages mode and themes', async () => {
   await pause(300);
   check((await page.evaluate(() => document.documentElement.dataset.theme)) === 'forest', 'Follow phone: Forest when the phone goes dark');
   await shot('08c-theme-page-auto');
+  // Night by the clock instead of the phone: a night that covers the whole day turns it dark now.
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByRole('button', { name: 'By the clock' }).click();
+  await page.locator('.clock-row input').first().fill('00:00');
+  await page.locator('.clock-row input').nth(1).fill('23:59');
+  await pause(500);
+  check((await page.evaluate(() => document.documentElement.dataset.theme)) === 'forest', 'night by the clock: the night theme at the time set, whatever the phone says');
+  await page.getByRole('button', { name: 'With the phone' }).click();
+  await pause(300);
   await page.emulateMedia({ colorScheme: 'light' });
   await page.getByRole('radio', { name: /^Lamp/ }).click();
   await pause(300);
@@ -430,7 +439,7 @@ await section('Pages mode and themes', async () => {
 await section('Scanned and image pages', async () => {
   await openBook('makhtut-scan');
   // Once its text is recognised the book opens as text; switch to the page images.
-  if (!(await page.locator('.pdfpage').count())) await fromMore('Show the pages as printed');
+  if (!(await page.locator('.pdfpage').count())) await fromMore('Read the printed pages');
   await page.waitForSelector('.pdfpage canvas');
   await page.waitForTimeout(2500);
   const inked = await page.evaluate(() => {
@@ -461,16 +470,16 @@ await section('Text recognition for scans', async () => {
   check(scan?.ocr?.state === 'done' && scan.ocr.done === 5, `all 5 scanned pages are recognised offline (${JSON.stringify(scan?.ocr)}, ${Math.round((Date.now() - t0) / 1000)} s)`);
   await openBook('makhtut-scan');
   await page.locator('.pdfpage, .bk[data-t="p"]').first().waitFor({ timeout: 15000 });
-  if (await page.locator('.pdfpage').count()) await fromMore('Show the text read from the pages');
+  if (await page.locator('.pdfpage').count()) await fromMore('Read the text read from the pages');
   await page.waitForSelector('.bk[data-t="p"]');
   const text = await page.locator('.rd-text').textContent();
   check(/الإمام الشافعي/.test(text) && /صفحة مصورة/.test(text), 'the reader shows the recognised Arabic text');
   check((await page.locator('.pdfpage').count()) === 0, 'in text view, recognised pages show text instead of images');
   await shot('16-scan-text');
-  await fromMore('Show the pages as printed');
+  await fromMore('Read the printed pages');
   await pause(800);
   check((await page.locator('.pdfpage').count()) > 0 && (await page.locator('.bk[data-t="p"]').count()) === 0, 'the page/text switch shows the page images');
-  await fromMore('Show the text read from the pages');
+  await fromMore('Read the text read from the pages');
   await pause(500);
 
   await go('#/search');
@@ -560,6 +569,49 @@ await section('Other formats', async () => {
   check(true, 'a selected paragraph opens its page in the original');
   await page.keyboard.press('Escape');
   await pause(300);
+  // The printed page from the top bar, every page at a glance, and any page by number.
+  await showChrome();
+  await page.getByRole('button', { name: 'See the printed page' }).click();
+  await orig.waitFor({ timeout: 8000 });
+  check(true, 'the top bar opens the printed page in one tap');
+  await page.getByRole('button', { name: 'All pages' }).click();
+  const grid = page.getByRole('dialog', { name: 'All pages' });
+  await grid.waitFor({ timeout: 5000 });
+  const thumbCount = await grid.locator('.thumb').count();
+  const pageCount = (await books()).find((b) => b.title === 'risala-text')?.pageCount;
+  check(thumbCount === pageCount && thumbCount > 3, `All pages shows every page (${thumbCount} of ${pageCount})`);
+  await pause(1200);
+  const thumbDrawn = await grid.locator('.thumb canvas').first().evaluate((c) => c.width > 0);
+  check(thumbDrawn, 'the page pictures in All pages are drawn');
+  await shot('10c-all-pages');
+  await grid.locator('.thumb').nth(2).locator('.pdfpage').click();
+  await pause(500);
+  check(/page 3 of/.test(await orig.getAttribute('aria-label')) && (await grid.count()) === 0, 'tapping a page in All pages opens it');
+  await page.getByRole('button', { name: /Go to another page/ }).click();
+  await page.getByLabel('Go to page').fill('5');
+  await page.keyboard.press('Enter');
+  await pause(500);
+  check(/page 5 of/.test(await orig.getAttribute('aria-label')), 'any page can be opened by its number');
+  await page.keyboard.press('Escape');
+  await pause(400);
+  // A PDF of text can be read as its printed pages, like a PDF reader, and back.
+  await fromMore('Read the printed pages');
+  await page.waitForSelector('.rd .pdfpage canvas', { timeout: 10000 });
+  await pause(800);
+  check((await page.locator('.rd .pdfpage').count()) > 0 && (await page.locator('.rd .bk[data-t="p"]').count()) === 0, 'a PDF of text can be read as its printed pages alone');
+  await shot('10d-text-pdf-as-pages');
+  await fromMore('Read the text');
+  await page.waitForSelector('.bk[data-t="p"]');
+  check((await page.locator('.rd .pdfpage').count()) === 0, 'and back to its text');
+  // Each page number says where the words came from, and leads to the page itself.
+  await page.locator('.pgmark button').first().click();
+  await page.getByText('Text from the PDF itself').waitFor({ timeout: 5000 });
+  check(true, 'a page number tells where the words of that page came from');
+  await page.getByRole('button', { name: /^See the printed page/ }).last().click();
+  await orig.waitFor({ timeout: 8000 });
+  check(true, 'and opens the printed page');
+  await page.keyboard.press('Escape');
+  await pause(300);
   // Any other kind of book: the file itself, untouched.
   await page.goto(server.url + '#/library');
   await page.getByRole('button', { name: 'Details for مختصر في أصول الفقه' }).click();
@@ -575,6 +627,69 @@ await section('Other formats', async () => {
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByRole('button', { name: /^Open the original file/ }).click()]);
   check(dl2.suggestedFilename() === 'usul.epub', 'the reader opens the original file in two taps (More, then the file)');
+});
+
+await section('Comfort and finding your way', async () => {
+  await openBook('مختصر في أصول الفقه');
+  await pause(600);
+  // Book layout: the paragraphs after the first are indented, as in a printed book.
+  const indents = await page.evaluate(() => [...document.querySelectorAll('.rd-text .bk[data-t="p"]')].slice(0, 6).map((el) => parseFloat(getComputedStyle(el).textIndent)));
+  check(indents.some((n) => n > 5), `paragraphs are indented like a book (${indents.join(', ')})`);
+  // The chapters as marks along the slider.
+  await showChrome();
+  check((await page.locator('.rd-ticks i').count()) >= 1, `the chapters are marked along the slider (${await page.locator('.rd-ticks i').count()})`);
+  // A jump, then straight back.
+  const before = await page.locator('.rd-bottom-bar .where').textContent();
+  await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();
+  await page.getByRole('button', { name: 'باب القياس' }).click();
+  await pause(900);
+  await page.locator('.rd-back').waitFor({ timeout: 5000 });
+  check(/Back to/.test(await page.locator('.rd-back').textContent()), `after a jump, a button leads back (“${await page.locator('.rd-back').textContent()}”)`);
+  await shot('19b-back-pill');
+  await page.locator('.rd-back').click();
+  await pause(900);
+  check((await page.locator('.rd-back').count()) === 0 && (await page.locator('.rd-bottom-bar .where').textContent()) === before, 'and it takes the reader back to where they were');
+  // Pinch with two fingers: bigger text.
+  const size0 = parseFloat(await page.locator('.rd').evaluate((el) => getComputedStyle(el).getPropertyValue('--rd-size')));
+  const cdp = await page.context().newCDPSession(page);
+  const pts = (d) => [{ x: 206 - d, y: 450 }, { x: 206 + d, y: 450 }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(60) });
+  for (let d = 70; d <= 130; d += 10) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(d) });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await pause(700);
+  const size1 = parseFloat(await page.locator('.rd').evaluate((el) => getComputedStyle(el).getPropertyValue('--rd-size')));
+  check(size1 > size0 * 1.4, `pinching the page makes the text bigger (${size0} → ${size1} rem)`);
+  await showChrome();
+  await page.getByRole('button', { name: 'Text and theme' }).click();
+  await page.getByRole('button', { name: 'Smaller text' }).click();
+  for (let i = 0; i < 25; i++) await page.getByRole('button', { name: 'Smaller text' }).click();
+  for (let i = 0; i < 6; i++) await page.getByRole('button', { name: 'Larger text' }).click();
+  // Warm light and extra dimming for the night.
+  await page.getByLabel('Warm light').focus();
+  for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowRight');
+  await page.getByLabel('Extra dim').focus();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight');
+  await pause(300);
+  check((await page.locator('.rd-warm').count()) === 1 && (await page.locator('.rd-dim').count()) === 1, 'warm light and extra dim lie over the page');
+  check((await page.locator('.rd-warm').evaluate((el) => getComputedStyle(el).pointerEvents)) === 'none', 'and never get in the way of a tap');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await shot('19c-warm-dim');
+  await showChrome();
+  await page.getByRole('button', { name: 'Text and theme' }).click();
+  await page.getByLabel('Warm light').focus();
+  for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft');
+  await page.getByLabel('Extra dim').focus();
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
+  // Spaced paragraphs instead.
+  await page.getByRole('button', { name: 'Spaced', exact: true }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await pause(500);
+  const indents2 = await page.evaluate(() => [...document.querySelectorAll('.rd-text .bk[data-t="p"]')].slice(0, 6).map((el) => parseFloat(getComputedStyle(el).textIndent)));
+  check(indents2.every((n) => n === 0) && (await page.locator('.rd-warm, .rd-dim').count()) === 0, 'spaced paragraphs, and warm light and dimming off again');
+  await showChrome();
+  await page.getByRole('button', { name: 'Text and theme' }).click();
+  await page.getByRole('button', { name: 'Like a book', exact: true }).click();
+  await page.getByRole('button', { name: 'Close' }).click();
 });
 
 await section('Search across the library', async () => {

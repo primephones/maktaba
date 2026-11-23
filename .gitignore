@@ -17,3 +17,6 @@ node_modules
 public/pdfjs
 public/quran
 public/tesseract
+dist-test
+dist-b3
+dist-b*

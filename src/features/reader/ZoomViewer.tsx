@@ -16,7 +16,7 @@ export interface PageMark {
   box?: [number, number, number, number];
 }
 
-export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, onSwipe, mark, onMarked }: {
+export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, onSwipe, mark, onMarked, darkPage, redraw = 0 }: {
   source: ZoomSource;
   /** Highlight this paragraph on its page, and zoom to it. */
   mark?: PageMark;
@@ -28,6 +28,10 @@ export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, o
   children?: React.ReactNode;
   /** A sideways swipe while not zoomed in: -1 for the page before, 1 for the page after. */
   onSwipe?: (dir: 1 | -1) => void;
+  /** Draw the page light on dark (for reading a scan at night). */
+  darkPage?: boolean;
+  /** Changes when the page should be drawn again (its file has just come back). */
+  redraw?: number;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -55,7 +59,7 @@ export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, o
     };
   }, []);
 
-  const pdfKey = source.kind === 'pdf' ? `${source.bookId}:${source.page}` : '';
+  const pdfKey = source.kind === 'pdf' ? `${source.bookId}:${source.page}:${redraw}` : '';
   useEffect(() => {
     // A new page starts unzoomed.
     view.current = { scale: 1, x: 0, y: 0 };
@@ -146,6 +150,7 @@ export function ZoomViewer({ source, onClose, label = 'Zoomed page', children, o
   return createPortal(
     <div
       className="zoom"
+      data-dark-page={darkPage || undefined}
       role="dialog"
       aria-modal="true"
       aria-label={label}
