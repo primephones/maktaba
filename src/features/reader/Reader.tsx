@@ -1201,7 +1201,7 @@ function ReaderInner({ book }: { book: Book }) {
       {pageInfo && <PageInfo book={book} page={pageInfo.page} printed={pageInfo.printed} onSeePage={(pg) => setOriginal({ page: pg })} onClose={() => setPageInfo(null)} />}
       {original && <OriginalViewer book={book} page={original.page} mark={original.mark} onGo={(s, b) => goTo(s, b)} onClose={() => setOriginal(null)} />}
       {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
-      {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} />}
+      {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} onPlace={prefs.mode === 'paged' ? (s, b) => goTo(s, b, undefined, false) : undefined} />}
       {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}
     </div>
   );

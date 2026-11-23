@@ -26,6 +26,16 @@ import android.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import android.view.WindowManager;
+import android.app.Notification;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.graphics.drawable.Icon;
+import android.media.MediaMetadata;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
+import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
@@ -228,6 +238,134 @@ public class MaktabaPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("granted", getPermissionState("notifications") == PermissionState.GRANTED);
         call.resolve(ret);
+    }
+
+    // ------------------------------------------------------------------ lock-screen controls
+
+    private static final String MEDIA_ACTION = "za.co.primephones.maktaba.MEDIA";
+    private MediaSession mediaSession;
+    private BroadcastReceiver mediaReceiver;
+
+    /**
+     * While a book is read aloud: play, pause and skip on the lock screen, in the notification
+     * shade, and from headphones, as a music app has. The JavaScript side does the reading;
+     * each button is passed to it as a "media" event.
+     */
+    @PluginMethod
+    public void mediaShow(PluginCall call) {
+        String title = call.getString("title", "Reading aloud");
+        String text = call.getString("text", "");
+        Boolean playingArg = call.getBoolean("playing", true);
+        boolean playing = playingArg == null || playingArg;
+        Context ctx = getContext();
+        try {
+            if (mediaSession == null) {
+                mediaSession = new MediaSession(ctx, "Maktaba");
+                mediaSession.setCallback(new MediaSession.Callback() {
+                    @Override
+                    public void onPlay() {
+                        emitMedia("play");
+                    }
+
+                    @Override
+                    public void onPause() {
+                        emitMedia("pause");
+                    }
+
+                    @Override
+                    public void onSkipToNext() {
+                        emitMedia("next");
+                    }
+
+                    @Override
+                    public void onSkipToPrevious() {
+                        emitMedia("previous");
+                    }
+
+                    @Override
+                    public void onStop() {
+                        emitMedia("stop");
+                    }
+                });
+                mediaSession.setActive(true);
+                mediaReceiver = new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context c, Intent i) {
+                        String what = i.getStringExtra("action");
+                        if (what != null) emitMedia(what);
+                    }
+                };
+                ContextCompat.registerReceiver(ctx, mediaReceiver, new IntentFilter(MEDIA_ACTION), ContextCompat.RECEIVER_NOT_EXPORTED);
+            }
+            mediaSession.setMetadata(new MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, text)
+                .build());
+            mediaSession.setPlaybackState(new PlaybackState.Builder()
+                .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
+                    | PlaybackState.ACTION_SKIP_TO_NEXT | PlaybackState.ACTION_SKIP_TO_PREVIOUS | PlaybackState.ACTION_STOP)
+                .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
+                .build());
+            Notifications.ensureChannels(ctx);
+            Notification.Builder b = Build.VERSION.SDK_INT >= 26
+                ? new Notification.Builder(ctx, Notifications.CHANNEL_WORK)
+                : new Notification.Builder(ctx);
+            b.setSmallIcon(R.drawable.ic_stat_maktaba)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setContentIntent(Notifications.openApp(ctx))
+                .setOngoing(playing)
+                .setShowWhen(false)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .addAction(mediaAction(ctx, android.R.drawable.ic_media_previous, "Back a sentence", "previous", 41))
+                .addAction(playing
+                    ? mediaAction(ctx, android.R.drawable.ic_media_pause, "Pause", "pause", 42)
+                    : mediaAction(ctx, android.R.drawable.ic_media_play, "Play", "play", 43))
+                .addAction(mediaAction(ctx, android.R.drawable.ic_media_next, "Next sentence", "next", 44))
+                .setStyle(new Notification.MediaStyle()
+                    .setMediaSession(mediaSession.getSessionToken())
+                    .setShowActionsInCompactView(0, 1, 2));
+            NotificationManagerCompat.from(ctx).notify(Notifications.ID_MEDIA, b.build());
+        } catch (SecurityException e) {
+            // Notifications not allowed: reading aloud carries on without the controls.
+        } catch (RuntimeException e) {
+            call.reject("The reading controls could not be shown: " + e.getMessage());
+            return;
+        }
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void mediaHide(PluginCall call) {
+        Context ctx = getContext();
+        if (mediaReceiver != null) {
+            try {
+                ctx.unregisterReceiver(mediaReceiver);
+            } catch (IllegalArgumentException e) {
+                // Already gone.
+            }
+            mediaReceiver = null;
+        }
+        if (mediaSession != null) {
+            mediaSession.setActive(false);
+            mediaSession.release();
+            mediaSession = null;
+        }
+        NotificationManagerCompat.from(ctx).cancel(Notifications.ID_MEDIA);
+        call.resolve();
+    }
+
+    private Notification.Action mediaAction(Context ctx, int icon, String label, String what, int request) {
+        Intent i = new Intent(MEDIA_ACTION).setPackage(ctx.getPackageName()).putExtra("action", what);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, request, i, flags);
+        return new Notification.Action.Builder(Icon.createWithResource(ctx, icon), label, pi).build();
+    }
+
+    private void emitMedia(String action) {
+        JSObject data = new JSObject();
+        data.put("action", action);
+        notifyListeners("media", data);
     }
 
     // ------------------------------------------------------------------ reading aloud

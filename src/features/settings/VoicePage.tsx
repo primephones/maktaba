@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { canSpeak, getFixes, piecesOf, setFixes, speakPiece, stopSpeaking, type Fix } from '../../speech/speech';
+import { canSpeak, chooseVoice, chosenVoices, getFixes, piecesOf, setFixes, speakPiece, stopSpeaking, voicesFor, type Fix, type Piece, type VoiceInfo } from '../../speech/speech';
 import { isAndroidApp } from '../../native/maktaba';
 import { Icon } from '../../ui/Icon';
 
@@ -29,6 +29,11 @@ export function VoicePage() {
         <button className="btn" onClick={() => void preview('Ijmāʿ (consensus) and qiyās (analogy) are proofs, and the ḥadīth was narrated with a sound isnād.', 'en')}><Icon name="speaker" size={18} />Hear an example</button>
         {isAndroidApp() && <p className="muted small">For the most natural voices, open Android Settings › Accessibility › Text-to-speech, choose Speech Recognition and Synthesis from Google, and install the English (UK or US) and Arabic voice data.</p>}
       </div>
+
+      <div className="section-title">Voices</div>
+      <VoiceChoice lang="en" label="English" sample="Knowledge is of two kinds: knowledge for everyone, and knowledge for the specialists." />
+      <VoiceChoice lang="ar" label="Arabic" sample="العلم علمان: علم عامة وعلم خاصة." />
+      <VoiceChoice lang="ur" label="Urdu" sample="علم دو طرح کا ہے: عام لوگوں کا علم اور خاص لوگوں کا علم۔" />
 
       <div className="section-title">Fix a word</div>
       <div className="card" style={{ display: 'grid', gap: 12 }}>
@@ -76,5 +81,41 @@ export function VoicePage() {
         </div>
       )}
     </>
+  );
+}
+
+/** The voices installed for one language: choose one, and hear it. */
+function VoiceChoice({ lang, label, sample }: { lang: Piece['lang']; label: string; sample: string }) {
+  const [list, setList] = useState<VoiceInfo[] | null>(null);
+  const [chosen, setChosen] = useState<string | undefined>();
+  useEffect(() => {
+    void voicesFor(lang).then(setList);
+    void chosenVoices().then((c) => setChosen(c[lang]));
+  }, [lang]);
+  const pick = async (name: string | null) => {
+    await chooseVoice(lang, name);
+    setChosen(name ?? undefined);
+    await stopSpeaking();
+    await speakPiece({ text: sample, lang }, `voice-${Date.now()}`, 1, true);
+  };
+  if (list === null) return null;
+  return (
+    <div className="ctl voice-choice">
+      <div className="lbl"><span>{label}</span><span>{list.length ? `${list.length} voice${list.length === 1 ? '' : 's'} on this ${isAndroidApp() ? 'phone' : 'device'}` : 'none installed'}</span></div>
+      {list.length ? (
+        <span className="field">
+          <select value={chosen ?? ''} onChange={(e) => void pick(e.target.value || null)} aria-label={`${label} voice`}>
+            <option value="">The best one available</option>
+            {list.map((v) => (
+              <option key={v.name} value={v.name}>
+                {v.name.replace(/[-_]/g, ' ')}{v.offline ? '' : ' (needs internet)'}
+              </option>
+            ))}
+          </select>
+        </span>
+      ) : (
+        <p className="muted small" style={{ margin: 0 }}>Install a {label} voice in your phone’s text-to-speech settings to hear {label} read aloud.</p>
+      )}
+    </div>
   );
 }

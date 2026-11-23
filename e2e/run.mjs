@@ -342,6 +342,10 @@ await section('Reader', async () => {
   await page.locator('.listen-play').click();
   await page.waitForSelector('.bk[data-speaking]', { timeout: 10000 });
   check(true, 'reading aloud starts and marks the paragraph being read');
+  await pause(500);
+  check(await page.evaluate(() => !!globalThis.CSS?.highlights?.has('speaking')), 'the sentence being read is lit within its paragraph');
+  const playingTitle = await page.evaluate(() => navigator.mediaSession?.metadata?.title ?? '');
+  check(/أصول/.test(playingTitle), `what is being read shows with the phone’s media controls (${playingTitle})`);
   await page.getByRole('button', { name: 'Stop reading aloud' }).click();
   await pause();
 
@@ -627,6 +631,12 @@ await section('Other formats', async () => {
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const [dl2] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByRole('button', { name: /^Open the original file/ }).click()]);
   check(dl2.suggestedFilename() === 'usul.epub', 'the reader opens the original file in two taps (More, then the file)');
+});
+
+await section('Voices', async () => {
+  await go('#/settings/voice');
+  await page.getByText('Voices', { exact: true }).waitFor({ timeout: 5000 });
+  check((await page.locator('.voice-choice').count()) === 3, 'a voice can be chosen for English, Arabic and Urdu');
 });
 
 await section('Comfort and finding your way', async () => {

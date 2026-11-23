@@ -81,11 +81,55 @@ export function onSpeech(fn: Listener): () => void {
 
 const LOCALE: Record<Piece['lang'], string> = { en: 'en-GB', ar: 'ar-SA', ur: 'ur-PK', fa: 'fa-IR', ps: 'ps-AF', ms: 'ms-MY' };
 
+/** A voice the phone or browser has, for the reader to choose from. */
+export interface VoiceInfo {
+  name: string;
+  lang: string;
+  /** Works without the internet. */
+  offline: boolean;
+  quality?: number;
+}
+
+let chosenCache: Partial<Record<Piece['lang'], string>> | null = null;
+/** The voice chosen for each language (by name), if the reader chose one. */
+export async function chosenVoices(): Promise<Partial<Record<Piece['lang'], string>>> {
+  if (!chosenCache) chosenCache = ((await db.settings.get('voices'))?.value as Partial<Record<Piece['lang'], string>> | undefined) ?? {};
+  return chosenCache;
+}
+export async function chooseVoice(lang: Piece['lang'], name: string | null): Promise<void> {
+  const next = { ...(await chosenVoices()) };
+  if (name) next[lang] = name;
+  else delete next[lang];
+  chosenCache = next;
+  await db.settings.put({ key: 'voices', value: next });
+}
+
+/** The voices there are for a language, the best (offline, then highest quality) first. */
+export async function voicesFor(lang: Piece['lang']): Promise<VoiceInfo[]> {
+  const want = LOCALE[lang].split('-')[0];
+  let all: VoiceInfo[] = [];
+  if (isAndroidApp()) {
+    const r = await (plugin as unknown as { speechVoices(): Promise<{ voices: VoiceInfo[] }> }).speechVoices().catch(() => ({ voices: [] }));
+    all = r.voices;
+  } else if ('speechSynthesis' in window) {
+    let vs = speechSynthesis.getVoices();
+    if (!vs.length) {
+      await new Promise((r) => setTimeout(r, 400));
+      vs = speechSynthesis.getVoices();
+    }
+    all = vs.map((v) => ({ name: v.name, lang: v.lang, offline: v.localService }));
+  }
+  return all
+    .filter((v) => v.lang.toLowerCase().replace('_', '-').startsWith(want))
+    .sort((a, b) => Number(b.offline) - Number(a.offline) || (b.quality ?? 0) - (a.quality ?? 0) || a.name.localeCompare(b.name));
+}
+
 /** Says one piece; the "done" event carries the id. */
 export async function speakPiece(p: Piece, id: string, rate: number, flush = false): Promise<void> {
+  const voice = (await chosenVoices())[p.lang];
   if (isAndroidApp()) {
     hookNative();
-    await (plugin as unknown as { speak(o: unknown): Promise<void> }).speak({ text: p.text, id, lang: LOCALE[p.lang], rate, flush });
+    await (plugin as unknown as { speak(o: unknown): Promise<void> }).speak({ text: p.text, id, lang: LOCALE[p.lang], rate, flush, ...(voice ? { voice } : {}) });
     return;
   }
   if (!('speechSynthesis' in window)) throw new Error('This browser cannot read aloud.');
@@ -94,8 +138,8 @@ export async function speakPiece(p: Piece, id: string, rate: number, flush = fal
   u.lang = LOCALE[p.lang];
   u.rate = rate;
   const voices = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(p.lang));
-  // Prefer a voice installed on the device, so it works offline.
-  u.voice = voices.find((v) => v.localService) ?? voices[0] ?? null;
+  // The voice the reader chose; else one installed on the device, so it works offline.
+  u.voice = voices.find((v) => v.name === voice) ?? voices.find((v) => v.localService) ?? voices[0] ?? null;
   u.onstart = () => listeners.forEach((l) => l({ type: 'start', id }));
   u.onend = () => listeners.forEach((l) => l({ type: 'done', id }));
   u.onerror = () => listeners.forEach((l) => l({ type: 'error', id }));

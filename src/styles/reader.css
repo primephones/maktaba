@@ -2353,3 +2353,9 @@ mark.flash {
 .rd .rd-text .bk-pair > .bk {
   text-indent: 0;
 }
+
+/* Reading aloud: the sentence being said, lit within its paragraph. */
+::highlight(speaking) {
+  background-color: var(--hl-gold);
+  color: inherit;
+}

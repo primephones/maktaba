@@ -30,6 +30,8 @@ interface MaktabaNative {
   installUpdate(): Promise<{ needsPermission: boolean }>;
   openSecuritySettings(): Promise<{ samsung: boolean }>;
   shareText(o: { text: string; title: string }): Promise<void>;
+  mediaShow(o: { title: string; text: string; playing: boolean }): Promise<void>;
+  mediaHide(): Promise<void>;
   googleAuthorize(o: { scopes: string[]; interactive: boolean }): Promise<{ accessToken: string }>;
   addListener(event: string, fn: (e: unknown) => void): Promise<PluginListenerHandle>;
 }
@@ -41,6 +43,7 @@ export interface NativeEvents {
   sharedText: { text: string };
   authCallback: { url: string };
   updateProgress: { done: number; total: number };
+  media: { action: 'play' | 'pause' | 'next' | 'previous' | 'stop' };
 }
 
 /** True inside the installed Android app (not on the web or iPhone). */

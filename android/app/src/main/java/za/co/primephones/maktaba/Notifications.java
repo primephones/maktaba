@@ -14,6 +14,7 @@ final class Notifications {
     static final int ID_WORK = 1001;
     static final int ID_RESUME = 1002;
     static final int ID_DONE = 1003;
+    static final int ID_MEDIA = 1004;
 
     private Notifications() {}
 
