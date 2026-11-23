@@ -1419,3 +1419,187 @@ details.finish-by-hand textarea {
   margin: 4px 0 2px;
   color: var(--rubric);
 }
+
+/* ---------- Motion across the app ---------- */
+
+/* A new colour theme spreads out from where it was chosen. */
+:root[data-vt='theme']::view-transition-old(root) {
+  animation: none;
+}
+:root[data-vt='theme']::view-transition-new(root) {
+  animation: theme-reveal var(--deliberate) var(--ease-in-out) both;
+}
+@keyframes theme-reveal {
+  from { clip-path: circle(0 at var(--reveal-x, 50%) var(--reveal-y, 50%)); }
+  to { clip-path: circle(150vmax at var(--reveal-x, 50%) var(--reveal-y, 50%)); }
+}
+
+/* Opening a book: the binding swings open on its spine while the page grows. */
+::view-transition-image-pair(book) {
+  perspective: 1400px;
+}
+:root[data-nav='forward'][data-open]::view-transition-old(book) {
+  transform-origin: left center;
+  animation: cover-swing 0.42s cubic-bezier(0.45, 0, 0.25, 1) both;
+}
+:root[data-nav='forward'][data-open='rtl']::view-transition-old(book) {
+  transform-origin: right center;
+  animation-name: cover-swing-rtl;
+}
+@keyframes cover-swing {
+  0% { transform: rotateY(0); opacity: 1; }
+  75% { opacity: 1; }
+  100% { transform: rotateY(-96deg); opacity: 0; }
+}
+@keyframes cover-swing-rtl {
+  0% { transform: rotateY(0); opacity: 1; }
+  75% { opacity: 1; }
+  100% { transform: rotateY(96deg); opacity: 0; }
+}
+
+/* Choices glide: the old choice's background slides to the new one. */
+.seg {
+  position: relative;
+}
+.seg-ghost {
+  position: absolute;
+  z-index: 0;
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  pointer-events: none;
+  transition: transform 0.34s var(--ease-spring), width 0.34s var(--ease-spring);
+}
+.seg > button {
+  position: relative;
+  z-index: 1;
+}
+.seg[data-gliding] > button[aria-pressed='true'],
+.seg[data-gliding] > button[aria-selected='true'] {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* The switch's knob stretches while it is pressed, then springs across. */
+.switch::after {
+  transition: transform 0.34s var(--ease-spring), width var(--quick) var(--ease-out);
+}
+.switch:active::after {
+  width: 29px;
+}
+.switch[aria-checked='true']:active::after {
+  transform: translateX(15px);
+}
+[dir='rtl'] .switch[aria-checked='true']:active::after {
+  transform: translateX(-15px);
+}
+
+/* Messages: they rise in, slip away, and can be flicked off sideways. */
+.toast {
+  touch-action: pan-y;
+  transition: transform var(--quick) var(--ease-out), opacity var(--quick);
+}
+.toast[data-leaving] {
+  animation: toast-out 0.2s ease-in both;
+}
+@keyframes toast-out {
+  to { opacity: 0; transform: translateY(8px) scale(0.97); }
+}
+
+/* While your AI works, its mark glows softly instead of a spinner. */
+.ahead-pill .ai-mark,
+.scan-busy ~ .ai-mark,
+[aria-busy='true'] .ai-mark,
+.btn:disabled .ai-mark {
+  animation: ai-glow 1.6s ease-in-out infinite;
+}
+@keyframes ai-glow {
+  0%, 100% { opacity: 1; filter: none; }
+  50% { opacity: 0.45; filter: drop-shadow(0 0 4px var(--gold-soft)); }
+}
+
+/* Shapes holding the places of books while the shelf loads. */
+.ph {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--surface-2) 0 30%, color-mix(in srgb, var(--surface-2) 40%, var(--surface)) 45%, var(--surface-2) 60% 100%);
+  background-size: 300% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+.ph-cover {
+  aspect-ratio: 2 / 3;
+  border-radius: 3px 7px 7px 3px;
+}
+.ph-line {
+  height: 9px;
+  width: 80%;
+  margin-top: 8px;
+}
+.ph-line--short {
+  width: 45%;
+  margin-top: 6px;
+}
+.ph-card {
+  height: 132px;
+  border-radius: var(--r-lg);
+  margin-bottom: 18px;
+}
+.skeleton .tile {
+  pointer-events: none;
+}
+
+/* The name, written in ink. */
+.ink-name {
+  display: block;
+  width: min(280px, 80%);
+  height: auto;
+  margin: 4px auto 14px;
+  overflow: visible;
+}
+.ink-name[data-small] {
+  width: min(180px, 60%);
+}
+.ink-ar {
+  font-family: var(--font-arabic);
+  font-weight: 700;
+  font-size: 96px;
+  fill: var(--rubric);
+  stroke: var(--rubric);
+  stroke-width: 1.3;
+  stroke-dasharray: 520;
+  animation: ink-draw 1.9s var(--ease-in-out) both, ink-fill 0.5s ease 1.6s both;
+}
+.ink-en {
+  font-family: var(--font-read);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  fill: var(--ink);
+  animation: rise 0.6s var(--ease-out) 1.75s both;
+}
+.ink-rule {
+  stroke: var(--gold-soft);
+  stroke-width: 1.5;
+  animation: ink-rule 0.7s var(--ease-out) 1.5s both;
+}
+@keyframes ink-draw {
+  from { stroke-dashoffset: 520; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes ink-fill {
+  from { fill: transparent; }
+  to { fill: var(--rubric); }
+}
+@keyframes ink-rule {
+  from { stroke-dasharray: 0 200; }
+  to { stroke-dasharray: 200 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph,
+  .ahead-pill .ai-mark {
+    animation: none;
+  }
+}

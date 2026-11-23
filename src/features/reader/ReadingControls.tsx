@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { resolveTheme, setSetting, useSetting, type ReaderPrefs } from '../../app/settings';
+import { applyTheme, resolveTheme, setSetting, useSetting, type ReaderPrefs } from '../../app/settings';
+import { revealTheme } from '../../ui/motion';
 import { THEMES, swatchStyle } from '../../app/themes';
 import { isAndroidApp } from '../../native/maktaba';
 
@@ -53,7 +54,7 @@ export function ReadingControls({ showTheme, showScriptOptions, lang, grouped }:
           {!grouped && <div className="lbl"><span>Theme</span></div>}
           <div className="theme-chips" role="group" aria-label="Theme">
             {THEMES.map((t) => (
-              <button key={t.id} className="theme-chip" aria-pressed={resolveTheme(theme) === t.id} onClick={() => void setSetting('theme', t.id)}>
+              <button key={t.id} className="theme-chip" aria-pressed={resolveTheme(theme) === t.id} onClick={(e) => revealTheme(e, () => { applyTheme(t.id); void setSetting('theme', t.id); })}>
                 <span className="swatch" style={swatchStyle(t)} aria-hidden="true" />
                 {t.label}
               </button>

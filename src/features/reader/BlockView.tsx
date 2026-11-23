@@ -89,6 +89,8 @@ function placeOf(text: string, m: Mark): [number, number] | null {
  */
 function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, index, onFlip }: { tr: Translation; marks: Mark[]; onUncertain?: (t: Translation) => void; onQuran?: (m: QuranMatch) => void; onMark?: (id: string) => void; heading: boolean; section: number; index: number; onFlip?: (s: number, i: number) => void }) {
   const text = enDisplay(tr.en);
+  // English that has only just arrived writes itself in.
+  const [fresh] = useState(() => Date.now() - tr.updatedAt < 5000);
   const refs = findQuranRefs(text).filter((m) => m.kind === 'ref');
   const hls = marks.filter((m) => m.en && m.type !== 'bookmark').map((m) => ({ m, at: placeOf(text, m) })).filter((x): x is { m: Mark; at: [number, number] } => !!x.at);
   const cuts = new Set([0, text.length]);
@@ -105,6 +107,7 @@ function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, in
       data-t={heading ? 'h' : 'p'}
       data-en
       data-flip
+      data-fresh={fresh || undefined}
       lang="en"
       dir="ltr"
       onClick={(e) => {
@@ -144,7 +147,7 @@ function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, in
         if (hl) {
           const id = hl.m.id;
           node = (
-            <span className="hl" data-c={hl.m.color} data-note={hl.m.note || undefined} data-mark={id} onClick={(e) => { if (!window.getSelection()?.isCollapsed) return; e.stopPropagation(); onMark?.(id); }}>
+            <span className="hl" data-c={hl.m.color} data-note={hl.m.note || undefined} data-mark={id} data-fresh={Date.now() - hl.m.createdAt < 2500 || undefined} onClick={(e) => { if (!window.getSelection()?.isCollapsed) return; e.stopPropagation(); onMark?.(id); }}>
               {node}
             </span>
           );
@@ -157,7 +160,8 @@ function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, in
 
 export const BlockView = memo(function BlockView({ bookId, bookLang, section, index, block, marks, flash, showTashkil, onNote, onMark, onZoom, tr, show = 'orig', flipped, onFlip, onUncertain, onQuran }: Props) {
   const common = { 'data-s': section, 'data-b': index, 'data-t': block.t } as const;
-  const bookmarked = marks.some((m) => m.type === 'bookmark');
+  const bookmark = marks.find((m) => m.type === 'bookmark');
+  const bookmarked = bookmark ? (Date.now() - bookmark.createdAt < 2500 ? 'fresh' : true) : false;
 
   if (block.t === 'hr') return <div className="bk" {...common} role="separator" />;
 
@@ -250,6 +254,7 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
               data-c={seg.mark.color}
               data-note={seg.mark.note || undefined}
               data-mark={id}
+              data-fresh={Date.now() - seg.mark.createdAt < 2500 || undefined}
               onClick={(e) => {
                 if (!window.getSelection()?.isCollapsed) return;
                 e.stopPropagation();

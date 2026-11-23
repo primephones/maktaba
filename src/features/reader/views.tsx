@@ -329,9 +329,17 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pages, sec, section, size.w]);
 
+  const shade = useRef(0);
   const turn = useCallback(
     (dir: 1 | -1) => {
       onUserMove();
+      // The page lifts as it turns: a shadow sweeps across in the direction of reading.
+      const pg = frame.current?.parentElement;
+      if (pg && document.documentElement.dataset.motion !== 'off') {
+        pg.dataset.turning = (dir === 1) !== rtl ? 'next' : 'prev';
+        window.clearTimeout(shade.current);
+        shade.current = window.setTimeout(() => delete pg.dataset.turning, 460);
+      }
       if (dir === 1) {
         if (page < pages - 1) setPage(page + 1);
         else if (sec < last) {
@@ -346,7 +354,7 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
         setSec(sec - 1);
       }
     },
-    [page, pages, sec, last, onUserMove],
+    [page, pages, sec, last, onUserMove, rtl],
   );
 
   useEffect(() => {
@@ -368,6 +376,7 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
 
   const drag = useRef<{ x: number; y: number; dx: number; active: boolean; t: number; v: number } | null>(null);
   const swiped = useRef(false);
+  const pull = useRef<{ x: number; y: number } | null>(null);
   const base = (rtl ? 1 : -1) * page * size.w;
   const setDrag = (dx: number, dragging: boolean) => {
     const c = cols.current;
@@ -397,6 +406,20 @@ export function PagedView({ book, target, get, load, version, layoutKey, justify
           d.t = e.timeStamp;
           d.dx = dx;
           setDrag(dx, true);
+        }
+      }}
+      onTouchStart={(e) => {
+        const t = e.touches[0];
+        pull.current = e.touches.length === 1 && t.clientY < size.h * 0.35 ? { x: t.clientX, y: t.clientY } : null;
+      }}
+      onTouchEnd={(e) => {
+        // Pulled down from the top of the page: a bookmark drops in (or is taken out).
+        const p = pull.current;
+        pull.current = null;
+        const t = e.changedTouches[0];
+        if (p && t && t.clientY - p.y > 90 && Math.abs(t.clientX - p.x) < 50 && !hasSelection()) {
+          swiped.current = true;
+          window.dispatchEvent(new Event('maktaba:pull-bookmark'));
         }
       }}
       onPointerUp={() => {

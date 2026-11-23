@@ -1,3 +1,4 @@
+import { ShelfSkeleton } from '../../ui/InkName';
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, uid } from '../../db/db';
@@ -219,6 +220,8 @@ export function Library({ folderId }: { folderId?: string }) {
             <EmptyState icon="book" title={folderId ? 'No books in this folder' : 'No books here yet'} action={<button className="btn btn--primary" onClick={() => addBooks(folderId)}><Icon name="plus" size={20} />Add a book{folderId ? ' here' : ''}</button>}>
               {folderId ? 'Add a book straight into this folder, or move one here from its details.' : 'Your books are inside the folders above.'}
             </EmptyState>
+          ) : loading ? (
+            <ShelfSkeleton />
           ) : !loading ? (
             <EmptyState icon="search" title="Nothing matches" action={<button className="btn" onClick={() => setFilter('all')}>Show all books</button>}>
               No books here fit that filter.

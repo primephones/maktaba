@@ -135,6 +135,8 @@ function withTransition(change: () => void, dir: Direction = 'forward', closingB
   name(opening);
   if (closingBook) name(document.querySelector<HTMLElement>('.rd'));
   root.dataset.nav = dir;
+  // The binding swings open on its spine: from the right for an Arabic or Urdu book.
+  if (opening) root.dataset.open = opening.dataset.rtl === 'true' ? 'rtl' : 'ltr';
   try {
     const t = doc.startViewTransition(async () => {
       named.forEach((el) => (el.style.viewTransitionName = ''));
@@ -162,6 +164,7 @@ function withTransition(change: () => void, dir: Direction = 'forward', closingB
       .finally(() => {
         named.forEach((el) => (el.style.viewTransitionName = ''));
         if (root.dataset.nav === dir) delete root.dataset.nav;
+        delete root.dataset.open;
       });
   } catch {
     named.forEach((el) => (el.style.viewTransitionName = ''));

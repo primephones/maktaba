@@ -1,3 +1,4 @@
+import { InkName } from '../../ui/InkName';
 import { useEffect, useState } from 'react';
 import { goBack, navigate } from '../../app/router';
 import { useApp } from '../../app/AppContext';
@@ -48,6 +49,7 @@ export function Setup({ step: raw }: { step?: string }) {
 function Welcome({ onNext }: { onNext: () => void }) {
   return (
     <>
+      <InkName />
       <div className="hero-card">
         <span className="ai-mark" aria-hidden="true">✦</span>
         <h2>Two small steps. Then the books do the talking.</h2>

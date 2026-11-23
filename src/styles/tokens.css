@@ -44,6 +44,11 @@
   --bar-clear: calc(var(--bar-h) + var(--bar-gap) * 2 + var(--safe-bottom));
 
   --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Three speeds: presses and toggles; sheets, choices and screens; a book opening or a new theme. */
+  --quick: 140ms;
+  --standard: 260ms;
+  --deliberate: 460ms;
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 280ms;
 

@@ -26,6 +26,7 @@ import { Icon } from '../../ui/Icon';
 import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { BlockView, NO_MARKS } from './BlockView';
+import { BookCover } from '../library/BookCover';
 
 const NO_PAGES = new Set<number>();
 import { ScanPageAction } from './ScanPage';
@@ -154,12 +155,15 @@ function ReaderInner({ book }: { book: Book }) {
   const saveTimer = useRef(0);
   const lastJump = useRef(Date.now());
   const latest = useRef(pos);
+  const [finished, setFinished] = useState(false);
   const persist = useCallback(() => {
     const p = latest.current;
     const sec = cache.current.get(p.section);
     if (!sec) return;
     const fraction = fractionAt(book, p.section, p.block, sec.blocks.length);
     const atEnd = p.section === book.sectionCount - 1 && p.block >= sec.blocks.length - 2;
+    // Reaching the end by reading (not by a jump): the book is finished, and that is marked.
+    if (atEnd && book.status === 'reading' && Date.now() - lastJump.current > 4000) setFinished(true);
     void db.books.update(book.id, {
       progress: { section: p.section, block: p.block, fraction: atEnd ? 1 : fraction, updatedAt: Date.now() },
       // Landing near the end by a jump (search, contents) is not finishing the book.
@@ -444,6 +448,13 @@ function ReaderInner({ book }: { book: Book }) {
     haptic('medium');
     toast('Bookmarked.');
   };
+  const toggleRef = useRef(toggleBookmark);
+  toggleRef.current = toggleBookmark;
+  useEffect(() => {
+    const on = () => void toggleRef.current();
+    window.addEventListener('maktaba:pull-bookmark', on);
+    return () => window.removeEventListener('maktaba:pull-bookmark', on);
+  }, []);
 
   /**
    * The book as it was given, for checking: a PDF opens on the printed page being read
@@ -954,6 +965,7 @@ function ReaderInner({ book }: { book: Book }) {
         </div>
       )}
 
+      {finished && <FinishedSeal book={book} onClose={() => setFinished(false)} />}
       {peek && (
         <div className="peek" role="dialog" aria-label="The original" onClick={() => setPeek(null)}>
           <div className="peek-card">
@@ -975,7 +987,7 @@ function ReaderInner({ book }: { book: Book }) {
         <BookSearch book={book} onGo={(h) => goTo(h.section, h.block, h.en ? undefined : [h.start, h.end])} onClose={() => setSheet(null)} />
       )}
       {sheet === 'settings' && (
-        <Sheet title="Text" onClose={() => setSheet(null)}>
+        <Sheet title="Text" keepPage onClose={() => setSheet(null)}>
           <ReadingControls showTheme lang={book.lang} grouped />
         </Sheet>
       )}
@@ -1100,6 +1112,31 @@ function ReaderInner({ book }: { book: Book }) {
       {quran && <QuranSheet match={quran} onClose={() => setQuran(null)} />}
       {listening && <Listen book={book} from={pos} translations={translations} defaultSource={view} onClose={() => setListening(false)} />}
       {studyOpen && <StudySheet book={book} {...studyOpen} onClose={() => setStudyOpen(null)} />}
+    </div>
+  );
+}
+
+/** The last page: a seal pressed onto the cover, a glint across the gold, and one line. */
+function FinishedSeal({ book, onClose }: { book: Book; onClose: () => void }) {
+  useEffect(() => {
+    const t = window.setTimeout(() => haptic('success'), 420);
+    return () => window.clearTimeout(t);
+  }, []);
+  const days = Math.max(1, Math.round((Date.now() - book.addedAt) / 86_400_000));
+  return (
+    <div className="finished" role="dialog" aria-label="Book finished">
+      <div className="finished-card">
+        <div className="finished-cover">
+          <BookCover book={book} />
+          <span className="finished-seal" aria-hidden="true">Finished<b lang="ar">خُتِم</b></span>
+        </div>
+        <h2 dir="auto">You finished {book.title}</h2>
+        <p className="muted">{days === 1 ? 'In a day.' : `${days} days since you added it.`} May it benefit you.</p>
+        <div className="finished-acts">
+          <button className="btn" onClick={onClose}>Stay here</button>
+          <button className="btn btn--primary" onClick={() => { onClose(); goBack('/library'); }}>Back to the library</button>
+        </div>
+      </div>
     </div>
   );
 }

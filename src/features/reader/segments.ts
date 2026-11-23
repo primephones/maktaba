@@ -7,7 +7,7 @@ export interface Segment {
   b?: boolean;
   i?: boolean;
   /** Highlight or note covering this run. */
-  mark?: { id: string; color: HighlightColor; note: boolean };
+  mark?: { id: string; color: HighlightColor; note: boolean; createdAt: number };
   flash?: boolean;
   /** Footnote markers that sit immediately before this run. */
   notesBefore?: Array<{ id: string; label: string }>;
@@ -50,7 +50,7 @@ export function renderBlock(block: Block, marks: Mark[], flash: [number, number]
   const spans = (block.spans ?? []).map((s) => ({ s: conv(s.s), e: conv(s.e), k: s.k }));
   const hls = marks
     .filter((m) => m.type !== 'bookmark' && m.start !== undefined && m.end !== undefined)
-    .map((m) => ({ s: conv(m.start!), e: conv(m.end!), id: m.id, color: m.color ?? 'gold', note: !!m.note }));
+    .map((m) => ({ s: conv(m.start!), e: conv(m.end!), id: m.id, color: m.color ?? 'gold', note: !!m.note, createdAt: m.createdAt }));
   const fl = flash ? { s: conv(flash[0]), e: conv(flash[1]) } : null;
   const notes = (block.notes ?? []).map((n) => ({ at: conv(n.at), id: n.id, label: n.label }));
   const qs = links.map((q) => ({ ...q, s: conv(q.start), e: conv(q.end) }));
@@ -71,7 +71,7 @@ export function renderBlock(block: Block, marks: Mark[], flash: [number, number]
     for (const sp of spans) if (sp.s <= s && sp.e >= e) seg[sp.k] = true;
     // The newest mark wins where two overlap.
     const h = hls.filter((x) => x.s <= s && x.e >= e).pop();
-    if (h) seg.mark = { id: h.id, color: h.color, note: h.note };
+    if (h) seg.mark = { id: h.id, color: h.color, note: h.note, createdAt: h.createdAt };
     if (fl && fl.s <= s && fl.e >= e) seg.flash = true;
     const q = qs.find((x) => x.s <= s && x.e >= e);
     if (q) seg.q = q;

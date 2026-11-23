@@ -27,8 +27,10 @@ import './styles/reader.css';
 import { App } from './app/App';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { bootTheme } from './app/settings';
+import { initGlide } from './ui/motion';
 
 bootTheme();
+initGlide();
 
 // One orchestrated moment per launch: the shelves fill in. Later visits are instant.
 document.documentElement.dataset.entrance = '';

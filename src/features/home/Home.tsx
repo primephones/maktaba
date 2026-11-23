@@ -1,3 +1,4 @@
+import { ShelfSkeleton } from '../../ui/InkName';
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -50,7 +51,17 @@ export function Home() {
     };
   }, [books]);
 
-  if (books === undefined) return <div className="screen" aria-busy="true" />;
+  if (books === undefined)
+    return (
+      <div className="screen">
+        <div className="screen-head">
+          <h1>Maktaba<span className="ar" lang="ar">مكتبة</span></h1>
+        </div>
+        <div className="ph ph-card" />
+        <div className="section-title">Up next</div>
+        <ShelfSkeleton count={4} row />
+      </div>
+    );
 
   const where = current ? whereIn(current) || current.author : '';
 

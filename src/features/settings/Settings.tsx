@@ -6,7 +6,8 @@ import { db, requestPersistence } from '../../db/db';
 import type { Book, CoverStyle } from '../../db/types';
 import { formatBytes } from '../../lib/util';
 import { goBack, navigate } from '../../app/router';
-import { DEFAULTS, setSetting, useSetting } from '../../app/settings';
+import { DEFAULTS, applyTheme, setSetting, useSetting } from '../../app/settings';
+import { revealTheme } from '../../ui/motion';
 import { THEMES, swatchStyle, themeInfo, type ThemeInfo } from '../../app/themes';
 import { ErrorBoundary } from '../../app/ErrorBoundary';
 import { Icon, type IconName } from '../../ui/Icon';
@@ -92,7 +93,7 @@ function ThemePage() {
   const theme = useSetting('theme');
   const pair = useSetting('autoThemes');
   const row = (t: ThemeInfo) => (
-    <button className="row" key={t.id} role="radio" aria-checked={theme === t.id} onClick={() => void setSetting('theme', t.id)}>
+    <button className="row" key={t.id} role="radio" aria-checked={theme === t.id} onClick={(e) => revealTheme(e, () => { applyTheme(t.id); void setSetting('theme', t.id); })}>
       <span className="swatch" style={swatchStyle(t)} aria-hidden="true" />
       <span className="grow">
         <span className="title">{t.label}</span>

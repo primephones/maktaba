@@ -128,6 +128,51 @@ await touch('touchEnd');
 await page.waitForTimeout(600);
 check((await foot()) === afterFlick, 'a short slow drag springs back');
 
+// A page turning: a shadow sweeps across as it lifts.
+await page.keyboard.press('ArrowLeft');
+const lifted = await page.evaluate(() => document.querySelector('.pg')?.dataset.turning ?? null);
+check(!!lifted, `turning a page sweeps a shadow across it (${lifted})`);
+await page.waitForTimeout(600);
+// Pulled down from the top of the page: a bookmark drops in.
+await touch('touchStart', 200, 140);
+for (let i = 1; i <= 10; i++) { await touch('touchMove', 200, 140 + i * 16); await page.waitForTimeout(16); }
+await touch('touchEnd');
+await page.getByText('Bookmarked.').waitFor({ timeout: 4000 });
+check(true, 'pulling the page down from the top sets a bookmark');
+check((await page.locator('.bk[data-bookmark="fresh"]').count()) === 1, 'and the new bookmark ribbon drops in');
+// A sheet over the book: the page steps back a little.
+await page.mouse.click(206, 450);
+await page.waitForTimeout(400);
+if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') { await page.mouse.click(206, 450); await page.waitForTimeout(400); }
+await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();
+await page.waitForTimeout(600);
+const scaled = await page.locator('.rd').evaluate((el) => getComputedStyle(el).transform);
+check(/matrix\(0\.9/.test(scaled), `with a sheet open the page steps back (${scaled})`);
+await page.screenshot({ path: `${out}depth.png` });
+// Choices glide from one to the next.
+await page.getByRole('tab', { name: /^Bookmarks/ }).click();
+await page.waitForTimeout(60);
+check((await page.locator('.seg-ghost').count()) === 1, 'a choice glides across to the new option');
+await page.getByRole('button', { name: 'Close' }).click();
+await page.waitForTimeout(500);
+check((await page.locator('.rd').evaluate((el) => getComputedStyle(el).transform)) === 'none', 'and the page comes forward again when it closes');
+// A new theme spreads out from the swatch.
+if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') { await page.mouse.click(206, 450); await page.waitForTimeout(400); }
+await page.getByRole('button', { name: 'Text and theme' }).click();
+await page.waitForTimeout(500);
+check((await page.locator('.rd').evaluate((el) => getComputedStyle(el).transform)) === 'none', 'the Text sheet leaves the page as it is, to judge the changes');
+await page.getByRole('button', { name: 'Forest', exact: true }).click();
+const vt = await page.evaluate(() => document.documentElement.dataset.vt ?? null);
+check(vt === 'theme', `a new theme spreads out from where it was chosen (${vt})`);
+await page.waitForTimeout(800);
+await page.getByRole('button', { name: 'Paper', exact: true }).click();
+await page.waitForTimeout(800);
+await page.getByRole('button', { name: 'Close' }).click();
+// The name in ink on the welcome screen.
+await page.evaluate(() => (location.hash = '#/setup'));
+await page.locator('.ink-name').waitFor({ timeout: 5000 });
+check(true, 'the welcome screen writes the name in ink');
+
 check(errors.length === 0, `no errors${errors.length ? ': ' + errors.join(' | ') : ''}`);
 await browser.close();
 server.stop();

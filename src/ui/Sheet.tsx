@@ -10,6 +10,8 @@ interface SheetProps {
   children: ReactNode;
   /** Extra buttons shown beside the close button. */
   actions?: ReactNode;
+  /** Leave the page behind as it is (for settings whose effect should be seen while choosing). */
+  keepPage?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ interface SheetProps {
  * inside itself, and closes with the close button, a tap outside, Escape or the Android
  * back gesture.
  */
-export function Sheet({ title, onClose, children, actions }: SheetProps) {
+export function Sheet({ title, onClose, children, actions, keepPage }: SheetProps) {
   const [closing, setClosing] = useState(false);
   const titleId = useId();
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -35,6 +37,24 @@ export function Sheet({ title, onClose, children, actions }: SheetProps) {
     releaseRef.current();
     finish();
   }, [finish]);
+
+  // While a sheet is open, the screen behind steps back a little (see .rd in the styles).
+  useLayoutEffect(() => {
+    if (keepPage) return;
+    const root = document.documentElement;
+    root.dataset.sheet = String(Number(root.dataset.sheet ?? 0) + 1);
+    return () => {
+      const n = Number(root.dataset.sheet ?? 1) - 1;
+      if (n > 0) root.dataset.sheet = String(n);
+      else delete root.dataset.sheet;
+    };
+  }, [keepPage]);
+  useEffect(() => {
+    if (closing) document.documentElement.dataset.sheetClosing = '';
+    return () => {
+      delete document.documentElement.dataset.sheetClosing;
+    };
+  }, [closing]);
 
   // Registered before the sheet is painted, so the back gesture can never slip past it.
   useLayoutEffect(() => {
