@@ -266,6 +266,84 @@ try {
   await page.getByRole('button', { name: 'Close' }).click();
   await wait(400);
 
+  console.log('Putting the English right');
+  await go('#/library');
+  await page.getByRole('button', { name: 'Open مختصر في أصول الفقه', exact: true }).click();
+  await page.waitForSelector('.bk--en');
+  await wait(1500);
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.mouse.click(200, 40);
+  // The contents in English, with the chapters that have English marked.
+  await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();
+  await page.locator('.toc-two .toc-en', { hasText: 'in English' }).first().waitFor({ timeout: 20000 });
+  check(true, 'the contents are put into English, the original beneath each title');
+  check((await page.locator('.toc-en-mark').count()) >= 1, 'chapters that have English are marked in the contents');
+  await shot('27b-contents-english');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
+  // Correct one paragraph's English by hand.
+  const fixP = page.locator('.bk--en[data-t="p"]').nth(2);
+  const fixS = await fixP.getAttribute('data-s');
+  const fixB = await fixP.getAttribute('data-b');
+  await fixP.evaluate((el) => {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await wait(500);
+  await page.getByRole('button', { name: 'Correct', exact: true }).click();
+  await page.getByRole('dialog', { name: 'This paragraph’s English' }).waitFor({ timeout: 5000 });
+  await page.getByLabel('English of this paragraph').fill('Corrected by the reader: knowledge is what benefits.');
+  await page.getByRole('button', { name: 'Keep my correction' }).click();
+  await wait(700);
+  check(/Corrected by the reader/.test(await page.locator(`.bk--en[data-s="${fixS}"][data-b="${fixB}"]`).textContent()), 'a paragraph’s English can be corrected by hand, and the correction is what is read');
+  // Translate it again, more literally.
+  await page.locator(`.bk--en[data-s="${fixS}"][data-b="${fixB}"]`).evaluate((el) => {
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await wait(500);
+  await page.getByRole('button', { name: 'Correct', exact: true }).click();
+  await page.getByRole('button', { name: 'More literal' }).click();
+  await page.getByText('Translated again.').waitFor({ timeout: 20000 });
+  check(/English of paragraph/.test(await page.locator(`.bk--en[data-s="${fixS}"][data-b="${fixB}"]`).textContent()), 'and it can be translated again, more literally');
+  // Always translate a name this way, in this book.
+  await page.getByLabel('The word or name as in the book').fill('الشافعي');
+  await page.getByLabel('Always in English as').fill('Imam al-Shāfiʿī');
+  await page.getByRole('button', { name: 'Keep', exact: true }).click();
+  await wait(400);
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
+  if ((await page.locator('.rd').getAttribute('data-chrome')) !== 'true') await page.mouse.click(200, 40);
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByRole('button', { name: /Names and terms in this book/ }).click();
+  await page.getByText('Imam al-Shāfiʿī').waitFor({ timeout: 5000 });
+  check(true, 'the book’s word list keeps how a name is to be said, to read through and change');
+  await shot('27c-word-list');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
+  // A technical term in the English: tap it for its meaning.
+  const tBook = await page.evaluate(() => location.hash.split('/')[2]);
+  await page.evaluate(async ({ bookId, s, b }) => {
+    const req = indexedDB.open('maktaba');
+    const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+    const tx = dbh.transaction('translations', 'readwrite');
+    const st = tx.objectStore('translations');
+    const row = await new Promise((r) => (st.get(`${bookId}:${s}:${b}`).onsuccess = (e) => r(e.target.result)));
+    st.put({ ...row, en: 'This is established by ijmāʿ (consensus), the agreement of the scholars.', updatedAt: Date.now() - 60000 });
+    await new Promise((r) => (tx.oncomplete = r));
+  }, { bookId: tBook, s: Number(fixS), b: Number(fixB) });
+  await page.reload();
+  await page.waitForSelector('.bk--en');
+  await wait(800);
+  await page.locator('.bk--en .term').first().click();
+  await page.getByText(/Consensus of the qualified jurists/).waitFor({ timeout: 15000 });
+  check(true, 'a technical term in the English can be tapped for its meaning');
+  await page.getByRole('button', { name: 'Close' }).click();
+  await wait(400);
+
   console.log('Sync between two phones');
   // Phone A highlights a passage and makes a folder, through the app.
   await go('#/library');
@@ -378,6 +456,23 @@ try {
   });
   check(onA.includes('Written on phone B'), 'a folder made on phone B reaches phone A');
   await ctxB.close();
+
+  console.log('A new book, named after its file');
+  await go('#/library');
+  await page.setInputFiles('[data-testid=add-input]', [fx('risala-text.pdf')]);
+  let named = null;
+  for (let i = 0; i < 60 && !named; i++) {
+    await wait(1000);
+    named = await page.evaluate(async () => {
+      const req = indexedDB.open('maktaba');
+      const dbh = await new Promise((r) => (req.onsuccess = () => r(req.result)));
+      const books = await new Promise((r) => (dbh.transaction('books').objectStore('books').getAll().onsuccess = (e) => r(e.target.result)));
+      dbh.close();
+      const b = books.find((x) => x.fileName === 'risala-text.pdf');
+      return b && b.title !== 'risala-text' ? { title: b.title, en: b.titleEn, author: b.author } : null;
+    });
+  }
+  check(named?.title === 'الرسالة' && named?.en === 'al-Risāla' && named?.author === 'الشافعي', `a book named after its file gets its real title and author from its first pages (${JSON.stringify(named)})`);
 } catch (e) {
   console.log('TEST ERROR', e.message);
   failures.push(e.message);

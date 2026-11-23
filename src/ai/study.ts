@@ -32,7 +32,7 @@ export interface Answer {
   model: string;
 }
 
-async function study<T>(body: Record<string, unknown>, isPrivate: boolean, feature: 'ask' | 'explain' | 'irab'): Promise<{ result: T; provider: string; model: string }> {
+export async function study<T>(body: Record<string, unknown>, isPrivate: boolean, feature: 'ask' | 'explain' | 'irab'): Promise<{ result: T; provider: string; model: string }> {
   const ai = await getSetting('ai');
   // Every model busy for a moment: asked once more after a short wait, rather than failing at once.
   return patiently(

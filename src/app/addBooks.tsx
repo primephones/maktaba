@@ -47,6 +47,7 @@ export function useAddBooks(): { pick: (folderId?: string) => void; addDropped: 
     // Added from inside a folder: they are already where they belong.
     const ids = results.map((r) => r.bookId).filter((x): x is string => !!x);
     if (ids.length && !folderRef.current) void offerShelving(ids, setChoosing);
+    if (ids.length) void prepareNewBooks(ids);
   }, []);
 
   const pick = useCallback((folderId?: string) => {
@@ -104,6 +105,34 @@ export function useAddBooks(): { pick: (folderId?: string) => void; addDropped: 
 
   const addDropped = useCallback((files: File[]) => void add(files), [add]);
   return { pick, addDropped, element };
+}
+
+/**
+ * With your AI connected, a new book is made ready to read in English before it is opened:
+ * its real title and author read from its first pages (if it is still named after its file),
+ * its contents put into English, and its opening translated.
+ */
+async function prepareNewBooks(ids: string[]): Promise<void> {
+  const { aiReady } = await import('../ai/client');
+  if (!(await aiReady())) return;
+  await whenReady(ids);
+  const { namedAfterFile, readBookInfo, applyBookInfo, translateContents } = await import('../ai/bookinfo');
+  const { translatable } = await import('../ai/translation');
+  const { translateAhead, isScanned } = await import('../ai/ahead');
+  let opened = false;
+  for (const id of ids) {
+    const book = await db.books.get(id);
+    if (!book || book.import.state !== 'ready') continue;
+    if (namedAfterFile(book) && !book.ocr) await readBookInfo(book).then((info) => applyBookInfo(book, info)).catch(() => undefined);
+    if (!translatable(book)) continue;
+    const fresh = (await db.books.get(id)) ?? book;
+    if (fresh.toc.length >= 2 && !fresh.tocEn) await translateContents(fresh).catch(() => undefined);
+    // The opening of the first new book, so it opens in English (a scanned book's first page).
+    if (!opened) {
+      opened = true;
+      void translateAhead(fresh, { from: { section: 0, block: 0 }, count: isScanned(fresh) ? 1 : 12 }).catch(() => undefined);
+    }
+  }
 }
 
 /** Waits (up to two minutes) for new books to be read, so their real titles are known. */

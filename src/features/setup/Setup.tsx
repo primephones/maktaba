@@ -249,6 +249,16 @@ function AiStep({ onBack, onNext }: { onBack: () => void; onNext: () => void }) 
           </span>
         </div>
       )}
+      {ai.gemini && !ai.groq && open !== 'groq' && (
+        <button className="backup-ai" onClick={() => setOpen('groq')}>
+          <span className="ai-mark" aria-hidden="true">✦</span>
+          <span className="grow">
+            <b>Add a backup: Groq, free</b>
+            <span>Gemini’s free models are often busy for a few minutes. With Groq as well, translation carries on instead of waiting. About two minutes.</span>
+          </span>
+          <Icon name="forward" size={18} />
+        </button>
+      )}
       {GUIDES.map((g) => (
         <div className="card guide" key={g.id} data-open={open === g.id}>
           <button className="guide-head" onClick={() => setOpen(open === g.id ? null : g.id)} aria-expanded={open === g.id}>

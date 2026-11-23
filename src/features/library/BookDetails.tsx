@@ -13,6 +13,7 @@ import { toast } from '../../ui/toast';
 import { HelpFor } from '../setup/help';
 import { mimeOf, openOriginal, saveFile } from '../../lib/saveFile';
 import { BookCover, leatherOf, useCoverUrl } from './BookCover';
+import { applyBookInfo, namedAfterFile, readBookInfo } from '../../ai/bookinfo';
 import { CHECK_BELOW, rereadWithAi, rerunOcr, runOcrQueue } from '../../ocr/queue';
 import { aiReaderFor, aiReaderPausedUntil } from '../../ocr/ai';
 import { aiReady } from '../../ai/client';
@@ -281,8 +282,10 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
       <div className="detail-band" data-leather={leatherOf(book)}>
         <div className="detail-band-cover"><BookCover book={book} showState={false} /></div>
         <h3 lang={langAttr(book.title)} dir="auto">{book.title}</h3>
-        {book.author && <p className="by" lang={langAttr(book.author)} dir="auto">{book.author}</p>}
+        {book.titleEn && book.titleEn !== book.title && <p className="title-en">{book.titleEn}</p>}
+        {book.author && <p className="by" lang={langAttr(book.author)} dir="auto">{book.author}{book.authorEn && book.authorEn !== book.author ? ` · ${book.authorEn}` : ''}</p>}
       </div>
+      {ready && namedAfterFile(book) && <FindTitle book={book} />}
       <DetailFacts book={book} />
       <p className="detail-facts">{FORMAT[book.format]} · {formatBytes(book.size)} on this device</p>
 
@@ -539,5 +542,33 @@ function DetailFacts({ book }: { book: Book }) {
       <div><b>{percent(book.progress?.fraction ?? 0)}</b><small>Read</small></div>
       <div><b>{english ? (total ? percent(Math.min(1, english / total)) : english.toLocaleString()) : 'None'}</b><small>{english && !total ? 'Paras in English' : 'In English'}</small></div>
     </div>
+  );
+}
+
+/** A book still named after its file: your AI reads its real title and author from its first pages. */
+function FindTitle({ book }: { book: Book }) {
+  const [busy, setBusy] = useState(false);
+  const find = async () => {
+    if (!(await aiReady())) return toast('Connect your AI first: Settings › Your AI.');
+    setBusy(true);
+    try {
+      const info = await readBookInfo(book);
+      const before = { title: book.title, author: book.author, titleEn: book.titleEn, authorEn: book.authorEn };
+      await applyBookInfo(book, info);
+      toast(`Now “${info.title || info.titleEn}”.`, { label: 'Undo', run: () => void db.books.update(book.id, before) });
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button className="find-title" disabled={busy} onClick={() => void find()}>
+      <span className="ai-mark" aria-hidden="true">✦</span>
+      <span className="grow">
+        <b>{busy ? 'Reading its first pages…' : 'Find its real title and author'}</b>
+        <span>It is still named after its file. Your AI reads them from the book’s first pages.</span>
+      </span>
+    </button>
   );
 }

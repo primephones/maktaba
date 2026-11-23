@@ -198,7 +198,7 @@ export class SomeLeftInOriginal extends Error {
 export async function translateNow(
   book: Book,
   paras: SourceParagraph[],
-  opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void; onWait?: (seconds: number) => void; quality?: boolean } = {},
+  opts: { prefer?: string[]; fresh?: boolean; onProgress?: (done: number, total: number) => void; onWait?: (seconds: number) => void; quality?: boolean; tone?: 'literal' | 'natural' } = {},
 ): Promise<number> {
   let done = 0;
   const left: string[] = [];
@@ -215,7 +215,7 @@ export async function translateNow(
     const res = await patiently(
       () =>
         request<{ results: Array<{ id: string; en: string; uncertain: Translation['uncertain']; provider: string; model: string }>; names?: MemoryItem[] }>('/v1/translate', {
-          body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh, quality: opts.quality, bookTitle: book.title, chapter: part[0].chapter, previous: prev?.en, paragraphs, bookKey: book.hash, style: ctx.style, memory, verses: ctx.verses },
+          body: { lang: lang(book, paras.slice(0, 10).map((p) => p.text).join(' ')), private: !!book.private, prefer, fresh: opts.fresh || !!opts.tone, quality: opts.quality, bookTitle: book.title, chapter: part[0].chapter, previous: prev?.en, paragraphs, bookKey: book.hash, style: opts.tone ? { ...ctx.style, tone: opts.tone } : ctx.style, memory, verses: ctx.verses },
           timeoutMs: opts.quality ? 300_000 : 120_000,
         }),
       opts.onWait,

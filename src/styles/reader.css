@@ -2349,3 +2349,7 @@ mark.flash {
     font-size: 0.96em;
   }
 }
+/* In Both, each English sits under its original: no book indent between the two. */
+.rd .rd-text .bk-pair > .bk {
+  text-indent: 0;
+}

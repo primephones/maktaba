@@ -22,9 +22,11 @@ export type StudyTask =
   | { task: 'summarise'; passages: Passage[] }
   | { task: 'quiz'; passages: Passage[] }
   | { task: 'irab'; sentence: string }
-  | { task: 'define'; word: string; context: string };
+  | { task: 'define'; word: string; context: string }
+  | { task: 'bookinfo'; text: string; fileName?: string }
+  | { task: 'titles'; titles: string[]; book?: string };
 
-export const featureOf = (t: StudyTask): Feature => (t.task === 'irab' ? 'irab' : t.task === 'explain' || t.task === 'summarise' || t.task === 'quiz' || t.task === 'define' ? 'explain' : 'ask');
+export const featureOf = (t: StudyTask): Feature => (t.task === 'irab' ? 'irab' : t.task === 'explain' || t.task === 'summarise' || t.task === 'quiz' || t.task === 'define' || t.task === 'bookinfo' || t.task === 'titles' ? 'explain' : 'ask');
 
 type Msg = { role: 'system' | 'user'; content: string };
 
@@ -33,6 +35,31 @@ const passagesBlock = (ps: Passage[]) =>
 
 export function studyMessages(t: StudyTask): Msg[] {
   switch (t.task) {
+    case 'bookinfo':
+      return [
+        {
+          role: 'system',
+          content: [
+            'You read the first pages of a book (Arabic, Urdu, Persian, Pashto, Malay or English: a title page, a preface, a contents list) and say what the book is.',
+            'Give its title and its author exactly as written in the book, and both in English: the English title as English readers know it (for a classical work, its usual transliterated title, e.g. "al-Risāla"; for a modern work, a translation of the title), and the author\'s name transliterated with ʿ, ʾ and macrons.',
+            'Use only what the pages show. If the title or the author is not stated in them, leave it empty. Ignore publishers\' and websites\' names, stamps and watermarks.',
+            'Answer with JSON only: {"title":"…","author":"…","titleEn":"…","authorEn":"…"}',
+          ].join('\n'),
+        },
+        { role: 'user', content: `${t.fileName ? `File name: ${t.fileName}\n\n` : ''}${t.text.slice(0, 3500)}` },
+      ];
+    case 'titles':
+      return [
+        {
+          role: 'system',
+          content: [
+            `You put the chapter titles of a book${t.book ? ` (${t.book})` : ''} into English, for its contents list.`,
+            'Translate each title faithfully and briefly, as an English book would title its chapters. Keep names and technical terms transliterated (e.g. "On Analogy (al-Qiyās)", "The Book of Purification"). Keep numbering words as numbers ("Chapter 3"). Do not add anything.',
+            'Answer with JSON only: {"titles":["…"]}, one English title for each title given, in the same order.',
+          ].join('\n'),
+        },
+        { role: 'user', content: t.titles.map((x, i) => `${i + 1}. ${x}`).join('\n') },
+      ];
     case 'keywords':
       return [
         { role: 'system', content: 'You help search a library of classical Arabic, Urdu and Persian Islamic texts and their English translations. Given a question, give the words most likely to appear in passages that answer it: Arabic terms (as they would be written in classical texts, without vowel marks, including the technical term and its common variants) and English words. Answer with JSON only: {"ar":["…"],"en":["…"]}, at most 8 of each.' },
@@ -153,6 +180,17 @@ export function acceptStudy(t: StudyTask, raw: string): unknown {
   const text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   const data = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)) as Record<string, unknown>;
   switch (t.task) {
+    case 'bookinfo': {
+      const s = (v: unknown) => String(v ?? '').trim().slice(0, 200);
+      const info = { title: s(data.title), author: s(data.author), titleEn: s(data.titleEn), authorEn: s(data.authorEn) };
+      if (!info.title && !info.titleEn) throw new Error('no title found');
+      return info;
+    }
+    case 'titles': {
+      const titles = Array.isArray(data.titles) ? data.titles.map((x) => String(x ?? '').trim()) : [];
+      if (titles.length !== t.titles.length) throw new Error('a title for each title is wanted');
+      return { titles };
+    }
     case 'keywords': {
       const ar = Array.isArray(data.ar) ? data.ar.map(String).filter(Boolean).slice(0, 8) : [];
       const en = Array.isArray(data.en) ? data.en.map(String).filter(Boolean).slice(0, 8) : [];

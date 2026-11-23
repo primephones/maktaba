@@ -153,6 +153,9 @@ export interface Book {
   view?: 'en' | 'orig' | 'both';
   /** The contents' titles in English, in the order of `toc`. */
   tocEn?: string[];
+  /** The title and author in English (transliterated or translated), when found. */
+  titleEn?: string;
+  authorEn?: string;
   progress?: Progress;
 }
 

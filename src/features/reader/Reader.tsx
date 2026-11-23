@@ -27,6 +27,8 @@ import { Sheet } from '../../ui/Sheet';
 import { toast } from '../../ui/toast';
 import { BlockView, NO_MARKS } from './BlockView';
 import { BookCover } from '../library/BookCover';
+import { ParagraphEnglish, WordList } from './EnglishTools';
+import type { Term } from '../../../server/src/glossary';
 
 const NO_PAGES = new Set<number>();
 import { ScanPageAction } from './ScanPage';
@@ -103,6 +105,8 @@ function ReaderInner({ book }: { book: Book }) {
   const [aboutEn, setAboutEn] = useState<Translation | null>(null);
   const [selection, setSelection] = useState<ReaderSelection | null>(null);
   const [peek, setPeek] = useState<{ section: number; block: number } | null>(null);
+  const [fixing, setFixing] = useState<{ section: number; block: number } | null>(null);
+  const [words, setWords] = useState(false);
   const [scrub, setScrub] = useState<number | null>(null);
 
   // ----- Sections: loaded on demand and kept while the book is open -----
@@ -507,6 +511,16 @@ function ReaderInner({ book }: { book: Book }) {
   const trList = useLiveQuery(() => db.translations.where('bookId').equals(book.id).toArray(), [book.id]);
   const translations = useMemo(() => new Map((trList ?? []).map((t) => [`${t.section}:${t.block}`, t] as const)), [trList]);
   const hasTranslation = translations.size > 0;
+  const englishSections = useMemo(() => new Set((trList ?? []).map((t) => t.section)), [trList]);
+  // Reading in English: the contents put into English too, once, if not done when the book was added.
+  const askedToc = useRef(false);
+  useEffect(() => {
+    if (askedToc.current || !hasTranslation || book.tocEn || book.toc.length < 2 || (book.view ?? 'en') === 'orig') return;
+    askedToc.current = true;
+    void aiReady().then(async (ok) => {
+      if (ok) await import('../../ai/bookinfo').then((m) => m.translateContents(book)).catch(() => undefined);
+    });
+  }, [hasTranslation, book]);
   const view: 'en' | 'orig' | 'both' = hasTranslation ? book.view ?? 'en' : 'orig';
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [unsure, setUnsure] = useState<Translation | null>(null);
@@ -523,6 +537,15 @@ function ReaderInner({ book }: { book: Book }) {
   const [quran, setQuran] = useState<QuranMatch | null>(null);
   const [listening, setListening] = useState(false);
   const onQuran = useCallback((m: QuranMatch) => setQuran(m), []);
+  // A technical term tapped in the English: what it means, here and in general.
+  const onTerm = useCallback(
+    (term: Term, section: number, index: number) => {
+      const para = cache.current.get(section)?.blocks[index]?.text ?? '';
+      setStudyOpen({ kind: 'define', text: term.ar, cite: formatCitation(citationAt(section, index)), context: para.slice(0, 600) || term.ar });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [book],
+  );
 
   // Books with page images: the pages as printed, each with its English beneath (the
   // default), or the text read from them.
@@ -568,6 +591,7 @@ function ReaderInner({ book }: { book: Book }) {
         onFlip,
         onUncertain,
         onQuran,
+        onTerm,
       };
       /** The English of the paragraphs on one printed page, to go under its picture. */
       const englishOf = (onPage: number[]) =>
@@ -662,6 +686,7 @@ function ReaderInner({ book }: { book: Book }) {
             onFlip={onFlip}
             onUncertain={onUncertain}
             onQuran={onQuran}
+            onTerm={onTerm}
           />
         );
         // A scanned page shown as printed: the page, where its words came from, its English
@@ -702,7 +727,7 @@ function ReaderInner({ book }: { book: Book }) {
       });
       return out;
     },
-    [book, hasScans, hasTranslation, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran, aiRead, pageMode, isPdf, pageSources, onPageInfo],
+    [book, hasScans, hasTranslation, marksByBlock, flash, prefs.tashkil, onNote, onMark, onZoom, scanView, translations, view, flipped, onFlip, onUncertain, onQuran, onTerm, aiRead, pageMode, isPdf, pageSources, onPageInfo],
   );
 
   // Recognised text arrives while the book is open (by the background reading, or a page read
@@ -962,11 +987,25 @@ function ReaderInner({ book }: { book: Book }) {
                 <Icon name="language" size={20} />Original
               </button>
             )}
+            {selection.parts.some((p) => p.en) && (
+              <button
+                className="sel-act"
+                onClick={() => {
+                  const first = selection.parts.find((p) => p.en)!;
+                  clearSelection();
+                  setFixing({ section: first.section, block: first.block });
+                }}
+              >
+                <Icon name="edit" size={20} />Correct
+              </button>
+            )}
             <button className="sel-act" onClick={() => void copy()}><Icon name="copy" size={20} />Copy</button>
           </div>
         </div>
       )}
 
+      {fixing && <ParagraphEnglish book={book} section={fixing.section} block={fixing.block} onClose={() => setFixing(null)} />}
+      {words && <WordList book={book} onClose={() => setWords(false)} />}
       {finished && <FinishedSeal book={book} onClose={() => setFinished(false)} />}
       {peek && (
         <div className="peek" role="dialog" aria-label="The original" onClick={() => setPeek(null)}>
@@ -982,7 +1021,7 @@ function ReaderInner({ book }: { book: Book }) {
         </div>
       )}
       {sheet === 'contents' && (
-        <Contents book={book} marks={marks} current={pos} titleEn={view !== 'orig' ? tocEn : undefined} onGo={(s, b) => goTo(s, b)} onEditMark={setEditMark} onSummary={() => setSheet('summary')} onClose={() => setSheet(null)} />
+        <Contents book={book} marks={marks} current={pos} titleEn={view !== 'orig' ? tocEn : undefined} englishSections={englishSections} onGo={(s, b) => goTo(s, b)} onEditMark={setEditMark} onSummary={() => setSheet('summary')} onClose={() => setSheet(null)} />
       )}
       {sheet === 'summary' && <SummarySheet book={book} at={pos} onGo={(s, b) => goTo(s, b)} onClose={() => setSheet(null)} />}
       {sheet === 'search' && (
@@ -996,6 +1035,15 @@ function ReaderInner({ book }: { book: Book }) {
       {sheet === 'english' && (
         <Sheet title="English" onClose={() => setSheet(null)}>
           <TranslationControls book={book} view={view} hasTranslation={hasTranslation} from={pos} />
+          {hasTranslation && (
+            <div className="list">
+              <button className="row" onClick={() => { setSheet(null); setWords(true); }}>
+                <Icon name="language" />
+                <span className="grow"><span className="title">Names and terms in this book</span><div className="sub">How its names and terms are put into English, to read through and change</div></span>
+                <Icon name="forward" size={18} />
+              </button>
+            </div>
+          )}
         </Sheet>
       )}
       {sheet === 'quiz' && <QuizSheet book={book} at={pos} onGo={(s, b) => goTo(s, b)} onClose={() => setSheet(null)} />}

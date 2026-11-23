@@ -36,6 +36,8 @@ export interface TranslateStyle {
   honorifics?: 'words' | 'short';
   /** Technical terms transliterated with their English (ijmāʿ (consensus)), or in plain English only. */
   terms?: 'transliterated' | 'plain';
+  /** For one passage asked again: closer to the wording, or freer and more natural. */
+  tone?: 'balanced' | 'literal' | 'natural';
 }
 
 /** A name or special term already rendered in this book, kept so the whole book says it the same way. */
@@ -68,7 +70,7 @@ export interface TranslateRequest {
 }
 
 /** The reader's style, with its defaults filled in (Allah; honorifics written out; terms transliterated). */
-export const styleOf = (s?: TranslateStyle): Required<TranslateStyle> => ({ god: s?.god ?? 'Allah', honorifics: s?.honorifics ?? 'words', terms: s?.terms ?? 'transliterated' });
+export const styleOf = (s?: TranslateStyle): Required<TranslateStyle> => ({ god: s?.god ?? 'Allah', honorifics: s?.honorifics ?? 'words', terms: s?.terms ?? 'transliterated', tone: s?.tone ?? 'balanced' });
 
 const LANG_NAME: Record<SourceLang, string> = { ar: 'classical Arabic', ur: 'Urdu', fa: 'Persian (Fārsī)', ps: 'Pashto', ms: 'Malay (in Latin script or Jawi)' };
 
@@ -96,7 +98,11 @@ export function translationRules(lang: SourceLang, style?: TranslateStyle): stri
       : [
           `5a. ${SHORT_NAME[lang]} works quote Arabic (Qurʾān, ḥadīth, juristic texts) inside the ${SHORT_NAME[lang]}. Translate the Arabic quotation too, inside quotation marks, and then the author’s own words; if the author paraphrases the quotation, translate both as written rather than merging them. Religious words the language takes from Persian (e.g. ${lang === 'ur' ? 'نماز, روزہ' : 'نماز, روزه'}) are given as the matching Arabic term from the glossary (ṣalāt, ṣawm).`,
         ]),
-    '6. Write clear, natural English with the formality of the original. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.',
+    st.tone === 'literal'
+      ? '6. The reader asked for a close translation: follow the wording and the order of the original as far as English allows, keeping its sentence divisions and its connectives (fa-, thumma, wa-), even where the English is a little less smooth. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.'
+      : st.tone === 'natural'
+        ? '6. The reader asked for natural, flowing English: write it as a careful modern English writer would, dividing and joining sentences freely and choosing idiomatic wording, while keeping every point of meaning and adding nothing. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.'
+        : '6. Write clear, natural English with the formality of the original. Keep the paragraph structure exactly: one English paragraph for each source paragraph, with the same id.',
     '7. Scanned and downloaded books often carry a watermark or stamp (a library, publisher or website name, a web address, a phone number, "for free distribution", a seal) that can slip into the text. It is not part of the book: leave it out of the English without comment. If a whole paragraph is only such a stamp, give an empty "en" for it.',
     '8. Keep the book consistent. Names and terms already used earlier in this book are given below: write them exactly that way. Then list under "names" the proper names (people, places, books, schools) and special terms you rendered in these paragraphs that are not in the glossary, each as written in the text and as you wrote it in English, e.g. {"source": "ہارون رشید", "en": "Hārūn al-Rashīd"}.',
   ].join('\n');

@@ -123,7 +123,7 @@ export const DEFAULTS: Settings = {
   shelving: 'ask',
   lastBackupAt: 0,
   backupReminder: 'monthly',
-  translationStyle: { god: 'Allah', honorifics: 'words', terms: 'transliterated' },
+  translationStyle: { god: 'Allah', honorifics: 'words', terms: 'transliterated', tone: 'balanced' },
   readingSpeed: 950,
 };
 

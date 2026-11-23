@@ -16,6 +16,8 @@ interface Props {
   onSummary?: () => void;
   /** A contents entry's title in English, when the English is read and it has one. */
   titleEn?: (index: number) => string | undefined;
+  /** Chapters (sections) that have English. */
+  englishSections?: Set<number>;
   onClose: () => void;
 }
 
@@ -38,7 +40,7 @@ export async function findPage(book: Book, wanted: string): Promise<{ section: n
   return null;
 }
 
-export function Contents({ book, marks, current, onGo, onEditMark, onSummary, titleEn, onClose }: Props) {
+export function Contents({ book, marks, current, onGo, onEditMark, onSummary, titleEn, englishSections, onClose }: Props) {
   const [tab, setTab] = useState<'contents' | 'bookmarks' | 'notes'>('contents');
   const [page, setPage] = useState('');
   const [pageError, setPageError] = useState('');
@@ -116,6 +118,7 @@ export function Contents({ book, marks, current, onGo, onEditMark, onSummary, ti
                   ) : (
                     <span className="grow" dir="auto">{t.title}</span>
                   )}
+                  {englishSections?.has(t.section) && <span className="toc-en-mark" title="In English">EN</span>}
                 </button>
               ))}
             </div>

@@ -5,6 +5,7 @@ import { hasArabicScript, isRtl } from '../../lib/arabic';
 import { atPageEdge, PdfPage } from './PdfPage';
 import { renderBlock } from './segments';
 import { findQuranRefs, type QuranMatch } from '../../quran/refs';
+import { SEED_GLOSSARY, type Term } from '../../../server/src/glossary';
 import type { ZoomSource } from './ZoomViewer';
 
 interface Props {
@@ -28,6 +29,20 @@ interface Props {
   onFlip?: (section: number, index: number) => void;
   onUncertain?: (tr: Translation) => void;
   onQuran?: (m: QuranMatch) => void;
+  /** A technical term tapped in the English. */
+  onTerm?: (term: Term, section: number, index: number) => void;
+}
+
+/** The glossary's terms as they are written in the English (ijmāʿ, qiyās…), longest first. */
+const TERMS = [...SEED_GLOSSARY].filter((t) => t.tr.length >= 4).sort((a, b) => b.tr.length - a.tr.length);
+const TERM_RE = new RegExp(`(?<![\\p{L}\\p{M}])(${TERMS.map((t) => t.tr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{M}])`, 'giu');
+function termsIn(text: string): Array<{ start: number; end: number; term: Term }> {
+  const out: Array<{ start: number; end: number; term: Term }> = [];
+  for (const m of text.matchAll(TERM_RE)) {
+    const term = TERMS.find((t) => t.tr.toLowerCase() === m[0].toLowerCase());
+    if (term && m.index !== undefined) out.push({ start: m.index, end: m.index + m[0].length, term });
+  }
+  return out;
 }
 
 const EMPTY: Mark[] = [];
@@ -87,14 +102,17 @@ function placeOf(text: string, m: Mark): [number, number] | null {
  * The English of a paragraph: each † a button that explains the doubt, verse references
  * that open the verse, and the reader's own highlights and notes.
  */
-function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, index, onFlip }: { tr: Translation; marks: Mark[]; onUncertain?: (t: Translation) => void; onQuran?: (m: QuranMatch) => void; onMark?: (id: string) => void; heading: boolean; section: number; index: number; onFlip?: (s: number, i: number) => void }) {
+function English({ tr, marks, onUncertain, onQuran, onMark, onTerm, heading, section, index, onFlip }: { tr: Translation; marks: Mark[]; onUncertain?: (t: Translation) => void; onQuran?: (m: QuranMatch) => void; onMark?: (id: string) => void; onTerm?: (term: Term, section: number, index: number) => void; heading: boolean; section: number; index: number; onFlip?: (s: number, i: number) => void }) {
   const text = enDisplay(tr.en);
   // English that has only just arrived writes itself in.
   const [fresh] = useState(() => Date.now() - tr.updatedAt < 5000);
   const refs = findQuranRefs(text).filter((m) => m.kind === 'ref');
+  // Technical terms, tappable for their meaning (not inside a verse reference).
+  const terms = onTerm && !heading ? termsIn(text).filter((t) => !refs.some((r) => t.start < r.end && r.start < t.end)) : [];
   const hls = marks.filter((m) => m.en && m.type !== 'bookmark').map((m) => ({ m, at: placeOf(text, m) })).filter((x): x is { m: Mark; at: [number, number] } => !!x.at);
   const cuts = new Set([0, text.length]);
   for (const r of refs) cuts.add(r.start).add(r.end);
+  for (const t of terms) cuts.add(t.start).add(t.end);
   for (const h of hls) cuts.add(h.at[0]).add(h.at[1]);
   for (let i = 0; i < text.length; i++) if (text[i] === '†') cuts.add(i).add(i + 1);
   const pts = [...cuts].filter((n) => n >= 0 && n <= text.length).sort((a, b) => a - b);
@@ -142,6 +160,14 @@ function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, in
             </span>
           );
         }
+        const term = terms.find((t) => t.start <= a && b <= t.end);
+        if (term) {
+          node = (
+            <span className="term" role="button" tabIndex={0} title={`${term.term.tr}: ${term.term.en}`} onClick={(e) => { if (!window.getSelection()?.isCollapsed) return; e.stopPropagation(); onTerm?.(term.term, section, index); }}>
+              {node}
+            </span>
+          );
+        }
         // The latest highlight wins where two overlap.
         const hl = [...hls].reverse().find((h) => h.at[0] <= a && b <= h.at[1]);
         if (hl) {
@@ -158,7 +184,7 @@ function English({ tr, marks, onUncertain, onQuran, onMark, heading, section, in
   );
 }
 
-export const BlockView = memo(function BlockView({ bookId, bookLang, section, index, block, marks, flash, showTashkil, onNote, onMark, onZoom, tr, show = 'orig', flipped, onFlip, onUncertain, onQuran }: Props) {
+export const BlockView = memo(function BlockView({ bookId, bookLang, section, index, block, marks, flash, showTashkil, onNote, onMark, onZoom, tr, show = 'orig', flipped, onFlip, onUncertain, onQuran, onTerm }: Props) {
   const common = { 'data-s': section, 'data-b': index, 'data-t': block.t } as const;
   const bookmark = marks.find((m) => m.type === 'bookmark');
   const bookmarked = bookmark ? (Date.now() - bookmark.createdAt < 2500 ? 'fresh' : true) : false;
@@ -180,7 +206,7 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
 
   const heading = block.t === 'h';
   if (tr && show === 'en' && !flipped) {
-    return <English tr={tr} marks={marks} onUncertain={onUncertain} onQuran={onQuran} onMark={onMark} heading={heading} section={section} index={index} onFlip={onFlip} />;
+    return <English tr={tr} marks={marks} onUncertain={onUncertain} onQuran={onQuran} onMark={onMark} onTerm={onTerm} heading={heading} section={section} index={index} onFlip={onFlip} />;
   }
 
   const lang = blockLang(block, bookLang);
@@ -279,7 +305,7 @@ export const BlockView = memo(function BlockView({ bookId, bookLang, section, in
     return (
       <div className="bk-pair">
         {original}
-        <English tr={tr} marks={marks} onUncertain={onUncertain} onQuran={onQuran} onMark={onMark} heading={heading} section={section} index={index} />
+        <English tr={tr} marks={marks} onUncertain={onUncertain} onQuran={onQuran} onMark={onMark} onTerm={onTerm} heading={heading} section={section} index={index} />
       </div>
     );
   }
