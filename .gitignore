@@ -17,6 +17,5 @@ node_modules
 public/pdfjs
 public/quran
 public/tesseract
-dist-test
-dist-b3
-dist-b*
+# Copies of the build that tests run against while work goes on
+dist-*/
