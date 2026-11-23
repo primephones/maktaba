@@ -171,7 +171,7 @@ function ReaderInner({ book }: { book: Book }) {
     void db.books.update(book.id, {
       progress: { section: p.section, block: p.block, fraction: atEnd ? 1 : fraction, updatedAt: Date.now() },
       // Landing near the end by a jump (search, contents) is not finishing the book.
-      ...(atEnd && book.status === 'reading' && Date.now() - lastJump.current > 4000 ? { status: 'finished' as const } : {}),
+      ...(atEnd && book.status === 'reading' && Date.now() - lastJump.current > 4000 ? { status: 'finished' as const, finishedAt: Date.now() } : {}),
     });
   }, [book]);
 
@@ -419,6 +419,18 @@ function ReaderInner({ book }: { book: Book }) {
       toast('Copying isn’t allowed here. Use the phone’s own Copy.');
     }
     clearSelection();
+  };
+
+  /** The passage as a picture: the original, its English, and where it is from. */
+  const shareSelection = async () => {
+    if (!selection) return;
+    const orig = selection.parts.filter((p) => !p.en).map(toStored).filter((p): p is NonNullable<typeof p> => !!p);
+    const enParts = selection.parts.filter((p) => p.en);
+    const first = selection.parts[0];
+    const original = orig.map((p) => p.text).join('\n') || undefined;
+    const english = (enParts.length ? enParts.map((p) => p.text).join('\n') : [...new Set(orig.map((p) => `${p.section}:${p.block}`))].map((k) => translations.get(k as `${number}:${number}`)?.en).filter(Boolean).join('\n'))?.replace(/†/g, '') || undefined;
+    clearSelection();
+    await sharePicture({ original, english, lang: book.lang, source: formatCitation(citationAt(first.section, first.block)) });
   };
 
   // ----- Explain and iʿrāb -----
@@ -773,8 +785,36 @@ function ReaderInner({ book }: { book: Book }) {
     return () => ro.disconnect();
   }, []);
 
-  const onTap = useCallback(() => setChrome((c) => !c), []);
-  const onUserMove = useCallback(() => setChrome(false), []);
+  // Time spent reading, for the daily goal: counted while the book is on screen and the reader
+  // has turned or scrolled in the last two minutes.
+  const active = useRef(Date.now());
+  useEffect(() => {
+    active.current = Date.now();
+  }, [pos]);
+  useEffect(() => {
+    let pending = 0;
+    const t = window.setInterval(() => {
+      if (document.visibilityState !== 'visible' || Date.now() - active.current > 120_000) return;
+      pending += 15;
+      if (pending >= 60) {
+        void import('../../app/reading').then((r) => r.addReading(pending));
+        pending = 0;
+      }
+    }, 15_000);
+    return () => {
+      window.clearInterval(t);
+      if (pending) void import('../../app/reading').then((r) => r.addReading(pending));
+    };
+  }, []);
+
+  const onTap = useCallback(() => {
+    active.current = Date.now();
+    setChrome((c) => !c);
+  }, []);
+  const onUserMove = useCallback(() => {
+    active.current = Date.now();
+    setChrome(false);
+  }, []);
   const onReveal = useCallback(() => setChrome(true), []);
 
   const currentSection = cache.current.get(pos.section);
@@ -999,6 +1039,7 @@ function ReaderInner({ book }: { book: Book }) {
                 <Icon name="edit" size={20} />Correct
               </button>
             )}
+            <button className="sel-act" onClick={() => void shareSelection()}><Icon name="share" size={20} />Share</button>
             <button className="sel-act" onClick={() => void copy()}><Icon name="copy" size={20} />Copy</button>
           </div>
         </div>
@@ -1422,6 +1463,18 @@ function ShowChoices({ book, view, scanned }: { book: Book; view: 'en' | 'orig' 
   );
 }
 
+/** Makes the quote card and hands it to the share sheet. */
+async function sharePicture(o: { original?: string; english?: string; lang?: string; source: string }) {
+  try {
+    toast('Making the picture…');
+    const [{ quoteCard }, { shareBlob }] = await Promise.all([import('../../lib/typeset'), import('../../lib/saveFile')]);
+    const png = await quoteCard(o);
+    await shareBlob(png, 'Maktaba quote.png', 'Share this passage');
+  } catch (e) {
+    toast((e as Error).message);
+  }
+}
+
 function MarkEditor({ mark, onClose }: { mark: Mark; onClose: () => void }) {
   const [note, setNote] = useState(mark.note ?? '');
   const [color, setColor] = useState<HighlightColor>(mark.color ?? 'gold');
@@ -1447,6 +1500,17 @@ function MarkEditor({ mark, onClose }: { mark: Mark; onClose: () => void }) {
         <span className="field"><textarea rows={4} value={note} onChange={(e) => setNote(e.target.value)} dir="auto" placeholder="Write a note about this passage" /></span>
       </label>
       <button className="btn btn--primary btn--block" onClick={() => void save()}>Save</button>
+      <button
+        className="btn btn--block"
+        onClick={async () => {
+          const book = await db.books.get(mark.bookId);
+          const tr = mark.en ? undefined : await db.translations.get(`${mark.bookId}:${mark.section}:${mark.block}`);
+          const source = book ? [book.author, book.titleEn || book.title].filter(Boolean).join(', ') : '';
+          await sharePicture({ original: mark.en ? undefined : mark.text, english: mark.en ? mark.text : tr?.en.replace(/†/g, ''), lang: book?.lang, source });
+        }}
+      >
+        <Icon name="share" size={18} />Share as a picture
+      </button>
       <button
         className="btn btn--quiet btn--danger"
         onClick={async () => {

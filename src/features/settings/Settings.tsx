@@ -8,6 +8,8 @@ import { formatBytes } from '../../lib/util';
 import { goBack, navigate } from '../../app/router';
 import { DEFAULTS, applyTheme, setSetting, useSetting } from '../../app/settings';
 import { revealTheme } from '../../ui/motion';
+import { CountUp } from '../../ui/CountUp';
+import { bestStreak, minutesOn, streakOf } from '../../app/reading';
 import { THEMES, swatchStyle, themeInfo, type ThemeInfo } from '../../app/themes';
 import { ErrorBoundary } from '../../app/ErrorBoundary';
 import { Icon, type IconName } from '../../ui/Icon';
@@ -26,6 +28,7 @@ const PAGES: Array<{ id: string; title: string; icon: IconName; sub: string; gro
   { id: 'cloud', group: 'Your accounts', title: 'Your cloud', icon: 'cloud', sub: 'Your library in your own Google Drive, on all your phones' },
   { id: 'ai', group: 'Your accounts', title: 'Your AI', icon: 'sparkle', sub: 'Connect your own AI account, test it, today’s allowance' },
   { id: 'theme', group: 'Reading', title: 'Theme', icon: 'palette', sub: 'Eight colour themes, or follow the phone' },
+  { id: 'stats', group: 'Reading', title: 'Your reading', icon: 'book', sub: 'A daily goal, days in a row, and what you have read' },
   { id: 'english', group: 'Reading', title: 'How the English reads', icon: 'language', sub: 'Allah or God, honorifics, technical terms' },
   { id: 'reading', group: 'Reading', title: 'Reading defaults', icon: 'type', sub: 'Typefaces, size, spacing and page mode' },
   { id: 'voice', group: 'Reading', title: 'Voice', icon: 'speaker', sub: 'Reading aloud, and fixing how words are said' },
@@ -78,6 +81,7 @@ export function Settings({ page }: { page?: string }) {
         {page === 'theme' && <ThemePage />}
         {page === 'reading' && <ReadingPage />}
         {page === 'english' && <EnglishStylePage />}
+        {page === 'stats' && <StatsPage />}
         {page === 'library' && <LibraryPage />}
         {page === 'covers' && <CoversPage />}
         {page === 'switches' && <SwitchesPage />}
@@ -157,6 +161,68 @@ function ThemePage() {
       <div className="section-title">Classic</div>
       <div className="list">{THEMES.filter((t) => t.family === 'classic').map(row)}</div>
     </div>
+  );
+}
+
+/** The daily goal, the days in a row, the last week, and the books finished this year. */
+function StatsPage() {
+  const goal = useSetting('readingGoal');
+  const log = useSetting('readingLog');
+  const finished = useLiveQuery(() => db.books.filter((b) => b.status === 'finished').toArray(), []) ?? [];
+  const year = new Date().getFullYear();
+  const thisYear = finished.filter((b) => new Date(b.finishedAt ?? b.openedAt ?? 0).getFullYear() === year);
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return { d, m: minutesOn(log, d) };
+  });
+  const top = Math.max(goal || 15, ...days.map((x) => x.m), 1);
+  const yearMins = Math.round(Object.entries(log).filter(([k]) => k.startsWith(String(year))).reduce((n, [, s]) => n + s, 0) / 60);
+  const streak = streakOf(log, goal);
+  return (
+    <>
+      <div className="stats-row">
+        <div><b><CountUp value={streak} /></b><small>Days in a row</small></div>
+        <div><b>{bestStreak(log, goal)}</b><small>Best run</small></div>
+        <div><b>{yearMins >= 60 ? `${Math.floor(yearMins / 60)} h` : `${yearMins} min`}</b><small>This year</small></div>
+        <div><b>{thisYear.length}</b><small>Finished</small></div>
+      </div>
+      <div className="section-title">The last seven days</div>
+      <div className="week" role="img" aria-label={days.map((x) => `${x.d.toLocaleDateString(undefined, { weekday: 'long' })}: ${x.m} minutes`).join(', ')}>
+        {goal > 0 && <span className="week-goal" style={{ bottom: `${(goal / top) * 100}%` }} aria-hidden="true" />}
+        {days.map((x, i) => (
+          <div className="week-day" key={i}>
+            <span className="week-bar" data-met={goal > 0 && x.m >= goal ? '' : undefined} style={{ height: `${Math.max(2, (x.m / top) * 100)}%` }} />
+            <small>{x.d.toLocaleDateString(undefined, { weekday: 'narrow' })}</small>
+          </div>
+        ))}
+      </div>
+      <div className="ctl">
+        <div className="lbl"><span>Daily goal</span><span>{goal ? `${goal} minutes a day` : 'No goal'}</span></div>
+        <div className="seg" role="group" aria-label="Daily goal">
+          {[0, 5, 15, 30, 60].map((m) => (
+            <button key={m} aria-pressed={goal === m} onClick={() => void setSetting('readingGoal', m)}>{m ? `${m} min` : 'Off'}</button>
+          ))}
+        </div>
+        <p className="muted small" style={{ margin: 0 }}>Time is counted while a book is open and you are reading in it.</p>
+      </div>
+      {thisYear.length > 0 && (
+        <>
+          <div className="section-title">Finished in {year}</div>
+          <div className="list">
+            {thisYear.map((b) => (
+              <button className="row" key={b.id} onClick={() => navigate(`/book/${b.id}`)}>
+                <span className="mini-cover"><BookCover book={b} /></span>
+                <span className="grow">
+                  <span className="title" dir="auto">{b.titleEn || b.title}</span>
+                  <div className="sub">{b.finishedAt ? new Date(b.finishedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : ''}</div>
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

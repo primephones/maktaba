@@ -1,5 +1,7 @@
 import { ShelfSkeleton } from '../../ui/InkName';
 import { CountUp } from '../../ui/CountUp';
+import { minutesOn, streakOf } from '../../app/reading';
+import { setJump } from '../reader/jump';
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db/db';
@@ -69,6 +71,60 @@ function ContinueCard({ book, where }: { book: Book; where: string }) {
   );
 }
 
+/** Today's reading against the daily goal, and the days in a row. Tap for more. */
+function GoalLine() {
+  const goal = useSetting('readingGoal');
+  const log = useSetting('readingLog');
+  if (!goal) return null;
+  const today = minutesOn(log, new Date());
+  const streak = streakOf(log, goal);
+  const c = 2 * Math.PI * 9;
+  const f = Math.min(1, today / goal);
+  return (
+    <button className="goal-line" onClick={() => navigate('/settings/stats')}>
+      <svg className="ring ring--small" viewBox="0 0 24 24" aria-hidden="true">
+        <circle className="ring-bg" cx="12" cy="12" r="9" />
+        <circle className="ring-fg" cx="12" cy="12" r="9" style={{ strokeDasharray: c, strokeDashoffset: c * (1 - f) }} />
+      </svg>
+      <span className="grow">{today >= goal ? `Today’s ${goal} minutes are read` : `Today: ${today} of ${goal} minutes`}</span>
+      {streak > 0 && <span className="streak">{streak} day{streak === 1 ? '' : 's'} in a row</span>}
+    </button>
+  );
+}
+
+/** One of your own highlights or notes, a different one each day, to come back to. */
+function FromYourLibrary({ books }: { books: Book[] }) {
+  const pick = useLiveQuery(async () => {
+    const marks = (await db.marks.toArray()).filter((m) => m.type !== 'bookmark' && (m.text?.trim().length ?? 0) > 12);
+    if (!marks.length) return null;
+    const day = Math.floor((Date.now() - new Date().getTimezoneOffset() * 60_000) / 86_400_000);
+    const m = [...marks].sort((a, b) => a.createdAt - b.createdAt)[day % marks.length];
+    const tr = m.en ? undefined : await db.translations.get(`${m.bookId}:${m.section}:${m.block}`);
+    return { m, en: tr?.en.replace(/†/g, '') };
+  }, []);
+  if (!pick) return null;
+  const book = books.find((b) => b.id === pick.m.bookId);
+  if (!book) return null;
+  const text = pick.m.text ?? '';
+  return (
+    <>
+      <div className="section-title">From your library</div>
+      <button
+        className="from-library"
+        onClick={() => {
+          setJump(book.id, { section: pick.m.section, block: pick.m.block });
+          navigate(`/book/${book.id}`);
+        }}
+      >
+        <span className="fl-text" dir="auto" lang={langAttr(text)}>{text.length > 280 ? `${text.slice(0, 278)}…` : text}</span>
+        {pick.en && <span className="fl-en">{pick.en.length > 220 ? `${pick.en.slice(0, 218)}…` : pick.en}</span>}
+        {pick.m.note && <span className="fl-note" dir="auto">Your note: {pick.m.note}</span>}
+        <span className="fl-src" dir="auto">{book.titleEn || book.title}</span>
+      </button>
+    </>
+  );
+}
+
 /** A quiet line while your AI works on a book in the background; tap it to open the book. */
 function LiveLine({ books }: { books: Book[] }) {
   const busy = books.find((b) => (b.translation && (b.translation.state === 'running' || b.translation.state === 'queued')) || (b.ocr && (b.ocr.state === 'running' || b.ocr.state === 'queued') && b.ocr.done < b.ocr.total));
@@ -89,7 +145,7 @@ export function Home() {
   const refCount = useLiveQuery(() => db.refs.count(), []) ?? 0;
   const [details, setDetails] = useState<string | null>(null);
 
-  const { current, upNext, recent, working } = useMemo(() => {
+  const { current, upNext, recent, working, finished } = useMemo(() => {
     const all = books ?? [];
     const ready = all.filter((b) => b.import.state === 'ready');
     const opened = ready.filter((b) => b.openedAt && b.status !== 'finished').sort((a, b) => b.openedAt! - a.openedAt!);
@@ -99,6 +155,7 @@ export function Home() {
       upNext: [...opened.slice(1), ...ready.filter((b) => !b.openedAt && b.status === 'want').sort((a, b) => a.addedAt - b.addedAt)].slice(0, 12),
       recent: [...all].sort((a, b) => b.addedAt - a.addedAt).filter((b) => b.id !== cur?.id).slice(0, 12),
       working: all.filter((b) => b.import.state !== 'ready' && b.import.state !== 'missing'),
+      finished: ready.filter((b) => b.status === 'finished').sort((a, b) => (b.finishedAt ?? b.openedAt ?? 0) - (a.finishedAt ?? a.openedAt ?? 0)).slice(0, 12),
     };
   }, [books]);
 
@@ -140,6 +197,7 @@ export function Home() {
       ) : (
         <>
           {current && <ContinueCard book={current} where={where} />}
+          <GoalLine />
           <LiveLine books={books} />
 
           {working.length > 0 && (
@@ -185,6 +243,22 @@ export function Home() {
                 {recent.map((b) => (
                   <div className="tile" key={b.id}>
                     <button className="tile-cover" onClick={() => openBook(b, setDetails)} aria-label={`Open ${b.title}`}><BookCover book={b} /></button>
+                    <span className="tile-title" lang={langAttr(b.title)} dir="auto">{b.title}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <FromYourLibrary books={books} />
+
+          {finished.length > 0 && (
+            <>
+              <div className="section-title">Finished</div>
+              <div className="shelf shelf--finished" key={finished.map((b) => b.id).join()}>
+                {finished.map((b) => (
+                  <div className="tile" key={b.id}>
+                    <button className="tile-cover" onClick={() => openBook(b, setDetails)} aria-label={`Open ${b.title}`}><BookCover book={b} /><span className="mini-seal" aria-hidden="true">خُتِم</span></button>
                     <span className="tile-title" lang={langAttr(b.title)} dir="auto">{b.title}</span>
                   </div>
                 ))}

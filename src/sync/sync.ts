@@ -16,12 +16,12 @@ export const TABLES = ['books', 'folders', 'marks', 'refs', 'settings', 'transla
 export type SyncTable = (typeof TABLES)[number];
 
 /** Settings that follow the reader from phone to phone. */
-const SYNC_SETTINGS = new Set(['theme', 'autoThemes', 'reader', 'coverStyle', 'flags', 'librarySort', 'libraryView', 'shelving', 'ai', 'backupReminder']);
+const SYNC_SETTINGS = new Set(['theme', 'autoThemes', 'readingGoal', 'readingLog', 'reader', 'coverStyle', 'flags', 'librarySort', 'libraryView', 'shelving', 'ai', 'backupReminder']);
 
 /** Fields of a book that sync; the rest (its text, import state, cover) belong to each phone. */
 const BOOK_FIELDS = [
   'id', 'title', 'author', 'edition', 'lang', 'format', 'size', 'hash', 'fileName', 'addedAt', 'openedAt', 'status', 'folderId',
-  'coverStyle', 'commentaries', 'catalogueId', 'series', 'volume', 'progress', 'private', 'view', 'tocEn', 'titleEn', 'authorEn', 'scanView', 'ocrLang', 'translation', 'pageCount', 'cloudFileId',
+  'coverStyle', 'commentaries', 'catalogueId', 'series', 'volume', 'progress', 'private', 'view', 'finishedAt', 'tocEn', 'titleEn', 'authorEn', 'scanView', 'ocrLang', 'translation', 'pageCount', 'cloudFileId',
 ] as const;
 
 /** Is this row something that syncs at all? */

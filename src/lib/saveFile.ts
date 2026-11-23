@@ -32,7 +32,7 @@ export async function saveFile(blob: Blob, name: string, mime: string, onProgres
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = name;
+  a.download = downloadName(name);
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -56,6 +56,19 @@ const MIME: Record<string, string> = {
   png: 'image/png',
   webp: 'image/webp',
 };
+
+/**
+ * A file name a browser will keep. Browsers drop a download's name when it is written in
+ * Arabic script (the file then arrives as "download", without its extension), so those
+ * letters are left out there, keeping the rest and the extension.
+ */
+export function downloadName(name: string): string {
+  if (!/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/.test(name)) return name;
+  const dot = name.lastIndexOf('.');
+  const ext = dot > 0 ? name.slice(dot) : '';
+  const stem = (dot > 0 ? name.slice(0, dot) : name).replace(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF\u200c-\u200f]+/g, ' ').replace(/^[\s\-–·,]+|[\s\-–·,]+$/g, '').replace(/\s{2,}/g, ' ');
+  return `${stem ? `Maktaba - ${stem}` : 'Maktaba book'}${ext}`;
+}
 
 export function mimeOf(fileName: string, fallback?: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
@@ -93,10 +106,39 @@ export async function openOriginal(blob: Blob, fileName: string): Promise<'opene
   }
   const a = document.createElement('a');
   a.href = url;
-  a.download = fileName;
+  a.download = downloadName(fileName);
   document.body.appendChild(a);
   a.click();
   a.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return 'downloaded';
+}
+
+/**
+ * Hands a file to the phone's share sheet (WhatsApp, email, Drive…). Where there is no share
+ * sheet, it is saved as a download instead.
+ */
+export async function shareBlob(blob: Blob, name: string, title: string): Promise<'shared' | 'saved'> {
+  const mime = blob.type || mimeOf(name);
+  if (isAndroidApp()) {
+    const { id } = await plugin.saveFileBegin({ name, mime, temp: true });
+    for (let at = 0; at < blob.size; at += CHUNK) {
+      await plugin.saveFileChunk({ id, data: toBase64(new Uint8Array(await blob.slice(at, at + CHUNK).arrayBuffer())) });
+    }
+    const res = await plugin.saveFileEnd({ id });
+    await plugin.shareFile({ uri: res.uri, mime, title });
+    return 'shared';
+  }
+  const file = new File([blob], name, { type: mime });
+  const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+  if (nav.share && nav.canShare?.({ files: [file] })) {
+    try {
+      await nav.share({ files: [file], title });
+      return 'shared';
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return 'shared';
+    }
+  }
+  await saveFile(blob, name, mime);
+  return 'saved';
 }

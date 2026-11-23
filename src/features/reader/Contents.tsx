@@ -4,6 +4,7 @@ import type { Book, Mark } from '../../db/types';
 import { timeAgo } from '../../lib/util';
 import { Sheet } from '../../ui/Sheet';
 import { Icon } from '../../ui/Icon';
+import { toast } from '../../ui/toast';
 import { PAGES_PER_SECTION } from '../../import/pdf';
 
 interface Props {
@@ -146,6 +147,7 @@ export function Contents({ book, marks, current, onGo, onEditMark, onSummary, ti
         )
       )}
 
+      {tab === 'notes' && notes.length > 0 && <NotebookActions book={book} />}
       {tab === 'notes' && (
         notes.length ? (
           <div className="list">
@@ -164,5 +166,32 @@ export function Contents({ book, marks, current, onGo, onEditMark, onSummary, ti
         )
       )}
     </Sheet>
+  );
+}
+
+/** The book's highlights and notes as one notebook, to keep or send: a Word document or a PDF. */
+function NotebookActions({ book }: { book: Book }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const make = async (kind: 'docx' | 'pdf') => {
+    setBusy(kind === 'docx' ? 'Making the Word document…' : 'Making the PDF…');
+    try {
+      const { notebookDocx, notebookPdf, fileNameOf } = await import('./notebook');
+      const blob = kind === 'docx' ? await notebookDocx(book) : await notebookPdf(book);
+      const { saveFile, mimeOf } = await import('../../lib/saveFile');
+      const name = fileNameOf(book, 'notebook', kind);
+      const saved = await saveFile(blob, name, mimeOf(name));
+      toast(`Saved to ${saved.location}.`, saved.share ? { label: 'Send', run: () => void saved.share!() } : undefined);
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="notebook-acts">
+      <span className="muted small">{busy ?? 'Your highlights and notes as one notebook:'}</span>
+      <button className="btn" disabled={!!busy} onClick={() => void make('docx')}>Word</button>
+      <button className="btn" disabled={!!busy} onClick={() => void make('pdf')}>PDF</button>
+    </div>
   );
 }

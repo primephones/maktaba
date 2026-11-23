@@ -333,7 +333,7 @@ export function BookDetails({ bookId, onClose }: { bookId: string; onClose: () =
         <div className="section-title" style={{ marginTop: 4 }}>Reading status</div>
         <div className="seg" role="group" aria-label="Reading status">
           {STATUS.map(([value, label]) => (
-            <button key={value} aria-pressed={book.status === value} onClick={() => void update({ status: value })}>{label}</button>
+            <button key={value} aria-pressed={book.status === value} onClick={() => void update({ status: value, ...(value === 'finished' && book.status !== 'finished' ? { finishedAt: Date.now() } : {}) })}>{label}</button>
           ))}
         </div>
       </div>

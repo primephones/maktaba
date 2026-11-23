@@ -91,6 +91,10 @@ export interface Settings {
   translationStyle: Required<TranslateStyle>;
   /** How fast this reader reads, in characters a minute (learned while reading). */
   readingSpeed: number;
+  /** Minutes a day the reader means to read (0: no goal). */
+  readingGoal: number;
+  /** Seconds read on each day, by date (YYYY-MM-DD). */
+  readingLog: Record<string, number>;
 }
 
 export const DEFAULTS: Settings = {
@@ -125,6 +129,8 @@ export const DEFAULTS: Settings = {
   backupReminder: 'monthly',
   translationStyle: { god: 'Allah', honorifics: 'words', terms: 'transliterated', tone: 'balanced' },
   readingSpeed: 950,
+  readingGoal: 15,
+  readingLog: {},
 };
 
 export async function getSetting<K extends keyof Settings>(key: K): Promise<Settings[K]> {
@@ -149,10 +155,19 @@ function merge<T>(def: T, value: T | undefined): T {
   return value;
 }
 
-/** Reads a setting and re-renders when it changes. Returns the default while loading. */
+/** The last value of each setting seen on screen, so a screen opened again starts from it. */
+const known = new Map<string, unknown>();
+
+/**
+ * Reads a setting and re-renders when it changes. While it loads, the value last seen (or
+ * the default, the very first time): a screen never shows, or saves, the defaults over the
+ * reader's own choices in the moment before its settings arrive.
+ */
 export function useSetting<K extends keyof Settings>(key: K): Settings[K] {
-  const rec = useLiveQuery(() => db.settings.get(key), [key]);
-  return merge(DEFAULTS[key], rec?.value as Settings[K] | undefined);
+  const rec = useLiveQuery(async () => (await db.settings.get(key)) ?? null, [key]);
+  if (rec !== undefined) known.set(key, rec?.value);
+  const value = (rec === undefined ? known.get(key) : rec?.value) as Settings[K] | undefined;
+  return merge(DEFAULTS[key], value);
 }
 
 let autoPair: AutoThemes = DEFAULTS.autoThemes;

@@ -693,6 +693,56 @@ await section('Comfort and finding your way', async () => {
   await page.getByRole('button', { name: 'Close' }).click();
 });
 
+await section('Keep and share', async () => {
+  await openBook('مختصر في أصول الفقه');
+  await pause(600);
+  const fs = await import('node:fs');
+  // A passage as a picture to share (saved where there is no share sheet).
+  await page.evaluate(() => {
+    const p = [...document.querySelectorAll('.bk[data-t="p"]')].find((el) => el.getBoundingClientRect().top > 120);
+    const r = document.createRange();
+    r.selectNodeContents(p);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  });
+  await pause(500);
+  const [pic] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.locator('.sel-bar').getByRole('button', { name: 'Share', exact: true }).click()]);
+  const png = fs.readFileSync(await pic.path());
+  check(png.slice(1, 4).toString() === 'PNG' && png.length > 20000, `a passage can be shared as a picture (${pic.suggestedFilename()}, ${Math.round(png.length / 1024)} KB)`);
+  const shotPath = decodeURIComponent(new URL('./out/shots/44-quote-card.png', import.meta.url).pathname);
+  fs.writeFileSync(shotPath, png);
+  // The notebook: every highlight and note, as Word and as PDF.
+  await showChrome();
+  await page.getByRole('button', { name: 'Contents, bookmarks and highlights' }).click();
+  await page.getByRole('tab', { name: /^Highlights/ }).click();
+  const [word] = await Promise.all([page.waitForEvent('download', { timeout: 20000 }), page.getByRole('button', { name: 'Word', exact: true }).click()]);
+  const docxBytes = fs.readFileSync(await word.path());
+  const { unzipSync, strFromU8 } = await import('fflate');
+  const doc = strFromU8(unzipSync(new Uint8Array(docxBytes))['word/document.xml']);
+  check(word.suggestedFilename().endsWith('.docx') && /<w:bidi\/>/.test(doc) && /Highlights and notes/.test(doc), `the notebook is saved as a Word document, Arabic set right to left (${word.suggestedFilename()})`);
+  const [pdf] = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.getByRole('button', { name: 'PDF', exact: true }).click()]);
+  const pdfBytes = fs.readFileSync(await pdf.path());
+  check(pdfBytes.slice(0, 5).toString() === '%PDF-' && pdfBytes.length > 30000, `and as a PDF (${Math.round(pdfBytes.length / 1024)} KB)`);
+  await page.getByRole('button', { name: 'Close' }).click();
+  // Home: one of your highlights comes back; today's reading against the goal.
+  await go('#/');
+  await page.getByText('From your library').waitFor({ timeout: 5000 });
+  check((await page.locator('.from-library').count()) === 1, 'Home brings back one of your own highlights');
+  check(/of 15 minutes|minutes are read/.test(await page.locator('.goal-line').textContent()), 'and shows today’s reading against the daily goal');
+  await page.locator('.goal-line').click();
+  await page.getByText('The last seven days').waitFor({ timeout: 5000 });
+  check((await page.locator('.week-day').count()) === 7, 'Your reading: the last seven days, days in a row and books finished');
+  await shot('45-your-reading');
+  // A book marked finished goes on the Finished shelf.
+  await go('#/library');
+  await page.getByRole('button', { name: 'Details for urdu-risala' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Finished', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+  await go('#/');
+  await page.locator('.shelf--finished .tile').first().waitFor({ timeout: 5000 });
+  check(true, 'finished books go on a Finished shelf');
+});
+
 await section('Search across the library', async () => {
   await page.goto(server.url + '#/search');
   const box = page.getByRole('searchbox', { name: 'Search or ask your books' });
