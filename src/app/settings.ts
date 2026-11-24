@@ -98,7 +98,7 @@ export interface Settings {
 }
 
 export const DEFAULTS: Settings = {
-  theme: 'auto',
+  theme: 'paper',
   autoThemes: { light: 'paper', dark: 'lamp' },
   ai: { prefer: { translate: ['gemini', 'groq', 'openrouter', 'workers-ai'] } },
   reader: {
@@ -215,9 +215,9 @@ export function applyMotion(reduce: boolean) {
 }
 
 export function bootTheme() {
-  let stored: ThemeName = 'auto';
+  let stored: ThemeName = 'paper';
   try {
-    stored = (localStorage.getItem('maktaba.theme') as ThemeName) || 'auto';
+    stored = (localStorage.getItem('maktaba.theme') as ThemeName) || 'paper';
     const pair = JSON.parse(localStorage.getItem('maktaba.autoThemes') ?? 'null') as AutoThemes | null;
     if (pair && isThemeId(pair.light) && isThemeId(pair.dark)) autoPair = pair;
   } catch {
